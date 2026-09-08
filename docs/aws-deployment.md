@@ -1,165 +1,115 @@
 # Deploying the xChange API to AWS
 
 The frontend is a static export on Apache; the API is an ASP.NET Core container
-on AWS. This document covers the one-time AWS setup. Once it exists, every push
-that touches `src/**` or `Dockerfile` deploys automatically via
-`.github/workflows/deploy-api.yml`.
+on AWS App Runner.
 
-Region used throughout: `eu-central-1`. Change `AWS_REGION` in the workflow if
-you want another.
+Almost all of this is automated. A fresh account needs **three manual actions**;
+after that every push that touches `src/**`, `Dockerfile` or `infra/aws/**`
+deploys itself via `.github/workflows/deploy-api.yml`.
+
+Region: `eu-central-1` (change `AWS_REGION` in the workflow to move it).
 
 ## Why App Runner
 
-The endpoint accepts uploads up to 20 MB, and a single request can run for
-minutes while the model reads the PDF.
+The endpoint accepts uploads up to 20 MB, and one request can run for minutes
+while the model reads the PDF.
 
 - **API Gateway** caps a request payload at **10 MB**.
 - **Lambda function URLs** cap it at **6 MB**.
 
-Either would reject valid invoices, so the serverless-behind-a-gateway shapes are
-out. App Runner takes the container directly, terminates TLS, gives the service a
-public HTTPS hostname, and scales down between uploads.
+Both would reject valid invoices, so the serverless-behind-a-gateway shapes are
+out. App Runner takes the container directly, terminates TLS, gives it a public
+HTTPS hostname and scales down between uploads.
 
-If App Runner's own request timeout turns out to be shorter than a slow
-extraction needs, the fallback is ECS Fargate behind an ALB (an ALB's idle
-timeout is configurable up to 4000s). Watch the first few real extractions before
-assuming this is settled.
+If App Runner's request timeout turns out to be shorter than a slow extraction
+needs, the fallback is ECS Fargate behind an ALB, whose idle timeout is
+configurable up to 4000s. Watch the first real extractions before assuming this
+is settled.
 
-## Step 1 — the deploy role (GitHub OIDC)
+---
 
-The workflow authenticates with GitHub's OIDC provider and assumes a role. There
-is no long-lived AWS access key in the repository, in GitHub, or on anyone's
-laptop; nothing has to be pasted into a chat window or an email.
+## Step 1 — bootstrap the account (once)
 
-If your account has never trusted GitHub before, add the provider once:
-
-```bash
-aws iam create-open-id-connect-provider \
-  --url https://token.actions.githubusercontent.com \
-  --client-id-list sts.amazonaws.com \
-  --thumbprint-list 6938fd4d98bab03faadb97b34396831e3780aea1
-```
-
-Create `trust-policy.json`, restricting the trust to this repository's `main`
-branch so no other repo, and no pull request from a fork, can assume it:
-
-```json
-{
-  "Version": "2012-10-17",
-  "Statement": [
-    {
-      "Effect": "Allow",
-      "Principal": {
-        "Federated": "arn:aws:iam::<ACCOUNT_ID>:oidc-provider/token.actions.githubusercontent.com"
-      },
-      "Action": "sts:AssumeRoleWithWebIdentity",
-      "Condition": {
-        "StringEquals": {
-          "token.actions.githubusercontent.com:aud": "sts.amazonaws.com",
-          "token.actions.githubusercontent.com:sub": "repo:sgroen86/xChange:ref:refs/heads/main"
-        }
-      }
-    }
-  ]
-}
-```
+This is the only stack CI cannot create, because it is what grants CI its
+permissions. It creates the GitHub OIDC trust, the deploy role, the role App
+Runner uses to pull images, and the runtime role that reads the API key.
 
 ```bash
-aws iam create-role \
-  --role-name xchange-github-deploy \
-  --assume-role-policy-document file://trust-policy.json
-
-# Scoped to pushing images and rolling out this one service.
-aws iam put-role-policy \
-  --role-name xchange-github-deploy \
-  --policy-name xchange-deploy \
-  --policy-document '{
-    "Version": "2012-10-17",
-    "Statement": [
-      { "Effect": "Allow",
-        "Action": ["ecr:GetAuthorizationToken"],
-        "Resource": "*" },
-      { "Effect": "Allow",
-        "Action": [
-          "ecr:BatchCheckLayerAvailability", "ecr:CompleteLayerUpload",
-          "ecr:InitiateLayerUpload", "ecr:PutImage", "ecr:UploadLayerPart",
-          "ecr:DescribeRepositories", "ecr:CreateRepository"
-        ],
-        "Resource": "*" },
-      { "Effect": "Allow",
-        "Action": ["apprunner:ListServices", "apprunner:DescribeService", "apprunner:UpdateService"],
-        "Resource": "*" }
-    ]
-  }'
+aws cloudformation deploy \
+  --template-file infra/aws/bootstrap.yml \
+  --stack-name xchange-bootstrap \
+  --capabilities CAPABILITY_NAMED_IAM \
+  --region eu-central-1
 ```
 
-Then in GitHub: **Settings → Environments → New environment** named
-`xchange-aws`, and add one secret to it:
+If the account already trusts `token.actions.githubusercontent.com` (an account
+may only have one provider per URL), add
+`--parameter-overrides CreateOidcProvider=false`.
+
+Then read the role ARN:
+
+```bash
+aws cloudformation describe-stacks --stack-name xchange-bootstrap \
+  --query "Stacks[0].Outputs[?OutputKey=='GitHubDeployRoleArn'].OutputValue" \
+  --output text
+```
+
+The deploy role is deliberately narrow: it can push images and manage
+`xchange-*` stacks, but it has **no IAM write permissions**, so CI cannot grant
+itself anything. It may create the Anthropic secret and read its metadata, but
+not read or overwrite its value.
+
+The trust is pinned to `repo:sgroen86/xChange:ref:refs/heads/main`. Pull
+requests, including from forks, cannot assume it.
+
+## Step 2 — tell GitHub about the role (once)
+
+**Settings → Environments → New environment**, named `xchange-aws`, with one
+secret:
 
 | Secret | Value |
 |---|---|
-| `AWS_DEPLOY_ROLE_ARN` | `arn:aws:iam::<ACCOUNT_ID>:role/xchange-github-deploy` |
+| `AWS_DEPLOY_ROLE_ARN` | the ARN from step 1 |
 
-## Step 2 — the API key, stored in AWS
+That is the only AWS credential GitHub holds, and it is not a credential — it is
+the name of a role that only this repository's `main` branch may assume.
 
-The Anthropic key must never reach CI logs, the container image, or the browser.
-Put it in Secrets Manager and have App Runner read it from there:
+## Step 3 — set the Anthropic key (once)
 
-```bash
-aws secretsmanager create-secret \
-  --name xchange/anthropic-api-key \
-  --secret-string '<your-anthropic-key>'
-```
-
-## Step 3 — create the App Runner service (once)
-
-The workflow updates this service but deliberately does not create it: creation
-carries the API key configuration, which should not pass through CI.
-
-First push an image so there is something to run — either run the workflow (it
-will push the image, then stop with a message saying the service is missing), or
-build and push locally.
-
-Then create the service in the console, or:
+The first workflow run creates the secret with a placeholder so the stack has
+something to reference. Put the real key in it:
 
 ```bash
-aws apprunner create-service \
-  --service-name xchange-api \
-  --source-configuration '{
-    "ImageRepository": {
-      "ImageIdentifier": "<ACCOUNT_ID>.dkr.ecr.eu-central-1.amazonaws.com/xchange-api:latest",
-      "ImageRepositoryType": "ECR",
-      "ImageConfiguration": {
-        "Port": "8080",
-        "RuntimeEnvironmentSecrets": {
-          "Anthropic__ApiKey": "arn:aws:secretsmanager:eu-central-1:<ACCOUNT_ID>:secret:xchange/anthropic-api-key"
-        },
-        "RuntimeEnvironmentVariables": {
-          "ASPNETCORE_ENVIRONMENT": "Production",
-          "Cors__AllowedOrigins__0": "https://greenitsolutions.net",
-          "Cors__AllowedOrigins__1": "https://www.greenitsolutions.net"
-        }
-      }
-    },
-    "AutoDeploymentsEnabled": false,
-    "AuthenticationConfiguration": { "AccessRoleArn": "arn:aws:iam::<ACCOUNT_ID>:role/service-role/AppRunnerECRAccessRole" }
-  }' \
-  --health-check-configuration '{"Protocol":"HTTP","Path":"/health","Interval":10,"Timeout":5}' \
-  --instance-configuration '{"Cpu":"1 vCPU","Memory":"2 GB"}'
+aws secretsmanager put-secret-value \
+  --secret-id xchange/anthropic-api-key \
+  --secret-string '<your-anthropic-key>' \
+  --region eu-central-1
 ```
 
-`AppRunnerECRAccessRole` is the standard service role App Runner uses to pull
-from ECR; the console offers to create it for you on first use.
+Extraction returns 502 until this is set. The key never passes through CI, the
+image, or the browser: App Runner injects it into the container at runtime and
+only the instance role can read it.
 
-Note the double underscore in `Anthropic__ApiKey` and `Cors__AllowedOrigins__0` —
-that is how .NET configuration maps environment variables onto nested keys.
+---
 
-## Step 4 — point the frontend at it
+## What the workflow does on its own
 
-Take the service URL from the workflow output (or
-`aws apprunner describe-service --service-arn <arn> --query 'Service.ServiceUrl'`)
-and set it as a **repository variable**, not a secret — it is a public URL and it
-gets baked into the JavaScript bundle:
+Everything else, on every push:
+
+1. runs `dotnet test` — a red build cannot deploy
+2. creates the ECR repository if missing
+3. creates the secret placeholder if missing
+4. builds the image and pushes it tagged with the commit sha
+5. deploys `infra/aws/service.yml`, creating or updating the App Runner service
+6. waits for health, retrying while App Runner swaps instances
+7. prints the service URL in the job summary
+
+Rollback is a redeploy of an earlier image tag.
+
+## Step 4 — point the frontend at the API
+
+Take the URL from the job summary and set it as a **repository variable** — not
+a secret; it is a public URL and gets baked into the JavaScript bundle:
 
 **Settings → Secrets and variables → Actions → Variables → New repository variable**
 
@@ -167,9 +117,9 @@ gets baked into the JavaScript bundle:
 |---|---|
 | `XCHANGE_API_URL` | `https://<id>.eu-central-1.awsapprunner.com` |
 
-Then re-run **Deploy xChange UI**. Until this variable is set, the frontend
-stays on mock data — a build that has not been pointed at an API still works
-rather than failing in the browser.
+Then re-run **Deploy xChange UI**. Until this is set the frontend stays on mock
+data, so a build that has never been pointed at an API still works rather than
+failing in the browser.
 
 ## Verifying
 
@@ -179,12 +129,23 @@ curl -F "file=@invoice.pdf" \
   https://<id>.eu-central-1.awsapprunner.com/api/v1/invoices/extract
 ```
 
-The deploy workflow already checks `/health` itself and fails if it does not
-return 200.
+## Tearing it down
+
+```bash
+aws cloudformation delete-stack --stack-name xchange-service
+aws cloudformation delete-stack --stack-name xchange-bootstrap
+```
+
+The secret and the ECR repository are created by the workflow rather than the
+stacks, so they survive deletion and must be removed separately if you want them
+gone.
 
 ## What is deliberately not here yet
 
-No database, no S3 storage, no queue, no authentication, and no `OrganizationId`
-enforcement. The API is currently unauthenticated: anyone who learns the URL can
-post a PDF and spend Anthropic credit. **Do not treat this as production-ready
-until authentication is added** — see the open decisions in CLAUDE.md.
+No database, no S3 storage, no queue, no authentication, and no
+`OrganizationId` enforcement.
+
+**The API is unauthenticated.** Anyone who learns the URL can post a PDF and
+spend Anthropic credit. Fix that before this is anything more than a prototype —
+App Runner has no built-in auth, so it needs either a key check in the API or a
+CloudFront/WAF layer in front.

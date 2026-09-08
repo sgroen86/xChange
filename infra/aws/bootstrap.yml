@@ -1,0 +1,201 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: >
+  xChange bootstrap. Creates the trust that lets GitHub Actions deploy into this
+  account, plus the role App Runner uses to pull images from ECR.
+
+  This is the one stack that cannot be created by CI, because it is what gives
+  CI its permissions in the first place. Deploy it once by hand; everything
+  after it is automated.
+
+  Deliberately separate from the service stack so that CI never needs IAM write
+  permissions - it can create services, but not grant itself anything.
+
+Parameters:
+  GitHubRepository:
+    Type: String
+    Default: sgroen86/xChange
+    Description: owner/repo allowed to assume the deploy role.
+
+  GitHubBranch:
+    Type: String
+    Default: main
+    Description: >
+      Only this branch may assume the role. Pull requests, including from forks,
+      cannot - which is what stops an untrusted PR from deploying.
+
+  CreateOidcProvider:
+    Type: String
+    AllowedValues: ['true', 'false']
+    Default: 'true'
+    Description: >
+      Set to false if this account already trusts token.actions.githubusercontent.com
+      (an account can only have one provider per URL).
+
+Conditions:
+  ShouldCreateOidcProvider: !Equals [!Ref CreateOidcProvider, 'true']
+
+Resources:
+  GitHubOidcProvider:
+    Type: AWS::IAM::OIDCProvider
+    Condition: ShouldCreateOidcProvider
+    Properties:
+      Url: https://token.actions.githubusercontent.com
+      ClientIdList:
+        - sts.amazonaws.com
+      # AWS now verifies GitHub's certificate chain against its own trust store,
+      # but the field is still required by the API.
+      ThumbprintList:
+        - 6938fd4d98bab03faadb97b34396831e3780aea1
+
+  GitHubDeployRole:
+    Type: AWS::IAM::Role
+    Properties:
+      RoleName: xchange-github-deploy
+      Description: Assumed by GitHub Actions to deploy the xChange API.
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Federated: !Sub arn:aws:iam::${AWS::AccountId}:oidc-provider/token.actions.githubusercontent.com
+            Action: sts:AssumeRoleWithWebIdentity
+            Condition:
+              StringEquals:
+                token.actions.githubusercontent.com:aud: sts.amazonaws.com
+                # Pinned to one branch of one repo. Without this condition any
+                # GitHub repository in the world could assume this role.
+                token.actions.githubusercontent.com:sub: !Sub repo:${GitHubRepository}:ref:refs/heads/${GitHubBranch}
+      Policies:
+        - PolicyName: xchange-deploy
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Sid: EcrLogin
+                Effect: Allow
+                Action: ecr:GetAuthorizationToken
+                Resource: '*'
+
+              - Sid: EcrPush
+                Effect: Allow
+                Action:
+                  - ecr:BatchCheckLayerAvailability
+                  - ecr:CompleteLayerUpload
+                  - ecr:CreateRepository
+                  - ecr:DescribeRepositories
+                  - ecr:InitiateLayerUpload
+                  - ecr:PutImage
+                  - ecr:PutImageScanningConfiguration
+                  - ecr:UploadLayerPart
+                Resource: '*'
+
+              - Sid: ManageTheServiceStackOnly
+                Effect: Allow
+                Action:
+                  - cloudformation:CreateStack
+                  - cloudformation:UpdateStack
+                  - cloudformation:DescribeStacks
+                  - cloudformation:DescribeStackEvents
+                  - cloudformation:DescribeStackResources
+                  - cloudformation:GetTemplateSummary
+                  - cloudformation:CreateChangeSet
+                  - cloudformation:DescribeChangeSet
+                  - cloudformation:ExecuteChangeSet
+                  - cloudformation:DeleteChangeSet
+                  - cloudformation:ListStacks
+                Resource:
+                  - !Sub arn:aws:cloudformation:${AWS::Region}:${AWS::AccountId}:stack/xchange-*/*
+                  - !Sub arn:aws:cloudformation:${AWS::Region}:${AWS::AccountId}:stack/xchange-*
+
+              - Sid: ReadBootstrapOutputs
+                Effect: Allow
+                Action: cloudformation:DescribeStacks
+                Resource: '*'
+
+              - Sid: AppRunner
+                Effect: Allow
+                Action:
+                  - apprunner:CreateService
+                  - apprunner:DeleteService
+                  - apprunner:DescribeService
+                  - apprunner:ListServices
+                  - apprunner:ListTagsForResource
+                  - apprunner:StartDeployment
+                  - apprunner:TagResource
+                  - apprunner:UpdateService
+                Resource: '*'
+
+              # Create the secret if it is missing and read its metadata, but
+              # never read or overwrite the value. The Anthropic key is set once
+              # by a human and CI has no reason to see it.
+              - Sid: SecretMetadataOnly
+                Effect: Allow
+                Action:
+                  - secretsmanager:CreateSecret
+                  - secretsmanager:DescribeSecret
+                Resource: !Sub arn:aws:secretsmanager:${AWS::Region}:${AWS::AccountId}:secret:xchange/*
+
+              # Hand the pull role to App Runner without being able to modify it.
+              - Sid: PassTheEcrAccessRole
+                Effect: Allow
+                Action: iam:PassRole
+                Resource: !GetAtt AppRunnerEcrAccessRole.Arn
+                Condition:
+                  StringEquals:
+                    iam:PassedToService: build.apprunner.amazonaws.com
+
+  AppRunnerEcrAccessRole:
+    Type: AWS::IAM::Role
+    Properties:
+      RoleName: xchange-apprunner-ecr-access
+      Description: Lets App Runner pull the xChange API image from ECR.
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: build.apprunner.amazonaws.com
+            Action: sts:AssumeRole
+      ManagedPolicyArns:
+        - arn:aws:iam::aws:policy/service-role/AWSAppRunnerServicePolicyForECRAccess
+
+  # The instance role is what the running container uses. It needs to read the
+  # Anthropic key, and nothing else.
+  AppRunnerInstanceRole:
+    Type: AWS::IAM::Role
+    Properties:
+      RoleName: xchange-apprunner-instance
+      Description: Runtime role for the xChange API container.
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: tasks.apprunner.amazonaws.com
+            Action: sts:AssumeRole
+      Policies:
+        - PolicyName: read-anthropic-key
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action: secretsmanager:GetSecretValue
+                Resource: !Sub arn:aws:secretsmanager:${AWS::Region}:${AWS::AccountId}:secret:xchange/anthropic-api-key-*
+
+Outputs:
+  GitHubDeployRoleArn:
+    Description: Put this in the GitHub environment as AWS_DEPLOY_ROLE_ARN.
+    Value: !GetAtt GitHubDeployRole.Arn
+    Export:
+      Name: xchange-github-deploy-role-arn
+
+  AppRunnerEcrAccessRoleArn:
+    Description: Read by the deploy workflow; no need to copy it anywhere.
+    Value: !GetAtt AppRunnerEcrAccessRole.Arn
+    Export:
+      Name: xchange-apprunner-ecr-access-role-arn
+
+  AppRunnerInstanceRoleArn:
+    Description: Read by the deploy workflow; no need to copy it anywhere.
+    Value: !GetAtt AppRunnerInstanceRole.Arn
+    Export:
+      Name: xchange-apprunner-instance-role-arn

@@ -1,21 +1,21 @@
 name: Deploy xChange API
 
-# Builds the ASP.NET Core API as a container, pushes it to ECR and rolls out a
-# new App Runner deployment.
+# Builds the ASP.NET Core API as a container, pushes it to ECR and reconciles
+# the App Runner service through CloudFormation.
+#
+# Everything except the bootstrap stack is created by this workflow, including
+# the ECR repository, the secret placeholder and the service itself - so a fresh
+# account needs one manual command (infra/aws/bootstrap.yml) and one manual
+# secret value, and nothing else.
 #
 # Why App Runner and not Lambda: the endpoint accepts uploads up to 20 MB and a
-# single request can run for minutes while the model reads the PDF. API Gateway
-# caps request payloads at 10 MB and a Lambda function URL at 6 MB, so either
-# would reject valid invoices outright. App Runner terminates TLS, gives the
-# service a public HTTPS hostname, and scales to zero-ish between uploads.
+# request can run for minutes while the model reads the PDF. API Gateway caps a
+# payload at 10 MB and a Lambda function URL at 6 MB, so both would reject valid
+# invoices.
 #
-# Credentials: this workflow authenticates with GitHub OIDC and assumes a role
-# in your account. There is no long-lived access key anywhere in the repo, in
-# GitHub, or on a developer machine.
-#
-# The Anthropic API key is NOT set here. It lives in the App Runner service
-# configuration (ideally as a Secrets Manager reference), so it never passes
-# through CI logs or the container image.
+# The Anthropic key is never seen here. CI may create the secret and read its
+# metadata, but not its value; App Runner injects it into the container at
+# runtime.
 
 on:
   push:
@@ -23,6 +23,7 @@ on:
     paths:
       - 'src/**'
       - 'Dockerfile'
+      - 'infra/aws/**'
       - '.github/workflows/deploy-api.yml'
   workflow_dispatch:
 
@@ -37,7 +38,9 @@ permissions:
 env:
   AWS_REGION: eu-central-1
   ECR_REPOSITORY: xchange-api
-  APP_RUNNER_SERVICE: xchange-api
+  BOOTSTRAP_STACK: xchange-bootstrap
+  SERVICE_STACK: xchange-service
+  SECRET_NAME: xchange/anthropic-api-key
 
 jobs:
   deploy:
@@ -64,6 +67,29 @@ jobs:
           role-to-assume: ${{ secrets.AWS_DEPLOY_ROLE_ARN }}
           aws-region: ${{ env.AWS_REGION }}
 
+      - name: Read the bootstrap stack
+        id: bootstrap
+        run: |
+          set -e
+
+          if ! aws cloudformation describe-stacks --stack-name "$BOOTSTRAP_STACK" >/dev/null 2>&1; then
+            echo "::error::Bootstrap stack '$BOOTSTRAP_STACK' not found."
+            echo "Deploy it once with:"
+            echo "  aws cloudformation deploy --template-file infra/aws/bootstrap.yml \\"
+            echo "    --stack-name $BOOTSTRAP_STACK --capabilities CAPABILITY_NAMED_IAM"
+            exit 1
+          fi
+
+          get() {
+            aws cloudformation describe-stacks --stack-name "$BOOTSTRAP_STACK" \
+              --query "Stacks[0].Outputs[?OutputKey=='$1'].OutputValue" --output text
+          }
+
+          {
+            echo "ecr_access_role=$(get AppRunnerEcrAccessRoleArn)"
+            echo "instance_role=$(get AppRunnerInstanceRoleArn)"
+          } >> "$GITHUB_OUTPUT"
+
       - name: Log in to Amazon ECR
         id: ecr
         uses: aws-actions/amazon-ecr-login@v2
@@ -74,9 +100,28 @@ jobs:
           aws ecr describe-repositories --repository-names "$ECR_REPOSITORY" >/dev/null 2>&1 \
             || aws ecr create-repository \
                  --repository-name "$ECR_REPOSITORY" \
-                 --image-scanning-configuration scanOnPush=true \
-                 --image-tag-mutability MUTABLE >/dev/null
+                 --image-scanning-configuration scanOnPush=true >/dev/null
           echo "Repository ready: $ECR_REPOSITORY"
+
+      - name: Ensure the Anthropic secret exists
+        id: secret
+        run: |
+          set -e
+
+          # Created empty on first run so the stack has something to reference.
+          # The real value is set once, by a human, outside CI - this workflow
+          # has no permission to read or overwrite it.
+          if ! aws secretsmanager describe-secret --secret-id "$SECRET_NAME" >/dev/null 2>&1; then
+            aws secretsmanager create-secret \
+              --name "$SECRET_NAME" \
+              --description "Anthropic API key for the xChange API. Set the value manually." \
+              --secret-string "PLACEHOLDER-set-me" >/dev/null
+            echo "::warning::Created $SECRET_NAME with a placeholder. Extraction will fail until you set the real key:"
+            echo "::warning::aws secretsmanager put-secret-value --secret-id $SECRET_NAME --secret-string '<key>'"
+          fi
+
+          ARN=$(aws secretsmanager describe-secret --secret-id "$SECRET_NAME" --query ARN --output text)
+          echo "arn=$ARN" >> "$GITHUB_OUTPUT"
 
       - name: Build and push image
         id: image
@@ -84,63 +129,68 @@ jobs:
           REGISTRY: ${{ steps.ecr.outputs.registry }}
         run: |
           set -e
-          # Tag with the commit sha so a rollback is just a redeploy of an
-          # earlier tag; "latest" is a convenience pointer, never the source of
-          # truth for what is running.
+          # Tagged with the commit sha, so a rollback is a redeploy of an earlier
+          # tag; "latest" is a convenience pointer, never the source of truth.
           IMAGE="$REGISTRY/$ECR_REPOSITORY:${GITHUB_SHA}"
           docker build -t "$IMAGE" -t "$REGISTRY/$ECR_REPOSITORY:latest" .
           docker push "$IMAGE"
           docker push "$REGISTRY/$ECR_REPOSITORY:latest"
-          echo "image=$IMAGE" >> "$GITHUB_OUTPUT"
+          echo "uri=$IMAGE" >> "$GITHUB_OUTPUT"
 
-      - name: Deploy to App Runner
-        env:
-          IMAGE: ${{ steps.image.outputs.image }}
+      - name: Deploy the service stack
+        id: service
         run: |
           set -e
 
-          ARN=$(aws apprunner list-services \
-                  --query "ServiceSummaryList[?ServiceName=='${APP_RUNNER_SERVICE}'].ServiceArn" \
-                  --output text)
+          aws cloudformation deploy \
+            --template-file infra/aws/service.yml \
+            --stack-name "$SERVICE_STACK" \
+            --no-fail-on-empty-changeset \
+            --parameter-overrides \
+              ImageUri="${{ steps.image.outputs.uri }}" \
+              EcrAccessRoleArn="${{ steps.bootstrap.outputs.ecr_access_role }}" \
+              InstanceRoleArn="${{ steps.bootstrap.outputs.instance_role }}" \
+              AnthropicSecretArn="${{ steps.secret.outputs.arn }}"
 
-          if [ -z "$ARN" ] || [ "$ARN" = "None" ]; then
-            echo "No App Runner service named '${APP_RUNNER_SERVICE}' exists yet."
-            echo "Create it once (see docs/aws-deployment.md), then re-run this workflow."
-            echo "It is created by hand rather than here because it carries the"
-            echo "Anthropic API key configuration, which must not pass through CI."
-            exit 1
-          fi
+          URL=$(aws cloudformation describe-stacks --stack-name "$SERVICE_STACK" \
+                  --query "Stacks[0].Outputs[?OutputKey=='ServiceUrl'].OutputValue" --output text)
+          echo "url=$URL" >> "$GITHUB_OUTPUT"
+          echo "API_URL=$URL" >> "$GITHUB_ENV"
 
-          echo "Updating $ARN to $IMAGE"
-          aws apprunner update-service \
-            --service-arn "$ARN" \
-            --source-configuration "ImageRepository={ImageIdentifier=$IMAGE,ImageRepositoryType=ECR,ImageConfiguration={Port=8080}}" \
-            >/dev/null
-
-          echo "Waiting for the rollout to finish..."
-          for _ in $(seq 1 60); do
-            STATUS=$(aws apprunner describe-service --service-arn "$ARN" \
-                      --query 'Service.Status' --output text)
-            echo "  status: $STATUS"
-            case "$STATUS" in
-              RUNNING) break ;;
-              CREATE_FAILED|DELETE_FAILED|PAUSED)
-                echo "Service is in state $STATUS - deployment did not succeed."
-                exit 1 ;;
-            esac
-            sleep 10
-          done
-
-          URL=$(aws apprunner describe-service --service-arn "$ARN" \
-                 --query 'Service.ServiceUrl' --output text)
-          echo "API_URL=https://$URL" >> "$GITHUB_ENV"
-          echo "Deployed to https://$URL"
+      - name: Show the stack failure reason
+        if: failure() && steps.service.outcome == 'failure'
+        run: |
+          # CloudFormation's own error is usually one line in the event log;
+          # surfacing it here saves a trip to the console.
+          aws cloudformation describe-stack-events --stack-name "$SERVICE_STACK" \
+            --query "StackEvents[?ResourceStatus=='CREATE_FAILED' || ResourceStatus=='UPDATE_FAILED'].[LogicalResourceId,ResourceStatusReason]" \
+            --output table | head -40 || true
 
       - name: Smoke-test the deployed API
         run: |
           set -e
           echo "Checking $API_URL/health"
-          code=$(curl -sSL -o /tmp/health.txt -w '%{http_code}' --max-time 30 "$API_URL/health" || echo 000)
-          echo "HTTP $code"
-          [ "$code" = "200" ] || { echo "Health check failed."; cat /tmp/health.txt; exit 1; }
-          echo "API is healthy."
+
+          # App Runner can still be swapping instances immediately after the
+          # stack settles, so allow a short warm-up rather than failing on the
+          # first request.
+          for attempt in $(seq 1 20); do
+            code=$(curl -sSL -o /tmp/health.txt -w '%{http_code}' --max-time 20 "$API_URL/health" || echo 000)
+            echo "  attempt $attempt: HTTP $code"
+            [ "$code" = "200" ] && { echo "API is healthy."; break; }
+            [ "$attempt" = "20" ] && { echo "Never became healthy."; cat /tmp/health.txt; exit 1; }
+            sleep 15
+          done
+
+      - name: Summary
+        if: always()
+        run: |
+          {
+            echo "### xChange API"
+            echo
+            echo "- URL: ${API_URL:-not deployed}"
+            echo "- Image: ${{ steps.image.outputs.uri }}"
+            echo
+            echo "Set the repository variable \`XCHANGE_API_URL\` to the URL above,"
+            echo "then re-run **Deploy xChange UI** so the frontend calls it."
+          } >> "$GITHUB_STEP_SUMMARY"

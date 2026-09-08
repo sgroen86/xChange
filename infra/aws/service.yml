@@ -1,0 +1,103 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: >
+  xChange API service. Deployed by CI on every push, so it must be safe to apply
+  repeatedly - CloudFormation reconciles rather than recreating.
+
+  The Anthropic key is referenced, never carried: the template points App Runner
+  at a Secrets Manager ARN, and the value behind it is set once by a human. The
+  key therefore never appears in this template, in CI logs, or in the image.
+
+Parameters:
+  ImageUri:
+    Type: String
+    Description: Fully qualified ECR image, tagged with the commit sha.
+
+  EcrAccessRoleArn:
+    Type: String
+    Description: From the bootstrap stack.
+
+  InstanceRoleArn:
+    Type: String
+    Description: From the bootstrap stack.
+
+  AnthropicSecretArn:
+    Type: String
+    Description: Secrets Manager ARN holding the Anthropic API key.
+
+  AnthropicModel:
+    Type: String
+    Default: claude-opus-5
+
+  AllowedOrigin:
+    Type: String
+    Default: https://greenitsolutions.net
+    Description: Origin allowed to call the API from a browser.
+
+  AllowedOriginWww:
+    Type: String
+    Default: https://www.greenitsolutions.net
+
+  Cpu:
+    Type: String
+    Default: '1 vCPU'
+
+  Memory:
+    Type: String
+    Default: '2 GB'
+
+Resources:
+  Service:
+    Type: AWS::AppRunner::Service
+    Properties:
+      ServiceName: xchange-api
+      SourceConfiguration:
+        # CI decides when to deploy, by updating ImageUri. Auto-deployment on
+        # every ECR push would race with the workflow's own rollout.
+        AutoDeploymentsEnabled: false
+        AuthenticationConfiguration:
+          AccessRoleArn: !Ref EcrAccessRoleArn
+        ImageRepository:
+          ImageIdentifier: !Ref ImageUri
+          ImageRepositoryType: ECR
+          ImageConfiguration:
+            Port: '8080'
+            RuntimeEnvironmentVariables:
+              - Name: ASPNETCORE_ENVIRONMENT
+                Value: Production
+              # Double underscore is how .NET maps env vars onto nested config.
+              - Name: Anthropic__Model
+                Value: !Ref AnthropicModel
+              - Name: Cors__AllowedOrigins__0
+                Value: !Ref AllowedOrigin
+              - Name: Cors__AllowedOrigins__1
+                Value: !Ref AllowedOriginWww
+            RuntimeEnvironmentSecrets:
+              - Name: Anthropic__ApiKey
+                Value: !Ref AnthropicSecretArn
+      InstanceConfiguration:
+        Cpu: !Ref Cpu
+        Memory: !Ref Memory
+        InstanceRoleArn: !Ref InstanceRoleArn
+      HealthCheckConfiguration:
+        Protocol: HTTP
+        Path: /health
+        Interval: 10
+        Timeout: 5
+        HealthyThreshold: 1
+        UnhealthyThreshold: 5
+      NetworkConfiguration:
+        IngressConfiguration:
+          IsPubliclyAccessible: true
+      Tags:
+        - Key: Project
+          Value: xchange
+
+Outputs:
+  ServiceUrl:
+    Description: >
+      Public HTTPS host. Set this as the XCHANGE_API_URL repository variable so
+      the frontend build points at it.
+    Value: !Sub https://${Service.ServiceUrl}
+
+  ServiceArn:
+    Value: !GetAtt Service.ServiceArn
