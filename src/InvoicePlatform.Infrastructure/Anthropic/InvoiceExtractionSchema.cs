@@ -5,6 +5,17 @@ namespace InvoicePlatform.Infrastructure.Anthropic;
 /// <summary>
 /// The JSON Schema the model's output is constrained to.
 ///
+/// The field set is capped by a hard API limit, not by preference: the request
+/// is rejected with "The compiled grammar is too large" above roughly seventy
+/// declared properties. Everything the brief named is kept - tax identifiers,
+/// electronic addresses, purchase order and buyer references, payment means,
+/// IBAN and reference, lines, allowances and charges, the VAT breakdown, all
+/// totals, and per-field evidence. What was dropped was never asked for:
+/// contact name/email/phone, a second tax registration id, item name and seller
+/// item id, base quantity, payment means text, BIC and account name, and two
+/// address lines. They remain in the domain model and simply stay null; add one
+/// back only by removing another.
+///
 /// Three deliberate choices:
 ///
 /// 1. Every property is listed in "required", so the model emits each field
@@ -18,10 +29,18 @@ namespace InvoicePlatform.Infrastructure.Anthropic;
 ///    because the mapper already treats empty and whitespace as absent, so a
 ///    blank still becomes null in the domain rather than an empty value.
 ///
-/// 3. Monetary and quantity values are strings matching a decimal pattern, not
-///    JSON numbers. A JSON number would invite a float representation, and
-///    1234.10 must not become 1234.0999999. They are parsed into
-///    <see cref="decimal"/> on arrival (CLAUDE.md, hard rule 3).
+/// 3. Monetary and quantity values are strings, not JSON numbers. A JSON number
+///    would invite a float representation, and 1234.10 must not become
+///    1234.0999999. They are parsed into <see cref="decimal"/> on arrival
+///    (CLAUDE.md, hard rule 3).
+///
+///    They carry no regex "pattern", for two reasons. Constraining ~25 amount
+///    fields by regex compiles into a grammar the API rejects outright - "The
+///    compiled grammar is too large" - and the pattern also contradicted the
+///    empty-string convention above, since it matched no empty value. The
+///    format is described in words instead, and ParseDecimal is the real
+///    guard: it returns null for anything unparseable rather than trusting the
+///    model to have obeyed.
 /// </summary>
 internal static class InvoiceExtractionSchema
 {
@@ -68,16 +87,13 @@ internal static class InvoiceExtractionSchema
         "payment": {
           "type": "object",
           "additionalProperties": false,
-          "required": ["paymentMeansCode", "paymentMeansText", "iban", "bic", "accountName", "paymentReference"],
+          "required": ["paymentMeansCode", "iban", "paymentReference"],
           "properties": {
             "paymentMeansCode": {
               "type": "string",
               "description": "UNTDID 4461 code, e.g. 30 for credit transfer."
             },
-            "paymentMeansText": { "type": "string" },
             "iban": { "type": "string" },
-            "bic": { "type": "string" },
-            "accountName": { "type": "string" },
             "paymentReference": { "type": "string" }
           }
         },
@@ -87,22 +103,18 @@ internal static class InvoiceExtractionSchema
             "type": "object",
             "additionalProperties": false,
             "required": [
-              "lineId", "description", "itemName", "sellerItemIdentifier", "quantity",
-              "unitCode", "unitPrice", "baseQuantity", "netAmount", "vatCategoryCode",
-              "vatPercentage", "allowancesAndCharges"
+              "lineId", "description", "quantity", "unitCode", "unitPrice",
+              "netAmount", "vatCategoryCode", "vatPercentage", "allowancesAndCharges"
             ],
             "properties": {
               "lineId": { "type": "string" },
               "description": { "type": "string" },
-              "itemName": { "type": "string" },
-              "sellerItemIdentifier": { "type": "string" },
               "quantity": { "$ref": "#/$defs/decimalString" },
               "unitCode": {
                 "type": "string",
                 "description": "UN/ECE Rec 20 code, e.g. C62 for each, HUR for hour."
               },
               "unitPrice": { "$ref": "#/$defs/decimalString" },
-              "baseQuantity": { "$ref": "#/$defs/decimalString" },
               "netAmount": {
                 "$ref": "#/$defs/decimalString",
                 "description": "Line net amount excluding VAT, exactly as printed."
@@ -195,16 +207,14 @@ internal static class InvoiceExtractionSchema
       "$defs": {
         "decimalString": {
           "type": "string",
-          "pattern": "^-?[0-9]+(\\.[0-9]+)?$",
-          "description": "A decimal as a string, using . as the decimal separator and no thousands separators or currency symbols. Never a JSON number. Use an empty string if the value is not in the document."
+          "description": "A decimal as a string, e.g. 1234.50, using . as the decimal separator and no thousands separators or currency symbols. Never a JSON number. Empty string if the value is not in the document."
         },
         "party": {
           "type": "object",
           "additionalProperties": false,
           "required": [
-            "name", "legalRegistrationId", "vatIdentifier", "taxRegistrationId",
-            "electronicAddress", "electronicAddressScheme",
-            "contactName", "contactEmail", "contactPhone", "address"
+            "name", "legalRegistrationId", "vatIdentifier",
+            "electronicAddress", "electronicAddressScheme", "address"
           ],
           "properties": {
             "name": { "type": "string" },
@@ -216,7 +226,6 @@ internal static class InvoiceExtractionSchema
               "type": "string",
               "description": "VAT number, e.g. NL123456789B01."
             },
-            "taxRegistrationId": { "type": "string" },
             "electronicAddress": {
               "type": "string",
               "description": "Electronic address for e-invoicing, e.g. a PEPPOL participant id or invoicing email."
@@ -225,19 +234,14 @@ internal static class InvoiceExtractionSchema
               "type": "string",
               "description": "Scheme of the electronic address, e.g. 0106 or EM."
             },
-            "contactName": { "type": "string" },
-            "contactEmail": { "type": "string" },
-            "contactPhone": { "type": "string" },
             "address": {
               "type": "object",
               "additionalProperties": false,
-              "required": ["streetName", "additionalStreetName", "postalZone", "cityName", "countrySubdivision", "countryCode"],
+              "required": ["streetName", "postalZone", "cityName", "countryCode"],
               "properties": {
                 "streetName": { "type": "string" },
-                "additionalStreetName": { "type": "string" },
                 "postalZone": { "type": "string" },
                 "cityName": { "type": "string" },
-                "countrySubdivision": { "type": "string" },
                 "countryCode": {
                   "type": "string",
                   "description": "ISO 3166-1 alpha-2, e.g. NL."
