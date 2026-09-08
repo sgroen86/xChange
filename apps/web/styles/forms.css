@@ -1,0 +1,153 @@
+/* Ported from Bookkeeping: css/forms.css */
+
+.form-group { margin-bottom: var(--space-5); }
+.form-label {
+  display: block;
+  font-size: var(--text-sm);
+  font-weight: 600;
+  color: var(--color-ink-muted);
+  margin-bottom: 6px;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+.form-input, .form-select, .form-textarea,
+.input, select.input, textarea.input {
+  width: 100%;
+  padding: 10px 14px;
+  background: var(--color-surface-raised);
+  border: 1px solid var(--color-border);
+  border-radius: 10px;
+  color: var(--color-ink);
+  font-family: var(--font-body);
+  font-size: var(--text-base);
+  transition: border-color var(--transition-fast);
+  line-height: 1.5;
+}
+.form-input:focus, .form-select:focus, .form-textarea:focus,
+.input:focus, select.input:focus, textarea.input:focus {
+  outline: none;
+  border-color: var(--color-primary);
+  box-shadow: 0 0 0 3px var(--color-primary-soft);
+}
+.form-input::placeholder, .form-textarea::placeholder,
+.input::placeholder { color: var(--color-ink-muted); }
+
+.form-select, select.input {
+  appearance: none;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%2364748b' stroke-width='2'%3E%3Cpath d='m6 9 6 6 6-6'/%3E%3C/svg%3E");
+  background-repeat: no-repeat;
+  background-position: right 10px center;
+  background-size: 16px;
+  padding-right: 36px;
+}
+.form-select option, select.input option { background: var(--color-surface); color: var(--color-ink); }
+.form-textarea, textarea.input { resize: vertical; min-height: 80px; }
+
+.form-help {
+  display: flex; align-items: center; gap: 6px;
+  font-size: var(--text-xs); color: var(--color-ink-muted); margin-top: var(--space-2);
+}
+.form-help svg { width: 14px; height: 14px; color: var(--color-primary); }
+.form-row { display: grid; grid-template-columns: 1fr 1fr; gap: var(--space-4); }
+
+/* BEM-style form classes */
+.form .form__row {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+  gap: var(--space-4);
+  margin-bottom: var(--space-4);
+}
+.form .form__group { display: flex; flex-direction: column; }
+.form .form__group label {
+  font-size: var(--text-sm);
+  font-weight: 600;
+  color: var(--color-ink-muted);
+  margin-bottom: 6px;
+}
+.form .form__actions { display: flex; gap: var(--space-3); margin-top: var(--space-4); }
+
+.card__body label {
+  font-size: var(--text-sm);
+  font-weight: 600;
+  color: var(--color-ink-muted);
+  display: block;
+  margin-bottom: 6px;
+}
+
+.form input[type="text"],
+.form input[type="email"],
+.form input[type="number"],
+.form input[type="password"],
+.form input[type="date"],
+.form input[type="tel"],
+.form input[type="url"],
+.form select,
+.form textarea {
+  width: 100%;
+  padding: 10px 14px;
+  background: var(--color-surface-raised);
+  border: 1px solid var(--color-border);
+  border-radius: 10px;
+  color: var(--color-ink);
+  font-family: var(--font-body);
+  font-size: var(--text-base);
+  transition: border-color var(--transition-fast);
+  line-height: 1.5;
+}
+.form input:focus,
+.form select:focus,
+.form textarea:focus {
+  outline: none;
+  border-color: var(--color-primary);
+  box-shadow: 0 0 0 3px var(--color-primary-soft);
+}
+.form select {
+  appearance: none;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%2364748b' stroke-width='2'%3E%3Cpath d='m6 9 6 6 6-6'/%3E%3C/svg%3E");
+  background-repeat: no-repeat;
+  background-position: right 10px center;
+  background-size: 16px;
+  padding-right: 36px;
+}
+
+/* Dropzone */
+.dropzone {
+  border: 2px dashed var(--color-border);
+  border-radius: var(--radius-lg);
+  padding: var(--space-8) var(--space-6);
+  text-align: center;
+  cursor: pointer;
+  transition: border-color var(--transition-fast), background var(--transition-fast);
+}
+.dropzone:hover {
+  border-color: var(--color-primary-soft);
+  background: var(--color-primary-bg);
+}
+.dropzone__icon {
+  width: 40px; height: 40px;
+  margin: 0 auto var(--space-3);
+  color: var(--color-ink-muted);
+}
+.dropzone__icon svg { width: 40px; height: 40px; }
+.dropzone__text { font-size: var(--text-sm); color: var(--color-ink-soft); }
+.dropzone__text strong { color: var(--color-primary); }
+
+/* Toggle */
+.toggle {
+  width: 40px; height: 22px;
+  background: var(--color-border);
+  border-radius: 11px;
+  cursor: pointer;
+  transition: background 0.2s;
+  padding: 2px;
+  display: flex; align-items: center;
+}
+.toggle--active { background: var(--color-primary); }
+.toggle__switch {
+  width: 18px; height: 18px;
+  background: var(--color-ink);
+  border-radius: 50%;
+  transition: transform 0.2s;
+  box-shadow: 0 1px 3px rgba(0,0,0,0.3);
+}
+.toggle--active .toggle__switch { transform: translateX(18px); background: var(--color-bg); }

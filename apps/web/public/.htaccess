@@ -1,0 +1,19 @@
+# xChange static export, served from https://www.greenitsolutions.net/xchange/
+#
+# Every route is a pre-rendered directory (trailingSlash: true), so Apache
+# serves them directly. The one exception is the review route: invoice ids are
+# created at runtime and have no pre-rendered page, so any id is rewritten onto
+# the placeholder page, which reads the real id from the URL client-side.
+
+<IfModule mod_rewrite.c>
+  RewriteEngine On
+  RewriteBase /xchange/
+
+  RewriteCond %{REQUEST_FILENAME} !-f
+  RewriteCond %{REQUEST_FILENAME} !-d
+  RewriteRule ^invoices/[^/]+/review/?$ invoices/demo/review/index.html [L]
+</IfModule>
+
+<IfModule mod_mime.c>
+  AddType application/xml .xml
+</IfModule>

@@ -147,7 +147,7 @@ dotnet run --project src/InvoicePlatform.Worker
 ```
 cd apps/web
 npm run dev
-npm run build
+npm run build      # static export -> apps/web/out
 npm run lint
 ```
 
@@ -157,6 +157,26 @@ message means the toolchain, not the code.
 
 There is no `docker compose` yet; add it when the first real dependency (Postgres, object storage,
 queue) lands.
+
+## Frontend deployment
+
+`apps/web` is a **static export** (`output: "export"`, `basePath: "/xchange"`, `trailingSlash`),
+because production is `https://www.greenitsolutions.net/xchange/` — Apache + PHP shared hosting with
+no Node runtime. `npm run build` writes `apps/web/out`; deploy its contents to `/xchange/` on that
+host. Do not introduce server components that need a runtime, route handlers, middleware or
+`next/image` optimisation: none of them exist in an export.
+
+Invoice ids are created at runtime, so `/invoices/[invoiceId]/review` cannot be fully pre-rendered.
+Only a placeholder is emitted and `apps/web/public/.htaccess` rewrites any id onto it; the client
+reads the real id from the URL. Client-side navigation never touches Apache.
+
+The UI is a port of the Bookkeeping design system — plain CSS in `apps/web/styles/`, tokens copied
+verbatim from `variables.css`, icons copied from `js/components/icons.js`. **No CSS framework and no
+component library.** See `docs/bookkeeping-ui-style.md` before changing anything visual.
+
+The prototype's processing is mocked end to end (`apps/web/lib/canonical.ts`): no OCR, no LLM, no
+AWS, no PEPPOL. Money is integer-scaled in `apps/web/lib/money.ts`, never floating point, and the
+XML serialiser is deterministic.
 
 ## Repository context
 

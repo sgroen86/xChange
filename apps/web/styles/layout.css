@@ -1,0 +1,93 @@
+/* Ported from Bookkeeping: css/layout.css
+   Only the shell pieces xChange uses (app, header, content, mobile drawer).
+   Company switcher / search overlay / notifications were not ported. */
+
+.app { display: flex; height: 100vh; overflow: hidden; }
+
+.app__main {
+  flex: 1;
+  margin-left: var(--sidebar-width);
+  display: flex;
+  flex-direction: column;
+  height: 100vh;
+  overflow: hidden;
+  transition: margin-left var(--transition-base);
+}
+.app--sidebar-collapsed .app__main { margin-left: var(--sidebar-collapsed); }
+
+.header {
+  height: var(--header-height);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0 var(--space-6);
+  background: rgba(17, 24, 39, 0.8);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  border-bottom: 1px solid var(--color-border);
+  flex-shrink: 0;
+}
+.header__left { display: flex; align-items: center; gap: var(--space-4); }
+.header__title {
+  font-family: var(--font-body);
+  font-weight: 700;
+  font-size: var(--text-base);
+  color: var(--color-ink);
+  letter-spacing: -0.01em;
+}
+.header__breadcrumb { font-size: var(--text-xs); color: var(--color-ink-muted); }
+.header__right { display: flex; align-items: center; gap: var(--space-2); }
+.header__date { font-size: 11px; color: var(--color-ink-muted); white-space: nowrap; }
+.header__divider {
+  width: 1px;
+  height: 20px;
+  background: var(--color-border);
+  margin: 0 var(--space-2);
+}
+
+.header__menu-toggle {
+  display: none;
+  align-items: center;
+  justify-content: center;
+  width: 40px;
+  height: 40px;
+  border-radius: 10px;
+  border: 1px solid var(--color-border);
+  background: var(--color-surface-raised);
+  color: var(--color-ink);
+  cursor: pointer;
+  flex-shrink: 0;
+  -webkit-tap-highlight-color: transparent;
+}
+.header__menu-toggle:active { background: var(--color-surface-hover); transform: scale(0.95); }
+.header__menu-toggle svg { width: 22px; height: 22px; }
+
+.content {
+  flex: 1;
+  overflow-y: auto;
+  overflow-x: hidden;
+  min-height: 0; /* crucial for flex child scrolling */
+}
+.content__inner {
+  padding: var(--space-6);
+  max-width: 1400px;
+  padding-bottom: var(--space-8);
+}
+
+.sidebar-overlay {
+  display: none;
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.6);
+  z-index: 99;
+}
+.sidebar-overlay--visible { display: block; }
+
+@media (max-width: 768px) {
+  .app__main { margin-left: 0 !important; width: 100%; }
+  .header { padding: 0 var(--space-3); }
+  .header__menu-toggle { display: flex !important; }
+  .header__date,
+  .header__divider { display: none; }
+  .content__inner { padding: var(--space-3); padding-bottom: var(--space-6); }
+}

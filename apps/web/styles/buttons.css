@@ -1,0 +1,75 @@
+/* Ported from Bookkeeping: css/buttons.css */
+
+.btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  padding: 10px 20px;
+  font-family: var(--font-body);
+  font-size: var(--text-base);
+  font-weight: 600;
+  border: 1px solid transparent;
+  border-radius: 10px;
+  cursor: pointer;
+  transition: all var(--transition-fast);
+  white-space: nowrap;
+  line-height: 1.4;
+}
+.btn svg { width: 18px; height: 18px; flex-shrink: 0; }
+
+.btn--primary {
+  background: var(--color-primary);
+  color: var(--color-bg);
+  border-color: var(--color-primary);
+}
+.btn--primary:hover { opacity: 0.9; }
+
+.btn--secondary {
+  background: var(--color-surface-raised);
+  color: var(--color-ink-soft);
+  border-color: var(--color-border);
+}
+.btn--secondary:hover {
+  background: var(--color-surface-hover);
+  color: var(--color-ink);
+}
+
+.btn--ghost {
+  background: transparent;
+  color: var(--color-ink-soft);
+  border-color: transparent;
+}
+.btn--ghost:hover {
+  background: var(--color-surface-hover);
+  color: var(--color-ink);
+}
+
+.btn--danger {
+  background: var(--color-danger);
+  color: #fff;
+  border-color: var(--color-danger);
+}
+.btn--danger:hover { opacity: 0.9; }
+
+.btn--secondary.active {
+  background: var(--color-primary);
+  color: var(--color-bg);
+  border-color: var(--color-primary);
+}
+
+.btn:disabled,
+.btn[aria-disabled='true'] {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
+.btn-group { display: inline-flex; gap: 0; }
+.btn-group .btn { border-radius: 0; }
+.btn-group .btn:first-child { border-radius: 10px 0 0 10px; }
+.btn-group .btn:last-child { border-radius: 0 10px 10px 0; }
+.btn-group .btn + .btn { border-left: none; }
+
+.btn--sm { padding: 4px 10px; font-size: var(--text-xs); }
+.btn--sm svg { width: 14px; height: 14px; }
+.btn--icon { padding: 6px; }
