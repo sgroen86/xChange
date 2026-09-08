@@ -62,22 +62,40 @@ internal sealed class DynamoDbIdentityStore(
 
     public async Task<bool> AnyUsersExistAsync(CancellationToken cancellationToken = default)
     {
-        // Only ever asked during first-run setup, and it stops at the first hit.
-        var response = await dynamo.ScanAsync(
-            new ScanRequest
-            {
-                TableName = _table,
-                FilterExpression = "begins_with(#pk, :prefix)",
-                ExpressionAttributeNames = new Dictionary<string, string> { ["#pk"] = Pk },
-                ExpressionAttributeValues = new Dictionary<string, AttributeValue>
-                {
-                    [":prefix"] = new("USER#"),
-                },
-                Limit = 1,
-            },
-            cancellationToken).ConfigureAwait(false);
+        // Paginated on purpose. A DynamoDB Limit caps the items *examined*, not
+        // the items returned, and the filter is applied afterwards - so
+        // "Limit = 1" on a table that also holds sessions and per-organisation
+        // copies usually examines a non-user row, matches nothing, and reports
+        // that no accounts exist. That reopened first-run setup on a live
+        // system. Scan until a match is found or the table is exhausted.
+        Dictionary<string, AttributeValue>? startKey = null;
 
-        return response.Items.Count > 0;
+        do
+        {
+            var response = await dynamo.ScanAsync(
+                new ScanRequest
+                {
+                    TableName = _table,
+                    FilterExpression = "begins_with(#pk, :prefix)",
+                    ExpressionAttributeNames = new Dictionary<string, string> { ["#pk"] = Pk },
+                    ExpressionAttributeValues = new Dictionary<string, AttributeValue>
+                    {
+                        [":prefix"] = new("USER#"),
+                    },
+                    ExclusiveStartKey = startKey,
+                },
+                cancellationToken).ConfigureAwait(false);
+
+            if (response.Items.Count > 0)
+            {
+                return true;
+            }
+
+            startKey = response.LastEvaluatedKey is { Count: > 0 } ? response.LastEvaluatedKey : null;
+        }
+        while (startKey is not null);
+
+        return false;
     }
 
     public async Task AddAsync(User user, CancellationToken cancellationToken = default)
