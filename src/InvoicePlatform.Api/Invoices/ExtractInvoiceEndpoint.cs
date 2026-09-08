@@ -1,3 +1,4 @@
+using InvoicePlatform.Api.Identity;
 using InvoicePlatform.Application.Invoices;
 using InvoicePlatform.Contracts.Invoices;
 using InvoicePlatform.Domain.Validation;
@@ -34,6 +35,10 @@ public static class ExtractInvoiceEndpoint
 
     public static RouteGroupBuilder MapInvoiceEndpoints(this RouteGroupBuilder group)
     {
+        // The guards go on this endpoint, not on the group. Applying them to
+        // the group would also protect login and setup, which have to stay
+        // reachable to a signed-out visitor - and that failure is invisible
+        // until the login page itself returns 401.
         group.MapPost("/invoices/extract", ExtractAsync)
             .WithName("ExtractInvoice")
             .WithSummary("Extract canonical invoice data from a PDF.")
@@ -41,8 +46,13 @@ public static class ExtractInvoiceEndpoint
             .Accepts<IFormFile>("multipart/form-data")
             .Produces<ExtractInvoiceResponse>()
             .ProducesProblem(StatusCodes.Status400BadRequest)
+            .ProducesProblem(StatusCodes.Status401Unauthorized)
             .ProducesProblem(StatusCodes.Status413PayloadTooLarge)
-            .ProducesProblem(StatusCodes.Status502BadGateway);
+            .ProducesProblem(StatusCodes.Status502BadGateway)
+            // Extraction spends money on every call, so it needs a login and is
+            // closed to read-only accounts.
+            .RequireAuthenticatedUser()
+            .RequireRole(UserRoleName.Admin, UserRoleName.User);
 
         return group;
     }

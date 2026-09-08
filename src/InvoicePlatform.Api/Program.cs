@@ -71,13 +71,13 @@ app.UseMiddleware<AuthenticationMiddleware>();
 app.MapHealthChecks("/health");
 
 var api = app.MapGroup("/api/v1").RequireCors(CorsPolicy);
-api.MapAuthEndpoints();
 
-// Extraction costs money on every call, so it is behind a login and closed to
-// read-only accounts.
-api.MapInvoiceEndpoints()
-   .RequireAuthenticatedUser()
-   .RequireRole(UserRoleName.Admin, UserRoleName.User);
+// Both map onto the same group. Authorisation is declared per endpoint inside
+// MapInvoiceEndpoints rather than here: these Map* helpers return the group,
+// so a guard chained on at this level silently applies to every route in it,
+// login included.
+api.MapAuthEndpoints();
+api.MapInvoiceEndpoints();
 
 app.Run();
 
