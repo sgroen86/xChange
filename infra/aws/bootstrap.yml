@@ -113,6 +113,10 @@ Resources:
                 Action:
                   - cloudformation:CreateStack
                   - cloudformation:UpdateStack
+                  # Needed by the workflow's own recovery path: a stack whose
+                  # first create failed sits in ROLLBACK_COMPLETE and can only
+                  # be replaced, never updated.
+                  - cloudformation:DeleteStack
                   - cloudformation:DescribeStacks
                   - cloudformation:DescribeStackEvents
                   - cloudformation:DescribeStackResources
