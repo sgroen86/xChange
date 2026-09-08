@@ -1,0 +1,146 @@
+name: Deploy xChange API
+
+# Builds the ASP.NET Core API as a container, pushes it to ECR and rolls out a
+# new App Runner deployment.
+#
+# Why App Runner and not Lambda: the endpoint accepts uploads up to 20 MB and a
+# single request can run for minutes while the model reads the PDF. API Gateway
+# caps request payloads at 10 MB and a Lambda function URL at 6 MB, so either
+# would reject valid invoices outright. App Runner terminates TLS, gives the
+# service a public HTTPS hostname, and scales to zero-ish between uploads.
+#
+# Credentials: this workflow authenticates with GitHub OIDC and assumes a role
+# in your account. There is no long-lived access key anywhere in the repo, in
+# GitHub, or on a developer machine.
+#
+# The Anthropic API key is NOT set here. It lives in the App Runner service
+# configuration (ideally as a Secrets Manager reference), so it never passes
+# through CI logs or the container image.
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'src/**'
+      - 'Dockerfile'
+      - '.github/workflows/deploy-api.yml'
+  workflow_dispatch:
+
+concurrency:
+  group: deploy-xchange-api
+  cancel-in-progress: false
+
+permissions:
+  id-token: write   # required for OIDC
+  contents: read
+
+env:
+  AWS_REGION: eu-central-1
+  ECR_REPOSITORY: xchange-api
+  APP_RUNNER_SERVICE: xchange-api
+
+jobs:
+  deploy:
+    name: Build and deploy
+    runs-on: ubuntu-latest
+    environment: xchange-aws
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v5
+
+      - name: Setup .NET
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '9.0.x'
+
+      # Gate the deploy on the tests, not just on the image building.
+      - name: Test
+        run: dotnet test --nologo
+
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ secrets.AWS_DEPLOY_ROLE_ARN }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      - name: Log in to Amazon ECR
+        id: ecr
+        uses: aws-actions/amazon-ecr-login@v2
+
+      - name: Ensure the ECR repository exists
+        run: |
+          set -e
+          aws ecr describe-repositories --repository-names "$ECR_REPOSITORY" >/dev/null 2>&1 \
+            || aws ecr create-repository \
+                 --repository-name "$ECR_REPOSITORY" \
+                 --image-scanning-configuration scanOnPush=true \
+                 --image-tag-mutability MUTABLE >/dev/null
+          echo "Repository ready: $ECR_REPOSITORY"
+
+      - name: Build and push image
+        id: image
+        env:
+          REGISTRY: ${{ steps.ecr.outputs.registry }}
+        run: |
+          set -e
+          # Tag with the commit sha so a rollback is just a redeploy of an
+          # earlier tag; "latest" is a convenience pointer, never the source of
+          # truth for what is running.
+          IMAGE="$REGISTRY/$ECR_REPOSITORY:${GITHUB_SHA}"
+          docker build -t "$IMAGE" -t "$REGISTRY/$ECR_REPOSITORY:latest" .
+          docker push "$IMAGE"
+          docker push "$REGISTRY/$ECR_REPOSITORY:latest"
+          echo "image=$IMAGE" >> "$GITHUB_OUTPUT"
+
+      - name: Deploy to App Runner
+        env:
+          IMAGE: ${{ steps.image.outputs.image }}
+        run: |
+          set -e
+
+          ARN=$(aws apprunner list-services \
+                  --query "ServiceSummaryList[?ServiceName=='${APP_RUNNER_SERVICE}'].ServiceArn" \
+                  --output text)
+
+          if [ -z "$ARN" ] || [ "$ARN" = "None" ]; then
+            echo "No App Runner service named '${APP_RUNNER_SERVICE}' exists yet."
+            echo "Create it once (see docs/aws-deployment.md), then re-run this workflow."
+            echo "It is created by hand rather than here because it carries the"
+            echo "Anthropic API key configuration, which must not pass through CI."
+            exit 1
+          fi
+
+          echo "Updating $ARN to $IMAGE"
+          aws apprunner update-service \
+            --service-arn "$ARN" \
+            --source-configuration "ImageRepository={ImageIdentifier=$IMAGE,ImageRepositoryType=ECR,ImageConfiguration={Port=8080}}" \
+            >/dev/null
+
+          echo "Waiting for the rollout to finish..."
+          for _ in $(seq 1 60); do
+            STATUS=$(aws apprunner describe-service --service-arn "$ARN" \
+                      --query 'Service.Status' --output text)
+            echo "  status: $STATUS"
+            case "$STATUS" in
+              RUNNING) break ;;
+              CREATE_FAILED|DELETE_FAILED|PAUSED)
+                echo "Service is in state $STATUS - deployment did not succeed."
+                exit 1 ;;
+            esac
+            sleep 10
+          done
+
+          URL=$(aws apprunner describe-service --service-arn "$ARN" \
+                 --query 'Service.ServiceUrl' --output text)
+          echo "API_URL=https://$URL" >> "$GITHUB_ENV"
+          echo "Deployed to https://$URL"
+
+      - name: Smoke-test the deployed API
+        run: |
+          set -e
+          echo "Checking $API_URL/health"
+          code=$(curl -sSL -o /tmp/health.txt -w '%{http_code}' --max-time 30 "$API_URL/health" || echo 000)
+          echo "HTTP $code"
+          [ "$code" = "200" ] || { echo "Health check failed."; cat /tmp/health.txt; exit 1; }
+          echo "API is healthy."

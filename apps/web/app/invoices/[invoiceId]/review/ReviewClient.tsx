@@ -14,10 +14,11 @@ import {
   type CanonicalInvoiceDraft,
   type CanonicalLine,
   type CanonicalParty,
+  type ValidationIssue,
 } from "../../../../lib/canonical";
 import { formatAmount, formatScaled, SCALE_AMOUNT } from "../../../../lib/money";
 import { getPdf } from "../../../../lib/pdfStore";
-import { loadDraft, saveDraft } from "../../../../lib/store";
+import { loadDraft, loadServerResult, saveDraft } from "../../../../lib/store";
 
 type TabKey = "invoice" | "xml" | "warnings";
 
@@ -37,6 +38,7 @@ export default function ReviewClient() {
   const [draft, setDraft] = useState<CanonicalInvoiceDraft | null>(() =>
     invoiceId ? loadDraft(invoiceId) : null,
   );
+  const [server] = useState(() => (invoiceId ? loadServerResult(invoiceId) : null));
   const [tab, setTab] = useState<TabKey>("invoice");
   const [validatedAt, setValidatedAt] = useState<string | null>(null);
 
@@ -72,9 +74,28 @@ export default function ReviewClient() {
     };
   }, [invoiceId]);
 
-  const issues = useMemo(() => (draft ? validate(draft) : []), [draft]);
   const totals = useMemo(() => (draft ? calculate(draft) : null), [draft]);
-  const xml = useMemo(() => (draft ? toCanonicalXml(draft) : ""), [draft]);
+
+  /* The API's XML and warnings are authoritative: they come from the same
+     deterministic server code that will produce the final document. The local
+     versions are only used when the extraction was mocked, or after the user
+     has edited fields the server has not seen. */
+  const localIssues = useMemo(() => (draft ? validate(draft) : []), [draft]);
+
+  const issues: ValidationIssue[] = useMemo(() => {
+    if (!server) return localIssues;
+    return server.warnings.map((warning) => ({
+      severity: warning.severity === "error" ? "error" : "warning",
+      code: warning.code,
+      path: warning.path,
+      message: warning.message,
+    }));
+  }, [server, localIssues]);
+
+  const xml = useMemo(
+    () => server?.canonicalXml ?? (draft ? toCanonicalXml(draft) : ""),
+    [server, draft],
+  );
 
   const errorCount = issues.filter((issue) => issue.severity === "error").length;
   const warningCount = issues.length - errorCount;

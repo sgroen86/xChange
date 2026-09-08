@@ -6,9 +6,40 @@
  * instead — see lib/pdfStore.ts.
  */
 
+import type { ApiProviderExecution, ApiValidationWarning } from "./api";
 import type { CanonicalInvoiceDraft } from "./canonical";
 
 const DRAFT_KEY = "xchange.draft.";
+const SERVER_KEY = "xchange.server.";
+
+/**
+ * What the API returned for an extraction. Kept separate from the draft because
+ * it is authoritative and not editable: the XML and the warnings come from
+ * deterministic server code, so the review screen shows them rather than
+ * recomputing its own version.
+ */
+export interface ServerExtraction {
+  canonicalXml: string;
+  warnings: ApiValidationWarning[];
+  providerExecution: ApiProviderExecution;
+}
+
+export function saveServerResult(invoiceId: string, result: ServerExtraction): void {
+  try {
+    sessionStorage.setItem(SERVER_KEY + invoiceId, JSON.stringify(result));
+  } catch {
+    // Storage unavailable: the review screen falls back to local calculation.
+  }
+}
+
+export function loadServerResult(invoiceId: string): ServerExtraction | null {
+  try {
+    const raw = sessionStorage.getItem(SERVER_KEY + invoiceId);
+    return raw ? (JSON.parse(raw) as ServerExtraction) : null;
+  } catch {
+    return null;
+  }
+}
 
 export function saveDraft(draft: CanonicalInvoiceDraft): void {
   try {

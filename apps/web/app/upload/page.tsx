@@ -5,10 +5,12 @@ import { useCallback, useRef, useState } from "react";
 
 import { Icon } from "../../components/Icon";
 import { useToast } from "../../components/Toast";
+import { extractInvoice, isApiConfigured, toDraft } from "../../lib/api";
+import { ApiError } from "../../lib/api";
 import { mockDraftFromFile } from "../../lib/canonical";
 import { checkPdf, formatBytes, MAX_PDF_BYTES } from "../../lib/pdf";
 import { putPdf } from "../../lib/pdfStore";
-import { newInvoiceId, saveDraft } from "../../lib/store";
+import { newInvoiceId, saveDraft, saveServerResult } from "../../lib/store";
 
 /** Mock pipeline stages, named after the real flow in CLAUDE.md. */
 const STAGES = [
@@ -67,19 +69,55 @@ export default function UploadPage() {
 
     const invoiceId = newInvoiceId();
 
-    for (let index = 0; index < STAGES.length; index++) {
-      setStageIndex(index);
-      setProgress(Math.round(((index + 1) / STAGES.length) * 100));
-      await new Promise((resolve) => window.setTimeout(resolve, STAGES[index].ms));
+    try {
+      if (isApiConfigured) {
+        // Real extraction. The stages are indicative only - the API does the
+        // whole pipeline in one call, so progress cannot be reported per stage.
+        setStageIndex(0);
+        setProgress(15);
+
+        const response = await extractInvoice(file);
+
+        setStageIndex(STAGES.length - 1);
+        setProgress(100);
+
+        await putPdf(invoiceId, file);
+        saveDraft({ ...toDraft(response, file.name, file.size), id: invoiceId });
+        saveServerResult(invoiceId, {
+          canonicalXml: response.canonicalXml,
+          warnings: response.warnings,
+          providerExecution: response.providerExecution,
+        });
+
+        const errorCount = response.warnings.filter((w) => w.severity === "error").length;
+        showToast(
+          errorCount > 0
+            ? `Factuur gelezen met ${errorCount} fout(en). Controleer de gegevens.`
+            : "Factuur gelezen. Controleer de gegevens.",
+          errorCount > 0 ? "warning" : "success",
+        );
+      } else {
+        // No API configured: the simulated pipeline, unchanged.
+        for (let index = 0; index < STAGES.length; index++) {
+          setStageIndex(index);
+          setProgress(Math.round(((index + 1) / STAGES.length) * 100));
+          await new Promise((resolve) => window.setTimeout(resolve, STAGES[index].ms));
+        }
+
+        await putPdf(invoiceId, file);
+        saveDraft(mockDraftFromFile(invoiceId, file.name, file.size));
+        showToast("Concept aangemaakt (mockdata). Controleer de gegevens.", "success");
+      }
+
+      router.push(`/invoices/${invoiceId}/review`);
+    } catch (cause) {
+      setStageIndex(-1);
+      setProgress(0);
+      const message =
+        cause instanceof ApiError ? cause.message : "De conversie is onverwacht mislukt.";
+      setErrors([message]);
+      showToast(message, "danger");
     }
-
-    // Persist before navigating: on the static export this can be a full
-    // document load, which would drop anything held only in memory.
-    await putPdf(invoiceId, file);
-    saveDraft(mockDraftFromFile(invoiceId, file.name, file.size));
-
-    showToast("Concept aangemaakt. Controleer de gegevens.", "success");
-    router.push(`/invoices/${invoiceId}/review`);
   };
 
   const canConvert = Boolean(file) && errors.length === 0 && !processing;

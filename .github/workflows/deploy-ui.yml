@@ -70,6 +70,10 @@ jobs:
         working-directory: apps/web
         env:
           XCHANGE_BASE_PATH: ${{ env.BASE_PATH }}
+          # Baked in at build time, because a static export has no server to read
+          # configuration at runtime. Set the XCHANGE_API_URL repository variable
+          # to the App Runner URL; leaving it unset keeps the UI on mock data.
+          NEXT_PUBLIC_XCHANGE_API_URL: ${{ vars.XCHANGE_API_URL }}
         run: npm run build
 
       - name: Verify the export before shipping it
