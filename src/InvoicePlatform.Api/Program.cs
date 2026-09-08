@@ -1,4 +1,5 @@
 using Amazon.Lambda.AspNetCoreServer.Hosting;
+using InvoicePlatform.Api.Identity;
 using InvoicePlatform.Api.Invoices;
 using InvoicePlatform.Infrastructure;
 using Microsoft.AspNetCore.HttpOverrides;
@@ -42,6 +43,7 @@ builder.Services.AddCors(options =>
 });
 
 builder.Services.AddInvoiceExtraction(builder.Configuration);
+builder.Services.AddIdentity(builder.Configuration);
 
 var app = builder.Build();
 
@@ -63,8 +65,19 @@ if (app.Environment.IsDevelopment())
 app.UseCors(CorsPolicy);
 app.UseStatusCodePages();
 
+// Identifies the caller if a bearer token is present. Enforcement is per route.
+app.UseMiddleware<AuthenticationMiddleware>();
+
 app.MapHealthChecks("/health");
-app.MapGroup("/api/v1").MapInvoiceEndpoints().RequireCors(CorsPolicy);
+
+var api = app.MapGroup("/api/v1").RequireCors(CorsPolicy);
+api.MapAuthEndpoints();
+
+// Extraction costs money on every call, so it is behind a login and closed to
+// read-only accounts.
+api.MapInvoiceEndpoints()
+   .RequireAuthenticatedUser()
+   .RequireRole(UserRoleName.Admin, UserRoleName.User);
 
 app.Run();
 

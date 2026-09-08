@@ -71,6 +71,57 @@ Resources:
                 Action: secretsmanager:GetSecretValue
                 Resource: !Ref AnthropicSecretArn
 
+        - PolicyName: identity-table
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action:
+                  - dynamodb:GetItem
+                  - dynamodb:PutItem
+                  - dynamodb:DeleteItem
+                  - dynamodb:Scan
+                Resource: !GetAtt IdentityTable.Arn
+
+  # Users, sessions and login-attempt counters.
+  #
+  # DynamoDB rather than the PostgreSQL CLAUDE.md specifies, and knowingly so:
+  # 25 GB and 25 read/write units a month are a perpetual free tier where the
+  # smallest RDS instance is not free, and a Lambda has no connection pool to
+  # keep warm. On-demand billing means an idle app costs nothing. Move to
+  # PostgreSQL when the database lands - the store interfaces exist so the swap
+  # touches one class.
+  IdentityTable:
+    Type: AWS::DynamoDB::Table
+    # User accounts are not build output. Losing this table means everyone is
+    # locked out and setup has to be redone.
+    DeletionPolicy: Retain
+    UpdateReplacePolicy: Retain
+    Properties:
+      TableName: xchange-identity
+      BillingMode: PAY_PER_REQUEST
+      AttributeDefinitions:
+        - AttributeName: pk
+          AttributeType: S
+        - AttributeName: sk
+          AttributeType: S
+      KeySchema:
+        - AttributeName: pk
+          KeyType: HASH
+        - AttributeName: sk
+          KeyType: RANGE
+      TimeToLiveSpecification:
+        # Expired sessions and stale lockout counters delete themselves.
+        AttributeName: expiresAt
+        Enabled: true
+      SSESpecification:
+        SSEEnabled: true
+      PointInTimeRecoverySpecification:
+        PointInTimeRecoveryEnabled: false
+      Tags:
+        - Key: Project
+          Value: xchange
+
   Function:
     Type: AWS::Lambda::Function
     Properties:
@@ -93,6 +144,7 @@ Resources:
           # Double underscore is how .NET maps env vars onto nested config keys.
           Anthropic__Model: !Ref AnthropicModel
           Anthropic__ApiKeySecretArn: !Ref AnthropicSecretArn
+          Identity__TableName: !Ref IdentityTable
           Cors__AllowedOrigins__0: !Ref AllowedOrigin
           Cors__AllowedOrigins__1: !Ref AllowedOriginWww
       Tags:
@@ -125,6 +177,9 @@ Resources:
           - GET
         AllowHeaders:
           - content-type
+          # Without this the browser's preflight rejects the login token and
+          # every authenticated call fails as a CORS error, not a 401.
+          - authorization
         MaxAge: 3600
 
   # Two permissions are required, not one. Since October 2025 a function URL

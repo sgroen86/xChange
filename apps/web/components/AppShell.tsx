@@ -7,8 +7,17 @@
  */
 
 import Link from "next/link";
-import { usePathname } from "next/navigation";
-import { useState } from "react";
+import { usePathname, useRouter } from "next/navigation";
+import { useEffect, useState, useSyncExternalStore } from "react";
+import { isApiConfigured } from "../lib/api";
+import {
+  clearSession,
+  getServerUserSnapshot,
+  getToken,
+  getUserSnapshot,
+  logout,
+  subscribeToUser,
+} from "../lib/auth";
 import { Icon } from "./Icon";
 import { isSection, navStructure, pageTitles, type NavItem } from "./nav";
 
@@ -24,8 +33,31 @@ function activeNavId(pathname: string): string {
 
 export function AppShell({ children }: { children: React.ReactNode }) {
   const pathname = usePathname() ?? "";
+  const router = useRouter();
   const [collapsed, setCollapsed] = useState(false);
   const [mobileOpen, setMobileOpen] = useState(false);
+
+  const onLoginPage = pathname.startsWith("/login");
+
+  /* The session is an external store, not React state. useSyncExternalStore
+     reads it without an effect and re-renders when it changes; the server
+     snapshot is null, so the prerendered HTML shows the signed-out shell. */
+  const user = useSyncExternalStore(subscribeToUser, getUserSnapshot, getServerUserSnapshot);
+
+  useEffect(() => {
+    // With no API configured the app runs on mock data and needs no login.
+    if (!isApiConfigured || onLoginPage) return;
+
+    if (!getToken()) {
+      router.replace("/login");
+    }
+  }, [onLoginPage, router]);
+
+  const signOut = async () => {
+    await logout();
+    clearSession();
+    router.replace("/login");
+  };
 
   const invoiceId = currentInvoiceId(pathname);
   const activeId = activeNavId(pathname);
@@ -100,10 +132,10 @@ export function AppShell({ children }: { children: React.ReactNode }) {
 
         <div className="sidebar__footer">
           <div className="sidebar__user">
-            <div className="sidebar__avatar">GS</div>
+            <div className="sidebar__avatar">{initials(user?.name)}</div>
             <div className="sidebar__user-text">
-              <span className="sidebar__user-name">Green IT Solutions</span>
-              <span className="sidebar__user-role">Prototype</span>
+              <span className="sidebar__user-name">{user?.name ?? "Green IT Solutions"}</span>
+              <span className="sidebar__user-role">{user ? roleLabel(user.role) : "Prototype"}</span>
             </div>
           </div>
           <div className="sidebar__footer-row">
@@ -115,6 +147,17 @@ export function AppShell({ children }: { children: React.ReactNode }) {
             >
               <Icon name="panelLeft" />
             </button>
+            {user && (
+              <button
+                type="button"
+                className="sidebar__toggle"
+                onClick={() => void signOut()}
+                aria-label="Uitloggen"
+                title="Uitloggen"
+              >
+                <Icon name="x" />
+              </button>
+            )}
           </div>
           <div className="sidebar__powered">
             Aangedreven door
@@ -155,4 +198,18 @@ export function AppShell({ children }: { children: React.ReactNode }) {
       </div>
     </div>
   );
+}
+
+/** Initials for the avatar, matching Bookkeeping's two-letter block. */
+function initials(name?: string): string {
+  if (!name) return "GS";
+  const parts = name.trim().split(/\s+/);
+  const letters = parts.length > 1 ? parts[0][0] + parts[parts.length - 1][0] : parts[0].slice(0, 2);
+  return letters.toUpperCase();
+}
+
+function roleLabel(role: string): string {
+  if (role === "Admin") return "Beheerder";
+  if (role === "ReadOnly") return "Alleen lezen";
+  return "Gebruiker";
 }

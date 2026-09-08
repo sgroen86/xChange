@@ -2,7 +2,10 @@ using InvoicePlatform.Application.Interpretation;
 using InvoicePlatform.Application.Invoices;
 using InvoicePlatform.Domain.Serialization;
 using InvoicePlatform.Domain.Validation;
+using Amazon.DynamoDBv2;
+using InvoicePlatform.Application.Identity;
 using InvoicePlatform.Infrastructure.Anthropic;
+using InvoicePlatform.Infrastructure.Identity;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 
@@ -35,6 +38,35 @@ public static class DependencyInjection
         services.AddSingleton<IAnthropicApiKeyProvider, AnthropicApiKeyProvider>();
         services.AddSingleton<IInvoiceInterpreter, AnthropicInvoiceInterpreter>();
         services.AddScoped<ExtractInvoiceService>();
+
+        return services;
+    }
+
+    /// <summary>
+    /// Accounts, sessions and login. xChange holds its own users: it is a
+    /// separate application that shares a domain with Bookkeeping, not a part
+    /// of it. The behaviour deliberately matches Bookkeeping's login.
+    /// </summary>
+    public static IServiceCollection AddIdentity(
+        this IServiceCollection services,
+        IConfiguration configuration)
+    {
+        services
+            .AddOptions<IdentityOptions>()
+            .Bind(configuration.GetSection(IdentityOptions.SectionName));
+
+        services.AddSingleton<IAmazonDynamoDB>(_ => new AmazonDynamoDBClient());
+
+        // One class backs all three stores: they share a table, and splitting
+        // the registration would not split the storage.
+        services.AddSingleton<DynamoDbIdentityStore>();
+        services.AddSingleton<IUserStore>(sp => sp.GetRequiredService<DynamoDbIdentityStore>());
+        services.AddSingleton<ISessionStore>(sp => sp.GetRequiredService<DynamoDbIdentityStore>());
+        services.AddSingleton<ILoginAttemptStore>(sp => sp.GetRequiredService<DynamoDbIdentityStore>());
+
+        services.AddSingleton<IPasswordHasher, BcryptPasswordHasher>();
+        services.AddSingleton<IClock, SystemClock>();
+        services.AddScoped<AuthService>();
 
         return services;
     }

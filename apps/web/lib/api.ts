@@ -9,6 +9,7 @@
  * not been pointed at an API still works rather than failing at runtime.
  */
 
+import { authHeaders, clearSession } from "./auth";
 import type { CanonicalInvoiceDraft } from "./canonical";
 
 export const API_BASE_URL = (process.env.NEXT_PUBLIC_XCHANGE_API_URL ?? "").replace(/\/$/, "");
@@ -123,6 +124,9 @@ export async function extractInvoice(
   try {
     response = await fetch(`${API_BASE_URL}/api/v1/invoices/extract`, {
       method: "POST",
+      // Content-Type is deliberately not set: the browser must add the
+      // multipart boundary itself.
+      headers: authHeaders(),
       body,
       signal,
     });
@@ -133,6 +137,13 @@ export async function extractInvoice(
       "De API is niet bereikbaar. Controleer de verbinding of de CORS-instelling.",
       0,
     );
+  }
+
+  if (response.status === 401) {
+    // The session expired or was revoked server-side. Drop it so the app asks
+    // for a login rather than retrying with a token that will never work.
+    clearSession();
+    throw new ApiError("Uw sessie is verlopen. Log opnieuw in.", 401);
   }
 
   if (!response.ok) {
