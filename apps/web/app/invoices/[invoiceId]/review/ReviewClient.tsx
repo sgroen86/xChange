@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 
 import { Icon } from "../../../../components/Icon";
 import { useToast } from "../../../../components/Toast";
@@ -16,9 +16,15 @@ import {
   type CanonicalParty,
 } from "../../../../lib/canonical";
 import { formatAmount, formatScaled, SCALE_AMOUNT } from "../../../../lib/money";
-import { getPdfUrl, loadDraft, saveDraft } from "../../../../lib/store";
+import { getPdf } from "../../../../lib/pdfStore";
+import { loadDraft, saveDraft } from "../../../../lib/store";
 
 type TabKey = "invoice" | "xml" | "warnings";
+
+type PdfState =
+  | { status: "loading" }
+  | { status: "ready"; url: string; name: string }
+  | { status: "missing" };
 
 export default function ReviewClient() {
   const pathname = usePathname() ?? "";
@@ -31,9 +37,40 @@ export default function ReviewClient() {
   const [draft, setDraft] = useState<CanonicalInvoiceDraft | null>(() =>
     invoiceId ? loadDraft(invoiceId) : null,
   );
-  const [pdfUrl] = useState<string | null>(() => (invoiceId ? getPdfUrl(invoiceId) : null));
   const [tab, setTab] = useState<TabKey>("invoice");
   const [validatedAt, setValidatedAt] = useState<string | null>(null);
+
+  /* The PDF is a Blob in IndexedDB, so unlike the draft it cannot be read
+     synchronously. The object URL is created here and revoked on unmount. */
+  const [pdf, setPdf] = useState<PdfState>(() =>
+    invoiceId ? { status: "loading" } : { status: "missing" },
+  );
+
+  useEffect(() => {
+    if (!invoiceId) return;
+
+    let objectUrl: string | null = null;
+    let cancelled = false;
+
+    getPdf(invoiceId)
+      .then((record) => {
+        if (cancelled) return;
+        if (!record) {
+          setPdf({ status: "missing" });
+          return;
+        }
+        objectUrl = URL.createObjectURL(record.blob);
+        setPdf({ status: "ready", url: objectUrl, name: record.name });
+      })
+      .catch(() => {
+        if (!cancelled) setPdf({ status: "missing" });
+      });
+
+    return () => {
+      cancelled = true;
+      if (objectUrl) URL.revokeObjectURL(objectUrl);
+    };
+  }, [invoiceId]);
 
   const issues = useMemo(() => (draft ? validate(draft) : []), [draft]);
   const totals = useMemo(() => (draft ? calculate(draft) : null), [draft]);
@@ -184,15 +221,21 @@ export default function ReviewClient() {
               <span className="badge badge--neutral">{draft.extraction.sourceFileName}</span>
             </div>
             <div className="card__body card__body--flush">
-              {pdfUrl ? (
-                <iframe className="pdf-frame" src={pdfUrl} title="Bron-PDF" />
-              ) : (
+              {pdf.status === "ready" && (
+                <iframe className="pdf-frame" src={pdf.url} title="Bron-PDF" />
+              )}
+              {pdf.status === "loading" && (
+                <div className="pdf-empty">
+                  <span className="text-soft text-sm">Laden&hellip;</span>
+                </div>
+              )}
+              {pdf.status === "missing" && (
                 <div className="pdf-empty">
                   <Icon name="eye" />
                   <div>
-                    De PDF is niet meer beschikbaar in deze sessie.
+                    De PDF is niet gevonden in de opslag van deze browser.
                     <br />
-                    Na een herlaadactie moet het bestand opnieuw geüpload worden.
+                    Upload het bestand opnieuw om het hier te bekijken.
                   </div>
                   <Link className="btn btn--secondary btn--sm" href="/upload">
                     Opnieuw uploaden

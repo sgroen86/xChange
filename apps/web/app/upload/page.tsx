@@ -7,7 +7,8 @@ import { Icon } from "../../components/Icon";
 import { useToast } from "../../components/Toast";
 import { mockDraftFromFile } from "../../lib/canonical";
 import { checkPdf, formatBytes, MAX_PDF_BYTES } from "../../lib/pdf";
-import { newInvoiceId, putPdf, saveDraft } from "../../lib/store";
+import { putPdf } from "../../lib/pdfStore";
+import { newInvoiceId, saveDraft } from "../../lib/store";
 
 /** Mock pipeline stages, named after the real flow in CLAUDE.md. */
 const STAGES = [
@@ -72,7 +73,9 @@ export default function UploadPage() {
       await new Promise((resolve) => window.setTimeout(resolve, STAGES[index].ms));
     }
 
-    putPdf(invoiceId, file);
+    // Persist before navigating: on the static export this can be a full
+    // document load, which would drop anything held only in memory.
+    await putPdf(invoiceId, file);
     saveDraft(mockDraftFromFile(invoiceId, file.name, file.size));
 
     showToast("Concept aangemaakt. Controleer de gegevens.", "success");

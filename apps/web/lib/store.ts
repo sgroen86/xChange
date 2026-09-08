@@ -1,27 +1,14 @@
 /**
- * Prototype persistence.
+ * Prototype persistence for the canonical draft.
  *
- * The draft is JSON and goes to sessionStorage so a reload keeps the data.
- * The PDF itself stays in memory for the lifetime of the tab — object URLs are
- * not serialisable, so after a hard reload the viewer shows an empty state
- * rather than a broken frame.
+ * The draft is JSON and small, so sessionStorage is enough and can be read
+ * synchronously during render. The source PDF is a Blob and lives in IndexedDB
+ * instead — see lib/pdfStore.ts.
  */
 
 import type { CanonicalInvoiceDraft } from "./canonical";
 
 const DRAFT_KEY = "xchange.draft.";
-
-const pdfObjectUrls = new Map<string, string>();
-
-export function putPdf(invoiceId: string, file: File): void {
-  const existing = pdfObjectUrls.get(invoiceId);
-  if (existing) URL.revokeObjectURL(existing);
-  pdfObjectUrls.set(invoiceId, URL.createObjectURL(file));
-}
-
-export function getPdfUrl(invoiceId: string): string | null {
-  return pdfObjectUrls.get(invoiceId) ?? null;
-}
 
 export function saveDraft(draft: CanonicalInvoiceDraft): void {
   try {
