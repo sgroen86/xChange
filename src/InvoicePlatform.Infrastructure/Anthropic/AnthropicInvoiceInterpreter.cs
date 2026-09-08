@@ -75,26 +75,45 @@ public sealed class AnthropicInvoiceInterpreter : IInvoiceInterpreter
         - Negative amounts stay negative. Credit notes use type code 381.
         """;
 
-    private readonly AnthropicClient _client;
+    private readonly IAnthropicApiKeyProvider _apiKeys;
     private readonly AnthropicOptions _options;
     private readonly ILogger<AnthropicInvoiceInterpreter> _logger;
 
+    // Built on first use, not in the constructor: the key may come from Secrets
+    // Manager, which is an async call, and a cold Lambda should not pay for it
+    // until a request actually arrives.
+    private AnthropicClient? _client;
+    private readonly SemaphoreSlim _clientGate = new(1, 1);
+
     public AnthropicInvoiceInterpreter(
+        IAnthropicApiKeyProvider apiKeys,
         IOptions<AnthropicOptions> options,
         ILogger<AnthropicInvoiceInterpreter> logger)
     {
+        _apiKeys = apiKeys;
         _options = options.Value;
         _logger = logger;
+    }
 
-        if (string.IsNullOrWhiteSpace(_options.ApiKey))
+    private async Task<AnthropicClient> GetClientAsync(CancellationToken cancellationToken)
+    {
+        if (_client is not null)
         {
-            throw new InvalidOperationException(
-                "No Anthropic API key configured. Set Anthropic:ApiKey through user-secrets, "
-                    + "the Anthropic__ApiKey environment variable, or ANTHROPIC_API_KEY. "
-                    + "The key must never be committed or sent to the browser.");
+            return _client;
         }
 
-        _client = new AnthropicClient { ApiKey = _options.ApiKey };
+        await _clientGate.WaitAsync(cancellationToken).ConfigureAwait(false);
+        try
+        {
+            return _client ??= new AnthropicClient
+            {
+                ApiKey = await _apiKeys.GetApiKeyAsync(cancellationToken).ConfigureAwait(false),
+            };
+        }
+        finally
+        {
+            _clientGate.Release();
+        }
     }
 
     public async Task<InvoiceInterpretationResult> InterpretAsync(
@@ -148,8 +167,10 @@ public sealed class AnthropicInvoiceInterpreter : IInvoiceInterpreter
         using var timeout = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
         timeout.CancelAfter(TimeSpan.FromSeconds(_options.TimeoutSeconds));
 
+        var client = await GetClientAsync(timeout.Token).ConfigureAwait(false);
+
         var stopwatch = Stopwatch.StartNew();
-        var response = await _client.Messages.Create(request, cancellationToken: timeout.Token)
+        var response = await client.Messages.Create(request, cancellationToken: timeout.Token)
             .ConfigureAwait(false);
         stopwatch.Stop();
 

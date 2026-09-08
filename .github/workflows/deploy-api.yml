@@ -1,28 +1,29 @@
 name: Deploy xChange API
 
-# Builds the ASP.NET Core API as a container, pushes it to ECR and reconciles
-# the App Runner service through CloudFormation.
+# Publishes the ASP.NET Core API as a Lambda zip and deploys it behind a
+# Function URL.
 #
-# Everything except the bootstrap stack is created by this workflow, including
-# the ECR repository, the secret placeholder and the service itself - so a fresh
-# account needs one manual command (infra/aws/bootstrap.yml) and one manual
-# secret value, and nothing else.
+# Free at this stage, which is why it is shaped this way: Lambda's 1M requests
+# and 400,000 GB-seconds a month are a perpetual free tier, a Function URL costs
+# nothing and terminates TLS itself, and nothing runs between uploads.
 #
-# Why App Runner and not Lambda: the endpoint accepts uploads up to 20 MB and a
-# request can run for minutes while the model reads the PDF. API Gateway caps a
-# payload at 10 MB and a Lambda function URL at 6 MB, so both would reject valid
-# invoices.
+# App Runner was the original target, but AWS closed it to new customers on
+# 30 April 2026, so this account can never subscribe. Fargate behind an ALB
+# would work and would keep 20 MB uploads, but bills ~$25-35/month whether or
+# not anyone uses it.
 #
-# The Anthropic key is never seen here. CI may create the secret and read its
-# metadata, but not its value; App Runner injects it into the container at
-# runtime.
+# The trade-off is request size: a Function URL rejects anything over 6 MB, and
+# a binary body is base64-encoded first, so ~4.4 MB of PDF gets through. The API
+# refuses larger files with a clear message.
+#
+# No Docker: a zip against the managed dotnet8 runtime builds faster and has
+# nothing to store in ECR.
 
 on:
   push:
     branches: [main]
     paths:
       - 'src/**'
-      - 'Dockerfile'
       - 'infra/aws/**'
       - '.github/workflows/deploy-api.yml'
   workflow_dispatch:
@@ -37,7 +38,6 @@ permissions:
 
 env:
   AWS_REGION: eu-central-1
-  ECR_REPOSITORY: xchange-api
   BOOTSTRAP_STACK: xchange-bootstrap
   SERVICE_STACK: xchange-service
   SECRET_NAME: xchange/anthropic-api-key
@@ -55,11 +55,25 @@ jobs:
       - name: Setup .NET
         uses: actions/setup-dotnet@v4
         with:
-          dotnet-version: '9.0.x'
+          dotnet-version: '8.0.x'
 
-      # Gate the deploy on the tests, not just on the image building.
+      # Gate the deploy on the tests, not just on the build.
       - name: Test
         run: dotnet test --nologo
+
+      - name: Publish and package
+        id: package
+        run: |
+          set -e
+          dotnet publish src/InvoicePlatform.Api/InvoicePlatform.Api.csproj \
+            -c Release -o publish --no-self-contained
+
+          # Lambda wants the assemblies at the root of the zip, not inside a
+          # folder, so zip from within the publish directory.
+          (cd publish && zip -qr ../xchange-api.zip .)
+
+          echo "key=xchange-api/${GITHUB_SHA}.zip" >> "$GITHUB_OUTPUT"
+          echo "Package size: $(du -h xchange-api.zip | cut -f1)"
 
       - name: Configure AWS credentials
         uses: aws-actions/configure-aws-credentials@v4
@@ -80,37 +94,19 @@ jobs:
             exit 1
           fi
 
-          get() {
-            aws cloudformation describe-stacks --stack-name "$BOOTSTRAP_STACK" \
-              --query "Stacks[0].Outputs[?OutputKey=='$1'].OutputValue" --output text
-          }
-
-          {
-            echo "ecr_access_role=$(get AppRunnerEcrAccessRoleArn)"
-            echo "instance_role=$(get AppRunnerInstanceRoleArn)"
-          } >> "$GITHUB_OUTPUT"
-
-      - name: Log in to Amazon ECR
-        id: ecr
-        uses: aws-actions/amazon-ecr-login@v2
-
-      - name: Ensure the ECR repository exists
-        run: |
-          set -e
-          aws ecr describe-repositories --repository-names "$ECR_REPOSITORY" >/dev/null 2>&1 \
-            || aws ecr create-repository \
-                 --repository-name "$ECR_REPOSITORY" \
-                 --image-scanning-configuration scanOnPush=true >/dev/null
-          echo "Repository ready: $ECR_REPOSITORY"
+          BUCKET=$(aws cloudformation describe-stacks --stack-name "$BOOTSTRAP_STACK" \
+            --query "Stacks[0].Outputs[?OutputKey=='ArtifactBucketName'].OutputValue" --output text)
+          echo "bucket=$BUCKET" >> "$GITHUB_OUTPUT"
 
       - name: Ensure the Anthropic secret exists
         id: secret
         run: |
           set -e
 
-          # Created empty on first run so the stack has something to reference.
-          # The real value is set once, by a human, outside CI - this workflow
-          # has no permission to read or overwrite it.
+          # Created with a placeholder on first run so the stack has something to
+          # reference. The real value is set once, by a human, outside CI - this
+          # workflow can create the secret and read its metadata, but not its
+          # value.
           if ! aws secretsmanager describe-secret --secret-id "$SECRET_NAME" >/dev/null 2>&1; then
             aws secretsmanager create-secret \
               --name "$SECRET_NAME" \
@@ -123,19 +119,11 @@ jobs:
           ARN=$(aws secretsmanager describe-secret --secret-id "$SECRET_NAME" --query ARN --output text)
           echo "arn=$ARN" >> "$GITHUB_OUTPUT"
 
-      - name: Build and push image
-        id: image
-        env:
-          REGISTRY: ${{ steps.ecr.outputs.registry }}
+      - name: Upload the package
         run: |
           set -e
-          # Tagged with the commit sha, so a rollback is a redeploy of an earlier
-          # tag; "latest" is a convenience pointer, never the source of truth.
-          IMAGE="$REGISTRY/$ECR_REPOSITORY:${GITHUB_SHA}"
-          docker build -t "$IMAGE" -t "$REGISTRY/$ECR_REPOSITORY:latest" .
-          docker push "$IMAGE"
-          docker push "$REGISTRY/$ECR_REPOSITORY:latest"
-          echo "uri=$IMAGE" >> "$GITHUB_OUTPUT"
+          aws s3 cp xchange-api.zip \
+            "s3://${{ steps.bootstrap.outputs.bucket }}/${{ steps.package.outputs.key }}"
 
       - name: Deploy the service stack
         id: service
@@ -158,15 +146,17 @@ jobs:
           aws cloudformation deploy \
             --template-file infra/aws/service.yml \
             --stack-name "$SERVICE_STACK" \
+            --capabilities CAPABILITY_NAMED_IAM \
             --no-fail-on-empty-changeset \
             --parameter-overrides \
-              ImageUri="${{ steps.image.outputs.uri }}" \
-              EcrAccessRoleArn="${{ steps.bootstrap.outputs.ecr_access_role }}" \
-              InstanceRoleArn="${{ steps.bootstrap.outputs.instance_role }}" \
+              ArtifactBucket="${{ steps.bootstrap.outputs.bucket }}" \
+              ArtifactKey="${{ steps.package.outputs.key }}" \
               AnthropicSecretArn="${{ steps.secret.outputs.arn }}"
 
           URL=$(aws cloudformation describe-stacks --stack-name "$SERVICE_STACK" \
                   --query "Stacks[0].Outputs[?OutputKey=='ServiceUrl'].OutputValue" --output text)
+          # Function URLs come back with a trailing slash; strip it so paths join cleanly.
+          URL="${URL%/}"
           echo "url=$URL" >> "$GITHUB_OUTPUT"
           echo "API_URL=$URL" >> "$GITHUB_ENV"
 
@@ -184,15 +174,14 @@ jobs:
           set -e
           echo "Checking $API_URL/health"
 
-          # App Runner can still be swapping instances immediately after the
-          # stack settles, so allow a short warm-up rather than failing on the
-          # first request.
-          for attempt in $(seq 1 20); do
-            code=$(curl -sSL -o /tmp/health.txt -w '%{http_code}' --max-time 20 "$API_URL/health" || echo 000)
+          # The first request pays the cold start, which for ASP.NET Core on
+          # Lambda can take a few seconds - so retry rather than failing on it.
+          for attempt in $(seq 1 10); do
+            code=$(curl -sSL -o /tmp/health.txt -w '%{http_code}' --max-time 30 "$API_URL/health" || echo 000)
             echo "  attempt $attempt: HTTP $code"
             [ "$code" = "200" ] && { echo "API is healthy."; break; }
-            [ "$attempt" = "20" ] && { echo "Never became healthy."; cat /tmp/health.txt; exit 1; }
-            sleep 15
+            [ "$attempt" = "10" ] && { echo "Never became healthy."; cat /tmp/health.txt; exit 1; }
+            sleep 10
           done
 
       - name: Summary
@@ -202,7 +191,7 @@ jobs:
             echo "### xChange API"
             echo
             echo "- URL: ${API_URL:-not deployed}"
-            echo "- Image: ${{ steps.image.outputs.uri }}"
+            echo "- Package: ${{ steps.package.outputs.key }}"
             echo
             echo "Set the repository variable \`XCHANGE_API_URL\` to the URL above,"
             echo "then re-run **Deploy xChange UI** so the frontend calls it."

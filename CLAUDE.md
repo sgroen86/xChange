@@ -50,7 +50,9 @@ apps/
   web                              Next.js + TypeScript frontend
 ```
 
-Target framework is `net9.0` throughout.
+Target framework is `net8.0` throughout — the LTS runtime AWS Lambda offers as a
+managed runtime. Do not bump to net9.0 without moving the API off Lambda's
+managed runtime first.
 
 Dependencies point inward only:
 
@@ -141,6 +143,7 @@ dotnet test tests/InvoicePlatform.Domain.Tests          # one project
 dotnet test --filter "FullyQualifiedName~HealthEndpointTests.Health_endpoint_reports_healthy"
 
 dotnet run --project src/InvoicePlatform.Api            # http://localhost:5xxx/health
+# needs a key: dotnet user-secrets set "Anthropic:ApiKey" "<key>" --project src/InvoicePlatform.Api
 dotnet run --project src/InvoicePlatform.Worker
 ```
 

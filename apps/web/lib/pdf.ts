@@ -1,6 +1,16 @@
 /** PDF validation for the upload page. Structural checks only — no parsing. */
 
-export const MAX_PDF_BYTES = 15 * 1024 * 1024;
+/**
+ * Must not exceed what the API accepts.
+ *
+ * The API runs as a Lambda behind a Function URL, which rejects any request
+ * over 6 MB; a binary body is base64-encoded first, so ~4.4 MB of PDF is the
+ * real ceiling. Rejecting here gives the user an immediate, readable message
+ * instead of a failed round trip.
+ *
+ * This is a limit of the free hosting during testing, not of the format.
+ */
+export const MAX_PDF_BYTES = 4 * 1024 * 1024;
 
 export interface PdfCheckResult {
   ok: boolean;

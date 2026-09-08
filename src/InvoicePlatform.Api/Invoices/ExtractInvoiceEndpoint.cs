@@ -12,7 +12,20 @@ namespace InvoicePlatform.Api.Invoices;
 /// </summary>
 public static class ExtractInvoiceEndpoint
 {
-    public const long MaxUploadBytes = 20 * 1024 * 1024;
+    /// <summary>
+    /// Ceiling on an uploaded PDF.
+    ///
+    /// A Lambda Function URL rejects any request over 6 MB, and a binary body
+    /// is base64-encoded first, so roughly 4.4 MB of PDF is the real limit.
+    /// 4 MB is set here so the API refuses the file with a clear message rather
+    /// than the request dying at the edge with an opaque 413.
+    ///
+    /// This is a testing-phase constraint of the free hosting, not a property
+    /// of the format. Restoring a larger limit means uploading straight to
+    /// object storage with a presigned URL and passing the key to this
+    /// endpoint - which is the architecture CLAUDE.md describes anyway.
+    /// </summary>
+    public const long MaxUploadBytes = 4 * 1024 * 1024;
 
     private const string FormFieldName = "file";
 

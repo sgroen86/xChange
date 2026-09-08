@@ -17,6 +17,13 @@ public sealed class AnthropicOptions
     /// </summary>
     public string? ApiKey { get; set; }
 
+    /// <summary>
+    /// Secrets Manager ARN holding the key, used when ApiKey is not set. This
+    /// is the deployed path: the key is fetched at runtime by the function's own
+    /// role, so it never lands in the function configuration or a deploy log.
+    /// </summary>
+    public string? ApiKeySecretArn { get; set; }
+
     /// <summary>Model identifier. Configured, never hardcoded at the call site.</summary>
     public string Model { get; set; } = "claude-opus-5";
 

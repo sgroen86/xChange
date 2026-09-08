@@ -1,24 +1,27 @@
 AWSTemplateFormatVersion: '2010-09-09'
 Description: >
-  xChange API service. Deployed by CI on every push, so it must be safe to apply
-  repeatedly - CloudFormation reconciles rather than recreating.
+  xChange API on Lambda behind a Function URL.
 
-  The Anthropic key is referenced, never carried: the template points App Runner
-  at a Secrets Manager ARN, and the value behind it is set once by a human. The
-  key therefore never appears in this template, in CI logs, or in the image.
+  Chosen because it is free at this stage: Lambda's 1M requests and 400,000
+  GB-seconds per month are a perpetual free tier, a Function URL costs nothing
+  and terminates TLS itself, and nothing runs between uploads. The alternative
+  that preserves 20 MB uploads - Fargate behind an Application Load Balancer -
+  bills around $25-35 a month whether or not anyone uses it.
+
+  The trade-off is request size: a Function URL rejects anything over 6 MB, and
+  a binary body is base64-encoded first, so roughly 4.4 MB of PDF gets through.
+  The API refuses larger files with a clear message. Restoring 20 MB means
+  uploading straight to object storage with a presigned URL and passing the key
+  to the endpoint, which is the architecture CLAUDE.md already describes.
 
 Parameters:
-  ImageUri:
+  ArtifactBucket:
     Type: String
-    Description: Fully qualified ECR image, tagged with the commit sha.
+    Description: Bucket holding the deployment zip. From the bootstrap stack.
 
-  EcrAccessRoleArn:
+  ArtifactKey:
     Type: String
-    Description: From the bootstrap stack.
-
-  InstanceRoleArn:
-    Type: String
-    Description: From the bootstrap stack.
+    Description: Key of the zip for this commit.
 
   AnthropicSecretArn:
     Type: String
@@ -31,73 +34,114 @@ Parameters:
   AllowedOrigin:
     Type: String
     Default: https://greenitsolutions.net
-    Description: Origin allowed to call the API from a browser.
 
   AllowedOriginWww:
     Type: String
     Default: https://www.greenitsolutions.net
 
-  Cpu:
-    Type: String
-    Default: '1 vCPU'
-
-  Memory:
-    Type: String
-    Default: '2 GB'
+  MemorySize:
+    Type: Number
+    Default: 1024
+    Description: >
+      More memory also means proportionally more CPU, which shortens the cold
+      start. 1024 MB keeps a request comfortably inside the free tier: the
+      monthly 400,000 GB-seconds is about 6.5 hours of execution at this size.
 
 Resources:
-  Service:
-    Type: AWS::AppRunner::Service
+  FunctionRole:
+    Type: AWS::IAM::Role
     Properties:
-      ServiceName: xchange-api
-      SourceConfiguration:
-        # CI decides when to deploy, by updating ImageUri. Auto-deployment on
-        # every ECR push would race with the workflow's own rollout.
-        AutoDeploymentsEnabled: false
-        AuthenticationConfiguration:
-          AccessRoleArn: !Ref EcrAccessRoleArn
-        ImageRepository:
-          ImageIdentifier: !Ref ImageUri
-          ImageRepositoryType: ECR
-          ImageConfiguration:
-            Port: '8080'
-            RuntimeEnvironmentVariables:
-              - Name: ASPNETCORE_ENVIRONMENT
-                Value: Production
-              # Double underscore is how .NET maps env vars onto nested config.
-              - Name: Anthropic__Model
-                Value: !Ref AnthropicModel
-              - Name: Cors__AllowedOrigins__0
-                Value: !Ref AllowedOrigin
-              - Name: Cors__AllowedOrigins__1
-                Value: !Ref AllowedOriginWww
-            RuntimeEnvironmentSecrets:
-              - Name: Anthropic__ApiKey
-                Value: !Ref AnthropicSecretArn
-      InstanceConfiguration:
-        Cpu: !Ref Cpu
-        Memory: !Ref Memory
-        InstanceRoleArn: !Ref InstanceRoleArn
-      HealthCheckConfiguration:
-        Protocol: HTTP
-        Path: /health
-        Interval: 10
-        Timeout: 5
-        HealthyThreshold: 1
-        UnhealthyThreshold: 5
-      NetworkConfiguration:
-        IngressConfiguration:
-          IsPubliclyAccessible: true
+      RoleName: xchange-api-lambda
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: lambda.amazonaws.com
+            Action: sts:AssumeRole
+      ManagedPolicyArns:
+        - arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole
+      Policies:
+        - PolicyName: read-anthropic-key
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              # The one privilege the function has beyond writing its own logs.
+              - Effect: Allow
+                Action: secretsmanager:GetSecretValue
+                Resource: !Ref AnthropicSecretArn
+
+  Function:
+    Type: AWS::Lambda::Function
+    Properties:
+      FunctionName: xchange-api
+      Runtime: dotnet8
+      # ASP.NET Core hosted by Amazon.Lambda.AspNetCoreServer.Hosting: the
+      # handler is just the assembly name.
+      Handler: InvoicePlatform.Api
+      Role: !GetAtt FunctionRole.Arn
+      MemorySize: !Ref MemorySize
+      # Longer than the interpreter's own 180s timeout, so the app reports a
+      # provider timeout itself rather than being killed mid-request.
+      Timeout: 300
+      Code:
+        S3Bucket: !Ref ArtifactBucket
+        S3Key: !Ref ArtifactKey
+      Environment:
+        Variables:
+          ASPNETCORE_ENVIRONMENT: Production
+          # Double underscore is how .NET maps env vars onto nested config keys.
+          Anthropic__Model: !Ref AnthropicModel
+          Anthropic__ApiKeySecretArn: !Ref AnthropicSecretArn
+          Cors__AllowedOrigins__0: !Ref AllowedOrigin
+          Cors__AllowedOrigins__1: !Ref AllowedOriginWww
       Tags:
         - Key: Project
           Value: xchange
 
+  # Log retention is not just tidiness: the default is "never expire", and
+  # CloudWatch storage is one of the few things here that would eventually cost
+  # money on its own.
+  FunctionLogs:
+    Type: AWS::Logs::LogGroup
+    Properties:
+      LogGroupName: !Sub /aws/lambda/${Function}
+      RetentionInDays: 14
+
+  FunctionUrl:
+    Type: AWS::Lambda::Url
+    Properties:
+      TargetFunctionArn: !GetAtt Function.Arn
+      # No authentication. Anyone with the URL can post a PDF and spend
+      # Anthropic credit - acceptable while this is a testing prototype, and
+      # called out in docs/aws-deployment.md. Add auth before real use.
+      AuthType: NONE
+      Cors:
+        AllowOrigins:
+          - !Ref AllowedOrigin
+          - !Ref AllowedOriginWww
+        AllowMethods:
+          - POST
+          - GET
+        AllowHeaders:
+          - content-type
+        MaxAge: 3600
+
+  UrlPermission:
+    Type: AWS::Lambda::Permission
+    Properties:
+      FunctionName: !GetAtt Function.Arn
+      Action: lambda:InvokeFunctionUrl
+      Principal: '*'
+      FunctionUrlAuthType: NONE
+
 Outputs:
   ServiceUrl:
     Description: >
-      Public HTTPS host. Set this as the XCHANGE_API_URL repository variable so
-      the frontend build points at it.
-    Value: !Sub https://${Service.ServiceUrl}
+      Public HTTPS endpoint. Set this as the XCHANGE_API_URL repository variable
+      so the frontend build points at it. Note the trailing slash is stripped by
+      the client.
+    Value: !GetAtt FunctionUrl.FunctionUrl
 
-  ServiceArn:
-    Value: !GetAtt Service.ServiceArn
+  FunctionName:
+    Value: !Ref Function

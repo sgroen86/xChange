@@ -32,6 +32,7 @@ public static class DependencyInjection
         services.AddSingleton<InvoiceCalculationValidator>();
         services.AddSingleton<CanonicalInvoiceXmlSerializer>();
 
+        services.AddSingleton<IAnthropicApiKeyProvider, AnthropicApiKeyProvider>();
         services.AddSingleton<IInvoiceInterpreter, AnthropicInvoiceInterpreter>();
         services.AddScoped<ExtractInvoiceService>();
 

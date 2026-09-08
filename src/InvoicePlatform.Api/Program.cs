@@ -1,3 +1,4 @@
+using Amazon.Lambda.AspNetCoreServer.Hosting;
 using InvoicePlatform.Api.Invoices;
 using InvoicePlatform.Infrastructure;
 using Microsoft.AspNetCore.HttpOverrides;
@@ -6,7 +7,12 @@ var builder = WebApplication.CreateBuilder(args);
 
 const string CorsPolicy = "xchange-web";
 
-builder.Services.AddOpenApi();
+// Runs as a Lambda behind a Function URL in AWS, and as an ordinary Kestrel
+// process locally. The hosting package detects Lambda from the environment, so
+// this line is a no-op when running on a laptop - one binary, both modes.
+// Function URLs deliver the HTTP API (payload v2) event shape.
+builder.Services.AddAWSLambdaHosting(LambdaEventSource.HttpApi);
+
 builder.Services.AddHealthChecks();
 builder.Services.AddProblemDetails();
 
@@ -48,10 +54,9 @@ app.UseForwardedHeaders(new ForwardedHeadersOptions
 
 if (app.Environment.IsDevelopment())
 {
-    app.MapOpenApi();
-
-    // Only locally. In front of a proxy that already terminates TLS, an internal
-    // HTTPS redirect sends the client into a loop.
+    // Only locally. Behind a proxy that already terminates TLS - a Lambda
+    // Function URL included - an internal HTTPS redirect sends the client into
+    // a loop.
     app.UseHttpsRedirection();
 }
 

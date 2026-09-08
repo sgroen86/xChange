@@ -9,22 +9,36 @@ deploys itself via `.github/workflows/deploy-api.yml`.
 
 Region: `eu-central-1` (change `AWS_REGION` in the workflow to move it).
 
-## Why App Runner
+## Why Lambda, and what it costs us
 
-The endpoint accepts uploads up to 20 MB, and one request can run for minutes
-while the model reads the PDF.
+The API runs as a Lambda behind a Function URL because, during testing, it is
+**free**: 1M requests and 400,000 GB-seconds a month are a perpetual free tier,
+a Function URL costs nothing and terminates TLS itself, and nothing runs between
+uploads. CloudWatch log retention is capped at 14 days and old build artefacts
+expire after 30 days, so the two things that would otherwise accrue cost do not.
 
-- **API Gateway** caps a request payload at **10 MB**.
-- **Lambda function URLs** cap it at **6 MB**.
+This was not the first choice. The history is worth knowing:
 
-Both would reject valid invoices, so the serverless-behind-a-gateway shapes are
-out. App Runner takes the container directly, terminates TLS, gives it a public
-HTTPS hostname and scales down between uploads.
+- **App Runner** was the original target and would have been ideal. AWS closed
+  it to new customers on **30 April 2026**, so this account can never subscribe.
+  Every call returns `SubscriptionRequiredException`.
+- **ECS Fargate behind an ALB** works and preserves 20 MB uploads, but bills
+  roughly **$25-35/month whether or not anyone uses it** - an ALB and a task
+  both run continuously.
+- **API Gateway** caps a request payload at 10 MB, so it does not solve the size
+  problem either.
 
-If App Runner's request timeout turns out to be shorter than a slow extraction
-needs, the fallback is ECS Fargate behind an ALB, whose idle timeout is
-configurable up to 4000s. Watch the first real extractions before assuming this
-is settled.
+**The cost of choosing free is upload size.** A Function URL rejects any request
+over 6 MB, and a binary body is base64-encoded first, so roughly 4.4 MB of PDF
+gets through. The API and the frontend both cap at 4 MB and say so plainly. That
+is below the 20 MB originally specified, and is a deliberate trade for zero cost
+while this is a testing prototype.
+
+**To restore 20 MB later**, upload straight to S3 with a presigned URL and pass
+the key to the endpoint. That removes the request-size limit entirely, stays on
+the free tier, and is the architecture CLAUDE.md already describes (documents in
+object storage, the database holding keys). It is the right move once there are
+clients; it is more moving parts than testing needs today.
 
 ---
 
@@ -126,14 +140,19 @@ only the instance role can read it.
 Everything else, on every push:
 
 1. runs `dotnet test` — a red build cannot deploy
-2. creates the ECR repository if missing
+2. publishes the API and zips it (no Docker: the managed `dotnet8` runtime takes
+   a zip, which builds faster and stores nothing in ECR)
 3. creates the secret placeholder if missing
-4. builds the image and pushes it tagged with the commit sha
-5. deploys `infra/aws/service.yml`, creating or updating the App Runner service
-6. waits for health, retrying while App Runner swaps instances
-7. prints the service URL in the job summary
+4. uploads the zip to the artefact bucket, keyed by commit sha
+5. deploys `infra/aws/service.yml`, creating or updating the function
+6. smoke-tests `/health`, retrying through the cold start
+7. prints the Function URL in the job summary
 
-Rollback is a redeploy of an earlier image tag.
+Rollback is a redeploy pointing at an earlier commit's zip.
+
+The key is read from Secrets Manager **at runtime by the function's own role**,
+not injected as an environment variable. Anyone with `lambda:GetFunctionConfiguration`
+can read environment variables; reading the secret needs the function's role.
 
 ## Step 4 — point the frontend at the API
 
@@ -171,23 +190,13 @@ gone.
 
 ## Troubleshooting
 
-**`SubscriptionRequiredException: The AWS Access Key Id needs a subscription for
-the service`** — the account cannot use App Runner at all. This is not a
-permissions problem and not something in this repository: it means the AWS
-account sign-up is incomplete, usually a missing or unverified payment method.
-Other services keep working in that state, which makes it confusing; ECR accepted
-image pushes while App Runner refused every call.
+**`SubscriptionRequiredException` from App Runner** — App Runner was closed to
+new customers on 30 April 2026 and this account can never subscribe. That is why
+the API runs on Lambda. Nothing to fix.
 
-Check it directly, which is faster than reading CloudFormation events:
-
-```bash
-aws apprunner list-services --region eu-central-1
-```
-
-If that errors for an admin user, finish account activation at
-console.aws.amazon.com/billing → Payment preferences, then retry. If App Runner
-is genuinely unavailable to you, the fallback is ECS Fargate behind an ALB - more
-moving parts (VPC, target group, listener) but no service subscription.
+**A 413, or an upload that fails at the edge** — the file is over the Function
+URL's 6 MB request limit. See "Why Lambda" above; the fix for real use is
+presigned S3 uploads.
 
 **`Stack ... is in ROLLBACK_COMPLETE state and can not be updated`** — a stack
 whose *first* create failed cannot be updated, only replaced. The workflow now
