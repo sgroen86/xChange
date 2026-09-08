@@ -11,10 +11,15 @@ Description: >
   permissions - it can create services, but not grant itself anything.
 
 Parameters:
-  GitHubRepository:
+  GitHubOwner:
     Type: String
-    Default: sgroen86/xChange
-    Description: owner/repo allowed to assume the deploy role.
+    Default: sgroen86
+    Description: GitHub account that owns the repository.
+
+  GitHubRepositoryName:
+    Type: String
+    Default: xChange
+    Description: Repository name on its own, without the owner.
 
   GitHubBranch:
     Type: String
@@ -72,14 +77,25 @@ Resources:
             Condition:
               StringEquals:
                 token.actions.githubusercontent.com:aud: sts.amazonaws.com
-                # Pinned to one repository. A list here means OR, and both forms
-                # are needed: a job that declares an environment presents the
-                # environment subject, one that does not presents the branch
-                # subject. Without this condition any GitHub repository in the
-                # world could assume this role.
+              # Four accepted subjects, because GitHub varies the claim on two
+              # independent axes and a mismatch on either fails the same way:
+              #
+              #  1. Environment vs branch. Declaring `environment:` on a job
+              #     swaps the subject to the environment form.
+              #  2. Plain vs immutable identifiers. GitHub may append numeric
+              #     ids to the owner and repository - this account emits
+              #     repo:sgroen86@261750674/xChange@1360828142:... - so the
+              #     literal owner/repo form never matches.
+              #
+              # StringLike is needed for the "@<id>" wildcards. It stays safe
+              # because a GitHub username cannot contain "@", so "owner@*"
+              # cannot be spoofed by registering a similarly-named account.
+              StringLike:
                 token.actions.githubusercontent.com:sub:
-                  - !Sub repo:${GitHubRepository}:environment:${GitHubEnvironment}
-                  - !Sub repo:${GitHubRepository}:ref:refs/heads/${GitHubBranch}
+                  - !Sub repo:${GitHubOwner}/${GitHubRepositoryName}:environment:${GitHubEnvironment}
+                  - !Sub repo:${GitHubOwner}/${GitHubRepositoryName}:ref:refs/heads/${GitHubBranch}
+                  - !Sub repo:${GitHubOwner}@*/${GitHubRepositoryName}@*:environment:${GitHubEnvironment}
+                  - !Sub repo:${GitHubOwner}@*/${GitHubRepositoryName}@*:ref:refs/heads/${GitHubBranch}
       Policies:
         - PolicyName: xchange-deploy
           PolicyDocument:

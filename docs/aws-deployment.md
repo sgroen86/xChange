@@ -59,13 +59,25 @@ The deploy role is deliberately narrow: it can push images and manage
 itself anything. It may create the Anthropic secret and read its metadata, but
 not read or overwrite its value.
 
-The trust accepts two subject claims, both scoped to this repository:
-`repo:sgroen86/xChange:environment:xchange-aws` and
-`repo:sgroen86/xChange:ref:refs/heads/main`. Both are needed because GitHub
-swaps the OIDC subject to the environment form as soon as a job declares an
-`environment:` — pinning only the branch form produces
-`Not authorized to perform sts:AssumeRoleWithWebIdentity` on every run. Pull
-requests, including from forks, still cannot assume it.
+The trust accepts four subject claims, all scoped to this repository, because
+GitHub varies the claim on two independent axes:
+
+- **environment vs branch** — a job that declares `environment:` presents
+  `repo:OWNER/REPO:environment:NAME` instead of `...:ref:refs/heads/BRANCH`
+- **plain vs immutable identifiers** — GitHub may append numeric ids to the
+  owner and repository. This account emits
+  `repo:sgroen86@261750674/xChange@1360828142:environment:xchange-aws`, so a
+  policy matching only the literal `sgroen86/xChange` never matches at all.
+
+A mismatch on either axis fails identically, with
+`Not authorized to perform sts:AssumeRoleWithWebIdentity` and nothing in the
+GitHub log saying why. **CloudTrail is where the answer is**: look up
+`AssumeRoleWithWebIdentity` in the deploy region and read `userIdentity.userName`
+for the subject that was actually presented.
+
+The `@*` wildcards are safe because a GitHub username cannot contain `@`, so
+`sgroen86@*` cannot be matched by registering a similarly named account. Pull
+requests, including from forks, still cannot assume the role.
 
 If you change the environment name in the workflow, redeploy this stack with
 `--parameter-overrides GitHubEnvironment=<new-name>`.
