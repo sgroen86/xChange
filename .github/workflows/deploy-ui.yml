@@ -1,0 +1,162 @@
+name: Deploy xChange UI
+
+# xChange's own deploy street. It shares no configuration with the
+# greenitsolutions repo: its own GitHub environment, its own secrets, its own
+# target directory. Nothing here can affect the main site or Bookkeeping.
+#
+# Target: https://www.greenitsolutions.net/xchange/
+# The home directory on that host is the web root (in the greenitsolutions repo,
+# deploy.yml uploads greenitsolutions.net/* to ~/ with strip_components: 1), so
+# /xchange/ is ~/xchange.
+#
+# Transfer is a single archive, not per-file SFTP. The Bookkeeping workflow in
+# that repo documents why: per-file transfers left public/ half-synced and broke
+# the app.
+#
+# Adding a staging lane later is a copy of this file with BASE_PATH=/DEV/xchange
+# and DEPLOY_DIR=DEV/xchange — the site's .htaccess already flags /DEV/ as
+# IS_STAGING and forces no-store there.
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'apps/web/**'
+      - '.github/workflows/deploy-ui.yml'
+  workflow_dispatch:
+
+# Never let two deploys interleave on the server.
+concurrency:
+  group: deploy-xchange-ui
+  cancel-in-progress: false
+
+env:
+  # Directory under the web root, and the URL prefix baked into the build.
+  # These two must agree or the assets 404.
+  DEPLOY_DIR: xchange
+  BASE_PATH: /xchange
+
+jobs:
+  deploy:
+    name: Build and publish
+    runs-on: ubuntu-latest
+    environment: xchange-production
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 1
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+          cache: npm
+          cache-dependency-path: apps/web/package-lock.json
+
+      - name: Install dependencies
+        working-directory: apps/web
+        run: npm ci
+
+      - name: Lint
+        working-directory: apps/web
+        run: npm run lint
+
+      - name: Build static export
+        working-directory: apps/web
+        env:
+          XCHANGE_BASE_PATH: ${{ env.BASE_PATH }}
+        run: npm run build
+
+      - name: Verify the export before shipping it
+        working-directory: apps/web
+        run: |
+          set -e
+
+          test -d out || { echo "No out/ directory — is output:'export' still set?"; exit 1; }
+          test -f out/upload/index.html || { echo "Missing /upload page."; exit 1; }
+          test -f out/invoices/demo/review/index.html || { echo "Missing review page."; exit 1; }
+          test -f out/.htaccess || { echo "Missing .htaccess — Apache rewrites would be lost."; exit 1; }
+
+          # A basePath regression would produce root-relative asset URLs and a
+          # blank page in production, so fail loudly here instead.
+          if ! grep -q "${BASE_PATH}/_next/" out/upload/index.html; then
+            echo "Assets are not prefixed with ${BASE_PATH} — check basePath in next.config.ts."
+            exit 1
+          fi
+
+          echo "Export verified. Pages:"
+          find out -name 'index.html' | sort
+
+      - name: Package as a single archive
+        working-directory: apps/web
+        run: |
+          # `-C out .` includes dotfiles, so .htaccess travels with the build.
+          tar czf ../../xchange-ui.tar.gz -C out .
+          echo "Archive size: $(du -h ../../xchange-ui.tar.gz | cut -f1)"
+
+      - name: Upload archive
+        uses: appleboy/scp-action@v0.1.7
+        with:
+          host: ${{ secrets.XCHANGE_SFTP_HOST }}
+          username: ${{ secrets.XCHANGE_SFTP_USERNAME }}
+          password: ${{ secrets.XCHANGE_SFTP_PASSWORD }}
+          source: "xchange-ui.tar.gz"
+          target: "~/"
+          overwrite: true
+
+      - name: Extract and publish
+        uses: appleboy/ssh-action@v1.0.3
+        with:
+          host: ${{ secrets.XCHANGE_SFTP_HOST }}
+          username: ${{ secrets.XCHANGE_SFTP_USERNAME }}
+          password: ${{ secrets.XCHANGE_SFTP_PASSWORD }}
+          envs: DEPLOY_DIR
+          script: |
+            set -e
+            cd ~
+
+            # Guard: this workflow may only ever write its own directory.
+            case "$DEPLOY_DIR" in
+              ""|/*|*..*) echo "Refusing to deploy to '$DEPLOY_DIR'."; exit 1 ;;
+            esac
+
+            # Unpack into a staging directory, then swap. A static export is
+            # entirely build output with no server-side state to preserve, and a
+            # fresh directory stops old _next chunks accumulating forever.
+            rm -rf "$DEPLOY_DIR.new"
+            mkdir -p "$DEPLOY_DIR.new"
+            tar xzf ~/xchange-ui.tar.gz -C "$DEPLOY_DIR.new"
+
+            # Refuse to publish an archive that arrived incomplete.
+            test -f "$DEPLOY_DIR.new/upload/index.html" || { echo "Upload page missing after extract — aborting, live site untouched."; exit 1; }
+            test -f "$DEPLOY_DIR.new/.htaccess"          || { echo ".htaccess missing after extract — aborting, live site untouched."; exit 1; }
+
+            # Swap last, so any failure above leaves the live site as it was.
+            rm -rf "$DEPLOY_DIR.old"
+            if [ -d "$DEPLOY_DIR" ]; then mv "$DEPLOY_DIR" "$DEPLOY_DIR.old"; fi
+            mkdir -p "$(dirname "$DEPLOY_DIR")"
+            mv "$DEPLOY_DIR.new" "$DEPLOY_DIR"
+            rm -rf "$DEPLOY_DIR.old"
+            rm -f ~/xchange-ui.tar.gz
+
+            # ── The database is never touched by this workflow. ──
+            # This deploys static frontend files only.
+
+            echo "Published to ~/$DEPLOY_DIR"
+            ls -la "$DEPLOY_DIR" | head -20
+
+      - name: Smoke-test the live URL
+        run: |
+          set -e
+          url="https://www.greenitsolutions.net${BASE_PATH}/upload/"
+          echo "Checking $url"
+          code=$(curl -sS -o /tmp/page.html -w '%{http_code}' --max-time 30 "$url" || true)
+          echo "HTTP $code"
+          if [ "$code" != "200" ]; then
+            echo "Deployed, but the page did not return 200. Check Apache config for ${BASE_PATH}/."
+            exit 1
+          fi
+          grep -q "${BASE_PATH}/_next/" /tmp/page.html || { echo "Live page is missing prefixed assets."; exit 1; }
+          echo "Live page OK."

@@ -1,13 +1,17 @@
-# xChange static export, served from https://www.greenitsolutions.net/xchange/
+# xChange static export.
 #
 # Every route is a pre-rendered directory (trailingSlash: true), so Apache
 # serves them directly. The one exception is the review route: invoice ids are
 # created at runtime and have no pre-rendered page, so any id is rewritten onto
 # the placeholder page, which reads the real id from the URL client-side.
+#
+# There is deliberately no RewriteBase. The substitution below is relative, and
+# both the request and the target live under the DocumentRoot, so Apache
+# resolves it against whichever directory this file sits in. That keeps the file
+# valid at /xchange/ and at /DEV/xchange/ without editing it per environment.
 
 <IfModule mod_rewrite.c>
   RewriteEngine On
-  RewriteBase /xchange/
 
   RewriteCond %{REQUEST_FILENAME} !-f
   RewriteCond %{REQUEST_FILENAME} !-d
@@ -16,4 +20,19 @@
 
 <IfModule mod_mime.c>
   AddType application/xml .xml
+</IfModule>
+
+# Cache policy. Next.js content-hashes every asset filename, so those are safe
+# to cache forever; the HTML entry points must not be, or a deploy looks like it
+# did nothing until the browser cache expires.
+#
+# Note: under a /DEV/ path the site's root .htaccess sets IS_STAGING and forces
+# no-store on everything, which deliberately overrides the immutable rule below.
+<IfModule mod_headers.c>
+  <FilesMatch "\.(js|css|woff2?|svg|ico)$">
+    Header set Cache-Control "public, max-age=31536000, immutable"
+  </FilesMatch>
+  <FilesMatch "\.html$">
+    Header set Cache-Control "no-cache, must-revalidate"
+  </FilesMatch>
 </IfModule>
