@@ -46,6 +46,15 @@ If the account already trusts `token.actions.githubusercontent.com` (an account
 may only have one provider per URL), add
 `--parameter-overrides CreateOidcProvider=false`.
 
+**Only pass that on the very first deploy.** Flipping it to `false` on a stack
+that already owns the provider removes the resource from the stack, and every
+role trusting it then fails with `The web identity token provided could not be
+validated` — which reads nothing like "the provider is gone". The resource now
+carries `DeletionPolicy: Retain` so this cannot happen again, but note also that
+CloudFormation *remembers* parameter values between deploys: defaults apply only
+at create time, so undoing it needs an explicit
+`--parameter-overrides CreateOidcProvider=true`.
+
 Then read the role ARN:
 
 ```bash

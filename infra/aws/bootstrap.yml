@@ -53,6 +53,13 @@ Resources:
   GitHubOidcProvider:
     Type: AWS::IAM::OIDCProvider
     Condition: ShouldCreateOidcProvider
+    # The provider is account-wide and shared: other stacks and other repos may
+    # depend on it. Retain it so that flipping CreateOidcProvider to false, or
+    # deleting this stack, cannot take it out from under them. Deleting it
+    # leaves every role that trusts it failing with "The web identity token
+    # provided could not be validated", which reads nothing like the real cause.
+    DeletionPolicy: Retain
+    UpdateReplacePolicy: Retain
     Properties:
       Url: https://token.actions.githubusercontent.com
       ClientIdList:
