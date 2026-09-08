@@ -127,12 +127,26 @@ Resources:
           - content-type
         MaxAge: 3600
 
+  # Two permissions are required, not one. Since October 2025 a function URL
+  # needs both lambda:InvokeFunctionUrl AND lambda:InvokeFunction; with only the
+  # first, every request returns 403 even when AuthType is NONE and the policy
+  # looks correct. The console and SAM add both for you; CloudFormation does not.
   UrlPermission:
     Type: AWS::Lambda::Permission
     Properties:
       FunctionName: !GetAtt Function.Arn
       Action: lambda:InvokeFunctionUrl
       Principal: '*'
+      FunctionUrlAuthType: NONE
+
+  InvokePermission:
+    Type: AWS::Lambda::Permission
+    Properties:
+      FunctionName: !GetAtt Function.Arn
+      Action: lambda:InvokeFunction
+      Principal: '*'
+      # Restricts this to calls arriving through the function URL, so the
+      # function cannot be invoked anonymously by any other route.
       FunctionUrlAuthType: NONE
 
 Outputs:
