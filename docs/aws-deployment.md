@@ -59,8 +59,16 @@ The deploy role is deliberately narrow: it can push images and manage
 itself anything. It may create the Anthropic secret and read its metadata, but
 not read or overwrite its value.
 
-The trust is pinned to `repo:sgroen86/xChange:ref:refs/heads/main`. Pull
-requests, including from forks, cannot assume it.
+The trust accepts two subject claims, both scoped to this repository:
+`repo:sgroen86/xChange:environment:xchange-aws` and
+`repo:sgroen86/xChange:ref:refs/heads/main`. Both are needed because GitHub
+swaps the OIDC subject to the environment form as soon as a job declares an
+`environment:` — pinning only the branch form produces
+`Not authorized to perform sts:AssumeRoleWithWebIdentity` on every run. Pull
+requests, including from forks, still cannot assume it.
+
+If you change the environment name in the workflow, redeploy this stack with
+`--parameter-overrides GitHubEnvironment=<new-name>`.
 
 ## Step 2 — tell GitHub about the role (once)
 

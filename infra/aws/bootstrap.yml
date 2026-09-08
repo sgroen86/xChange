@@ -23,6 +23,16 @@ Parameters:
       Only this branch may assume the role. Pull requests, including from forks,
       cannot - which is what stops an untrusted PR from deploying.
 
+  GitHubEnvironment:
+    Type: String
+    Default: xchange-aws
+    Description: >
+      GitHub environment the deploy job runs in. This matters more than it
+      looks: when a job declares an environment, GitHub swaps the OIDC token's
+      subject claim from the branch form to the environment form, so the trust
+      policy has to accept it or every run fails with
+      "Not authorized to perform sts:AssumeRoleWithWebIdentity".
+
   CreateOidcProvider:
     Type: String
     AllowedValues: ['true', 'false']
@@ -62,9 +72,14 @@ Resources:
             Condition:
               StringEquals:
                 token.actions.githubusercontent.com:aud: sts.amazonaws.com
-                # Pinned to one branch of one repo. Without this condition any
-                # GitHub repository in the world could assume this role.
-                token.actions.githubusercontent.com:sub: !Sub repo:${GitHubRepository}:ref:refs/heads/${GitHubBranch}
+                # Pinned to one repository. A list here means OR, and both forms
+                # are needed: a job that declares an environment presents the
+                # environment subject, one that does not presents the branch
+                # subject. Without this condition any GitHub repository in the
+                # world could assume this role.
+                token.actions.githubusercontent.com:sub:
+                  - !Sub repo:${GitHubRepository}:environment:${GitHubEnvironment}
+                  - !Sub repo:${GitHubRepository}:ref:refs/heads/${GitHubBranch}
       Policies:
         - PolicyName: xchange-deploy
           PolicyDocument:
