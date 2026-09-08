@@ -160,6 +160,25 @@ jobs:
           echo "url=$URL" >> "$GITHUB_OUTPUT"
           echo "API_URL=$URL" >> "$GITHUB_ENV"
 
+      - name: Allow anonymous invoke through the function URL
+        run: |
+          set -e
+          # The companion to UrlPermission in the template. It carries the
+          # InvokedViaFunctionUrl condition, which CloudFormation cannot express,
+          # so it is applied here. Idempotent: an existing statement is a
+          # conflict, not a failure.
+          if aws lambda add-permission \
+               --function-name xchange-api \
+               --statement-id UrlPolicyInvokeFunction \
+               --action lambda:InvokeFunction \
+               --principal '*' \
+               --invoked-via-function-url >/dev/null 2>&1
+          then
+            echo "Permission added."
+          else
+            echo "Permission already present."
+          fi
+
       - name: Show the stack failure reason
         if: failure() && steps.service.outcome == 'failure'
         run: |
