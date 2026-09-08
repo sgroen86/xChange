@@ -1,0 +1,18 @@
+<Project Sdk="Microsoft.NET.Sdk.Worker">
+
+  <PropertyGroup>
+    <TargetFramework>net9.0</TargetFramework>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <UserSecretsId>dotnet-InvoicePlatform.Worker-ec2e7543-3604-4468-b867-56ce7dc6dc53</UserSecretsId>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Microsoft.Extensions.Hosting" Version="9.0.9" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\InvoicePlatform.Application\InvoicePlatform.Application.csproj" />
+    <ProjectReference Include="..\InvoicePlatform.Infrastructure\InvoicePlatform.Infrastructure.csproj" />
+  </ItemGroup>
+</Project>
