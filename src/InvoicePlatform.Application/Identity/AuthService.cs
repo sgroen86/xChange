@@ -77,7 +77,17 @@ public sealed class AuthService(
             CreatedAt = now,
         };
 
-        await users.AddAsync(user, cancellationToken).ConfigureAwait(false);
+        try
+        {
+            await users.AddAsync(user, cancellationToken).ConfigureAwait(false);
+        }
+        catch (InvalidOperationException)
+        {
+            // The store refused a duplicate. Reaching here means the existence
+            // check above was wrong, so say something useful rather than
+            // letting an unhandled exception become a 500.
+            return AuthResult.Fail("Er bestaat al een account. Gebruik inloggen.");
+        }
 
         _ = organizationName; // Reserved for the organisation record; not stored yet.
 

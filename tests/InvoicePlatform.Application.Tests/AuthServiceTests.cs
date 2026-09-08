@@ -44,6 +44,23 @@ public class AuthServiceTests
     }
 
     [Fact]
+    public async Task Setup_reports_a_duplicate_account_instead_of_throwing()
+    {
+        // Defence in depth behind AnyUsersExistAsync. If that check is ever
+        // wrong - it was, because a DynamoDB Limit caps items examined rather
+        // than items returned - the user should see a clear message rather than
+        // a 500 from an unhandled exception.
+        await SetupAsync();
+        _store.PretendNoUsersExist = true;
+
+        var second = await _auth.SetupFirstUserAsync(
+            "stefan@example.nl", "another-long-password", "Stefan", "Org");
+
+        Assert.False(second.Succeeded);
+        Assert.Contains("bestaat al", second.Error);
+    }
+
+    [Fact]
     public async Task Setup_rejects_a_short_password()
     {
         var result = await _auth.SetupFirstUserAsync("a@b.nl", "short", "Name", "Org");
@@ -286,8 +303,11 @@ public class AuthServiceTests
             => Task.FromResult(_byEmail.Values.FirstOrDefault(
                 u => u.Id == userId && u.OrganizationId == organizationId));
 
+        /// <summary>Simulates the existence check returning a wrong answer.</summary>
+        public bool PretendNoUsersExist { get; set; }
+
         public Task<bool> AnyUsersExistAsync(CancellationToken cancellationToken = default)
-            => Task.FromResult(_byEmail.Count > 0);
+            => Task.FromResult(!PretendNoUsersExist && _byEmail.Count > 0);
 
         public Task AddAsync(User user, CancellationToken cancellationToken = default)
         {
