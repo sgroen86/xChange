@@ -249,12 +249,14 @@ internal sealed record EvidenceJson
 {
     [JsonPropertyName("field")] public string? Field { get; init; }
     [JsonPropertyName("confidence")] public string? Confidence { get; init; }
-    [JsonPropertyName("pageNumber")] public int? PageNumber { get; init; }
+    // A string, not an int: the schema carries every optional value as a string
+    // so that no field needs a union type.
+    [JsonPropertyName("pageNumber")] public string? PageNumber { get; init; }
     [JsonPropertyName("sourceText")] public string? SourceText { get; init; }
 
     public FieldEvidence ToDomain() => new(
         ExtractedInvoiceJson.Clean(Field) ?? string.Empty,
         ExtractedInvoiceJson.ParseDecimal(Confidence),
-        PageNumber,
+        int.TryParse(PageNumber, out var page) ? page : null,
         ExtractedInvoiceJson.Clean(SourceText));
 }
