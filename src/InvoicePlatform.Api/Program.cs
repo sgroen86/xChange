@@ -70,7 +70,11 @@ app.UseMiddleware<AuthenticationMiddleware>();
 
 app.MapHealthChecks("/health");
 
-var api = app.MapGroup("/api/v1").RequireCors(CorsPolicy);
+// UseCors above already applies the policy to every request. Adding
+// RequireCors here as well runs it twice, and the response then carries two
+// Access-Control-Allow-Origin headers - which browsers reject outright, while
+// curl happily shows a 200. Pick one; this is the one.
+var api = app.MapGroup("/api/v1");
 
 // Both map onto the same group. Authorisation is declared per endpoint inside
 // MapInvoiceEndpoints rather than here: these Map* helpers return the group,
