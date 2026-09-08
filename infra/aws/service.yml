@@ -83,6 +83,22 @@ Resources:
                   - dynamodb:Scan
                 Resource: !GetAtt IdentityTable.Arn
 
+        - PolicyName: invoice-storage
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action:
+                  - dynamodb:GetItem
+                  - dynamodb:PutItem
+                  - dynamodb:Query
+                Resource: !GetAtt InvoiceTable.Arn
+              - Effect: Allow
+                Action:
+                  - s3:GetObject
+                  - s3:PutObject
+                Resource: !Sub ${DocumentBucket.Arn}/*
+
   # Users, sessions and login-attempt counters.
   #
   # DynamoDB rather than the PostgreSQL CLAUDE.md specifies, and knowingly so:
@@ -122,6 +138,54 @@ Resources:
         - Key: Project
           Value: xchange
 
+  # Booked invoices. Same reasoning as the identity table: DynamoDB is free at
+  # this volume where RDS is not, and the store interfaces make a later move to
+  # PostgreSQL a one-class change.
+  InvoiceTable:
+    Type: AWS::DynamoDB::Table
+    # Booked invoices are the user's own records, not build output.
+    DeletionPolicy: Retain
+    UpdateReplacePolicy: Retain
+    Properties:
+      TableName: xchange-invoices
+      BillingMode: PAY_PER_REQUEST
+      AttributeDefinitions:
+        - AttributeName: pk
+          AttributeType: S
+        - AttributeName: sk
+          AttributeType: S
+      KeySchema:
+        - AttributeName: pk
+          KeyType: HASH
+        - AttributeName: sk
+          KeyType: RANGE
+      SSESpecification:
+        SSEEnabled: true
+      Tags:
+        - Key: Project
+          Value: xchange
+
+  # Source PDFs. Private and encrypted; re-booking an invoice overwrites its own
+  # document rather than accumulating copies.
+  DocumentBucket:
+    Type: AWS::S3::Bucket
+    DeletionPolicy: Retain
+    UpdateReplacePolicy: Retain
+    Properties:
+      BucketName: !Sub xchange-documents-${AWS::AccountId}
+      PublicAccessBlockConfiguration:
+        BlockPublicAcls: true
+        BlockPublicPolicy: true
+        IgnorePublicAcls: true
+        RestrictPublicBuckets: true
+      BucketEncryption:
+        ServerSideEncryptionConfiguration:
+          - ServerSideEncryptionByDefault:
+              SSEAlgorithm: AES256
+      Tags:
+        - Key: Project
+          Value: xchange
+
   Function:
     Type: AWS::Lambda::Function
     Properties:
@@ -145,6 +209,8 @@ Resources:
           Anthropic__Model: !Ref AnthropicModel
           Anthropic__ApiKeySecretArn: !Ref AnthropicSecretArn
           Identity__TableName: !Ref IdentityTable
+          InvoiceStorage__TableName: !Ref InvoiceTable
+          InvoiceStorage__BucketName: !Ref DocumentBucket
           Cors__AllowedOrigins__0: !Ref AllowedOrigin
           Cors__AllowedOrigins__1: !Ref AllowedOriginWww
       Tags:

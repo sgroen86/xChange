@@ -3,7 +3,9 @@ using InvoicePlatform.Application.Invoices;
 using InvoicePlatform.Domain.Serialization;
 using InvoicePlatform.Domain.Validation;
 using Amazon.DynamoDBv2;
+using Amazon.S3;
 using InvoicePlatform.Application.Identity;
+using InvoicePlatform.Infrastructure.Invoices;
 using InvoicePlatform.Infrastructure.Anthropic;
 using InvoicePlatform.Infrastructure.Identity;
 using Microsoft.Extensions.Configuration;
@@ -67,6 +69,23 @@ public static class DependencyInjection
         services.AddSingleton<IPasswordHasher, BcryptPasswordHasher>();
         services.AddSingleton<IClock, SystemClock>();
         services.AddScoped<AuthService>();
+
+        return services;
+    }
+
+    /// <summary>Invoice persistence: records in DynamoDB, documents in S3.</summary>
+    public static IServiceCollection AddInvoiceStorage(
+        this IServiceCollection services,
+        IConfiguration configuration)
+    {
+        services
+            .AddOptions<InvoiceStorageOptions>()
+            .Bind(configuration.GetSection(InvoiceStorageOptions.SectionName));
+
+        services.AddSingleton<IAmazonS3>(_ => new AmazonS3Client());
+        services.AddSingleton<IInvoiceRepository, DynamoDbInvoiceRepository>();
+        services.AddSingleton<IDocumentStore, S3DocumentStore>();
+        services.AddScoped<BookInvoiceService>();
 
         return services;
     }

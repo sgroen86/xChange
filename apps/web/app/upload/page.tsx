@@ -130,7 +130,8 @@ export default function UploadPage() {
             <Icon name="fileUp" /> Factuur uploaden
           </h1>
           <p className="page-header__subtitle">
-            Upload een PDF-factuur. De verwerking is in deze fase gesimuleerd.
+            Upload een PDF-factuur. De gegevens worden uitgelezen en daarna ter controle
+            voorgelegd.
           </p>
         </div>
       </div>
@@ -285,21 +286,6 @@ export default function UploadPage() {
                   </div>
                 </>
               )}
-            </div>
-          </div>
-
-          <div className="card">
-            <div className="card__header">
-              <h3>Wat er nog niet gebeurt</h3>
-            </div>
-            <div className="card__body">
-              <div className="alert alert--info">
-                <Icon name="info" />
-                <div>
-                  Er wordt geen OCR, taalmodel, AWS-dienst of PEPPOL-verzending aangeroepen. De
-                  gegevens op het beoordelingsscherm zijn mockdata.
-                </div>
-              </div>
             </div>
           </div>
         </div>

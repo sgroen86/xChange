@@ -8,6 +8,7 @@
   <ItemGroup>
     <PackageReference Include="Anthropic" Version="12.46.0" />
     <PackageReference Include="AWSSDK.DynamoDBv2" Version="4.0.103.6" />
+    <PackageReference Include="AWSSDK.S3" Version="4.0.102.5" />
     <PackageReference Include="AWSSDK.SecretsManager" Version="4.0.100.12" />
     <PackageReference Include="BCrypt.Net-Next" Version="4.2.0" />
     <PackageReference Include="Microsoft.Extensions.DependencyInjection.Abstractions" Version="10.0.11" />

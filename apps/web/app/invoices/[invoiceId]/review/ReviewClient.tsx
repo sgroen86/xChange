@@ -17,6 +17,7 @@ import {
   type ValidationIssue,
 } from "../../../../lib/canonical";
 import { formatAmount, formatScaled, SCALE_AMOUNT } from "../../../../lib/money";
+import { bookInvoice, documentBlobUrl, getInvoice } from "../../../../lib/invoices";
 import { getPdf } from "../../../../lib/pdfStore";
 import { loadDraft, loadServerResult, saveDraft } from "../../../../lib/store";
 
@@ -55,14 +56,27 @@ export default function ReviewClient() {
     let cancelled = false;
 
     getPdf(invoiceId)
-      .then((record) => {
+      .then(async (record) => {
         if (cancelled) return;
-        if (!record) {
-          setPdf({ status: "missing" });
+
+        if (record) {
+          objectUrl = URL.createObjectURL(record.blob);
+          setPdf({ status: "ready", url: objectUrl, name: record.name });
           return;
         }
-        objectUrl = URL.createObjectURL(record.blob);
-        setPdf({ status: "ready", url: objectUrl, name: record.name });
+
+        // A booked invoice keeps its document on the server, so a missing local
+        // copy is not the end of the story - this is what makes an invoice
+        // opened from the list work in a fresh browser.
+        const fromServer = await documentBlobUrl(invoiceId);
+        if (cancelled) return;
+
+        if (fromServer) {
+          objectUrl = fromServer;
+          setPdf({ status: "ready", url: fromServer, name: "document.pdf" });
+        } else {
+          setPdf({ status: "missing" });
+        }
       })
       .catch(() => {
         if (!cancelled) setPdf({ status: "missing" });
@@ -73,6 +87,29 @@ export default function ReviewClient() {
       if (objectUrl) URL.revokeObjectURL(objectUrl);
     };
   }, [invoiceId]);
+
+  /* Nothing in this session's storage means the invoice was booked earlier, or
+     in another browser. Load it back rather than reporting it missing. setState
+     happens in the promise callback, not synchronously in the effect body. */
+  useEffect(() => {
+    if (draft !== null || !invoiceId) return;
+
+    let cancelled = false;
+
+    getInvoice(invoiceId)
+      .then((stored) => {
+        if (!cancelled) {
+          setDraft(stored.canonicalInvoice as unknown as CanonicalInvoiceDraft);
+        }
+      })
+      .catch(() => {
+        // Genuinely absent: the existing "not found" card is the right answer.
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [draft, invoiceId]);
 
   const totals = useMemo(() => (draft ? calculate(draft) : null), [draft]);
 
@@ -132,6 +169,35 @@ export default function ReviewClient() {
     if (!draft) return;
     saveDraft(draft);
     showToast("Concept opgeslagen.", "success");
+  };
+
+  const [booking, setBooking] = useState(false);
+
+  const onBook = async () => {
+    if (!draft || booking) return;
+
+    if (pdf.status !== "ready") {
+      showToast("De PDF is niet beschikbaar; upload hem opnieuw voordat je boekt.", "danger");
+      return;
+    }
+
+    setBooking(true);
+    try {
+      const blob = await (await fetch(pdf.url)).blob();
+      await bookInvoice({
+        invoiceId,
+        canonicalInvoice: draft,
+        pdf: blob,
+        sourceFileName: draft.extraction.sourceFileName,
+        providerModel: draft.extraction.engine,
+      });
+      saveDraft(draft);
+      showToast("Factuur geboekt en opgeslagen.", "success");
+    } catch (cause) {
+      showToast(cause instanceof Error ? cause.message : "Boeken is mislukt.", "danger");
+    } finally {
+      setBooking(false);
+    }
   };
 
   const onValidate = () => {
@@ -223,6 +289,14 @@ export default function ReviewClient() {
         <div className="page-header__actions">
           <button type="button" className="btn btn--secondary" onClick={onSave}>
             <Icon name="save" /> Opslaan
+          </button>
+          <button
+            type="button"
+            className="btn btn--secondary"
+            onClick={() => void onBook()}
+            disabled={booking}
+          >
+            <Icon name="save" /> {booking ? "Bezig…" : "Boeken"}
           </button>
           <button type="button" className="btn btn--secondary" onClick={onValidate}>
             <Icon name="check" /> Valideren
