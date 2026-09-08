@@ -33,6 +33,7 @@ export function isSection(entry: NavEntry): entry is NavSection {
 export const navStructure: NavEntry[] = [
   { section: "xChange" },
   { id: "upload", label: "Factuur uploaden", icon: "fileUp", href: "/upload" },
+  { id: "invoices", label: "Facturen", icon: "fileText", href: "/invoices" },
   { id: "review", label: "Beoordelen", icon: "fileText", requiresInvoice: true },
 
   { section: "Boekhouden" },
@@ -51,5 +52,6 @@ export const navStructure: NavEntry[] = [
 /** Page titles shown in the header, keyed by nav id. */
 export const pageTitles: Record<string, { title: string; breadcrumb: string }> = {
   upload: { title: "Factuur uploaden", breadcrumb: "xChange / Uploaden" },
+  invoices: { title: "Facturen", breadcrumb: "xChange / Facturen" },
   review: { title: "Factuur beoordelen", breadcrumb: "xChange / Beoordelen" },
 };
