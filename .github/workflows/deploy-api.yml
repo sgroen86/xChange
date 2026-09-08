@@ -142,6 +142,19 @@ jobs:
         run: |
           set -e
 
+          # A stack whose first create failed sits in ROLLBACK_COMPLETE, which
+          # cannot be updated - only replaced. Without this, every retry after a
+          # first-time failure dies with a confusing "stack is in
+          # ROLLBACK_COMPLETE state and can not be updated" instead of the
+          # original error.
+          STATUS=$(aws cloudformation describe-stacks --stack-name "$SERVICE_STACK" \
+                    --query 'Stacks[0].StackStatus' --output text 2>/dev/null || echo NONE)
+          if [ "$STATUS" = "ROLLBACK_COMPLETE" ]; then
+            echo "Stack is in ROLLBACK_COMPLETE from a failed first create; deleting it."
+            aws cloudformation delete-stack --stack-name "$SERVICE_STACK"
+            aws cloudformation wait stack-delete-complete --stack-name "$SERVICE_STACK"
+          fi
+
           aws cloudformation deploy \
             --template-file infra/aws/service.yml \
             --stack-name "$SERVICE_STACK" \

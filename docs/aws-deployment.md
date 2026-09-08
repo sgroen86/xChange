@@ -169,6 +169,30 @@ The secret and the ECR repository are created by the workflow rather than the
 stacks, so they survive deletion and must be removed separately if you want them
 gone.
 
+## Troubleshooting
+
+**`SubscriptionRequiredException: The AWS Access Key Id needs a subscription for
+the service`** — the account cannot use App Runner at all. This is not a
+permissions problem and not something in this repository: it means the AWS
+account sign-up is incomplete, usually a missing or unverified payment method.
+Other services keep working in that state, which makes it confusing; ECR accepted
+image pushes while App Runner refused every call.
+
+Check it directly, which is faster than reading CloudFormation events:
+
+```bash
+aws apprunner list-services --region eu-central-1
+```
+
+If that errors for an admin user, finish account activation at
+console.aws.amazon.com/billing → Payment preferences, then retry. If App Runner
+is genuinely unavailable to you, the fallback is ECS Fargate behind an ALB - more
+moving parts (VPC, target group, listener) but no service subscription.
+
+**`Stack ... is in ROLLBACK_COMPLETE state and can not be updated`** — a stack
+whose *first* create failed cannot be updated, only replaced. The workflow now
+deletes such a stack before deploying, so this resolves itself on the next run.
+
 ## What is deliberately not here yet
 
 No database, no S3 storage, no queue, no authentication, and no
