@@ -44,6 +44,7 @@ builder.Services.AddCors(options =>
 
 builder.Services.AddInvoiceExtraction(builder.Configuration);
 builder.Services.AddIdentity(builder.Configuration);
+builder.Services.AddInvoiceStorage(builder.Configuration);
 
 var app = builder.Build();
 
@@ -82,6 +83,7 @@ var api = app.MapGroup("/api/v1");
 // login included.
 api.MapAuthEndpoints();
 api.MapInvoiceEndpoints();
+api.MapStoredInvoiceEndpoints();
 
 app.Run();
 
