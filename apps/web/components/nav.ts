@@ -34,6 +34,7 @@ export const navStructure: NavEntry[] = [
   { section: "xChange" },
   { id: "upload", label: "Factuur uploaden", icon: "fileUp", href: "/upload" },
   { id: "invoices", label: "Facturen", icon: "fileText", href: "/invoices" },
+  { id: "relations", label: "Relaties", icon: "users", href: "/relations" },
   { id: "review", label: "Beoordelen", icon: "fileText", requiresInvoice: true },
 
   { section: "Boekhouden" },
@@ -54,5 +55,6 @@ export const pageTitles: Record<string, { title: string; breadcrumb: string }> =
   upload: { title: "Factuur uploaden", breadcrumb: "xChange / Uploaden" },
   invoices: { title: "Facturen", breadcrumb: "xChange / Facturen" },
   review: { title: "Factuur beoordelen", breadcrumb: "xChange / Beoordelen" },
+  relations: { title: "Relaties", breadcrumb: "xChange / Relaties" },
   instellingen: { title: "Instellingen", breadcrumb: "Beheer / Instellingen" },
 };

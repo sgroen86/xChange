@@ -30,6 +30,7 @@ function activeNavId(pathname: string): string {
   if (/\/invoices\/[^/]+\/review/.test(pathname)) return "review";
   if (pathname.includes("/invoices")) return "invoices";
   if (pathname.includes("/settings")) return "instellingen";
+  if (pathname.includes("/relations")) return "relations";
   return "upload";
 }
 
