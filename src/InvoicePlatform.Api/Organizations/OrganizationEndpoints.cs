@@ -38,6 +38,7 @@ public static class OrganizationEndpoints
         {
             OrganizationName = organization?.Name,
             CountryCode = organization?.CountryCode,
+            EffectiveDefaultRulesetId = service.EffectiveDefault(settings, organization).Id,
         });
     }
 
@@ -70,6 +71,7 @@ public static class OrganizationEndpoints
             {
                 OrganizationName = organization?.Name,
                 CountryCode = organization?.CountryCode,
+                EffectiveDefaultRulesetId = service.EffectiveDefault(result.Settings!, organization).Id,
             })
             : Results.Problem(detail: result.Error, title: "Instellingen niet opgeslagen", statusCode: StatusCodes.Status400BadRequest);
     }
@@ -84,6 +86,9 @@ public static class OrganizationEndpoints
             Id = r.Id,
             DisplayName = r.DisplayName,
             RulesRelease = r.RulesRelease,
+            TaxName = r.TaxName,
+            TaxCategories = [.. r.TaxCategories.Select(c => new TaxCategoryInfo { Code = c.Code, Label = c.Label })],
+            TaxCurrency = r.TaxCurrency,
         })],
     };
 }

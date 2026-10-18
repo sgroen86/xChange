@@ -51,6 +51,7 @@ public class ValidatedCanonicalInvoiceTests
         public string ProfileId => "urn:test:profile";
         public string TaxName => "btw";
         public IReadOnlyList<TaxCategory> TaxCategories => [new("S", "standaard")];
+        public string? TaxCurrency => null;
         public UblDialect Ubl => new("VAT", new HashSet<string> { "O" }, false, false);
         public CanonicalInvoiceDraft Prepare(CanonicalInvoiceDraft draft) => draft;
 

@@ -20,6 +20,29 @@ public class OrganizationEndpointTests : IClassFixture<SignedInFactory>
         Assert.Equal("3.0.21", first.GetProperty("rulesRelease").GetString());
     }
 
+    [Fact]
+    public async Task A_singapore_organisation_opens_on_pint_sg_with_gst_categories()
+    {
+        // Its own factory: another test here gives org-b a default of its own,
+        // which rightly wins over the country's.
+        using var factory = new SignedInFactory();
+        await factory.Platform.SaveOrganizationAsync(new InvoicePlatform.Domain.Organizations.Organization
+        {
+            OrganizationId = SignedInFactory.OrgB,
+            Name = "Green IT Solutions Pte. Ltd.",
+            CountryCode = "SG",
+            CreatedAt = DateTimeOffset.UnixEpoch,
+        });
+
+        var body = await factory.As("admin-b").GetFromJsonAsync<JsonElement>("/api/v1/organization/settings");
+
+        Assert.Equal("pint-sg-billing-1", body.GetProperty("effectiveDefaultRulesetId").GetString());
+        var pint = body.GetProperty("rulesets").EnumerateArray().Single(r => r.GetProperty("id").GetString() == "pint-sg-billing-1");
+        Assert.Equal("GST", pint.GetProperty("taxName").GetString());
+        Assert.Equal("SGD", pint.GetProperty("taxCurrency").GetString());
+        Assert.Contains(pint.GetProperty("taxCategories").EnumerateArray(), c => c.GetProperty("code").GetString() == "SR");
+    }
+
     [Theory]
     [InlineData("user-a")]
     [InlineData("readonly-a")]

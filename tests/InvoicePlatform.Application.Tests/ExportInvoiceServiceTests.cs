@@ -229,6 +229,7 @@ public class ExportInvoiceServiceTests
         public string ProfileId => _inner.ProfileId;
         public string TaxName => _inner.TaxName;
         public IReadOnlyList<TaxCategory> TaxCategories => _inner.TaxCategories;
+        public string? TaxCurrency => _inner.TaxCurrency;
         public UblDialect Ubl => _inner.Ubl;
         public CanonicalInvoiceDraft Prepare(CanonicalInvoiceDraft draft) => _inner.Prepare(draft);
         public IReadOnlyList<RuleViolation> Check(CanonicalInvoiceDraft invoice) => _inner.Check(invoice);

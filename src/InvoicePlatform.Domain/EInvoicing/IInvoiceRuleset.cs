@@ -56,6 +56,12 @@ public interface IInvoiceRuleset
     /// <summary>The tax categories the review screen offers for this ruleset.</summary>
     IReadOnlyList<TaxCategory> TaxCategories { get; }
 
+    /// <summary>
+    /// The currency tax must also be stated in when the invoice is in another
+    /// one (PINT-SG: SGD), or null. The review screen then asks for the rate.
+    /// </summary>
+    string? TaxCurrency { get; }
+
     UblDialect Ubl { get; }
 
     /// <summary>

@@ -46,6 +46,8 @@ public sealed class PeppolBisBilling30Ruleset : IInvoiceRuleset
         new("O", "niet onderworpen"),
     ];
 
+    public string? TaxCurrency => null;
+
     public UblDialect Ubl { get; } = new(
         "VAT",
         new HashSet<string>(StringComparer.Ordinal) { "O" },

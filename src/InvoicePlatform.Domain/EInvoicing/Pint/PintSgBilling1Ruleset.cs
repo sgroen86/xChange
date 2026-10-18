@@ -53,6 +53,8 @@ public sealed class PintSgBilling1Ruleset : IInvoiceRuleset
         new("NA", "geen GST verschuldigd (bijzondere regeling)"),
     ];
 
+    public string? TaxCurrency => SingaporeGstRules.TaxCurrency;
+
     public UblDialect Ubl { get; } = new(
         "GST",
         new HashSet<string>(StringComparer.Ordinal) { "NG" },
