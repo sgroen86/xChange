@@ -25,6 +25,8 @@ on:
     paths:
       - 'src/**'
       - 'infra/aws/**'
+      - 'tests/**'
+      - 'tools/peppol-validation/**'
       - '.github/workflows/deploy-api.yml'
   workflow_dispatch:
 
@@ -60,6 +62,18 @@ jobs:
       # Gate the deploy on the tests, not just on the build.
       - name: Test
         run: dotnet test --nologo
+
+      - name: Setup Java
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      # The UBL writer's reference files against the official PEPPOL BIS 3.0.21
+      # rules. The writer tests require its output to equal these files, so a
+      # pass means the writer produces valid documents for those invoices.
+      - name: Validate UBL reference files against PEPPOL BIS 3.0.21
+        run: tools/peppol-validation/validate.sh tests/InvoicePlatform.Domain.Tests/EInvoicing/Ubl/Expected/*.xml
 
       - name: Publish and package
         id: package
