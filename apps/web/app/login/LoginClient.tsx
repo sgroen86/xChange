@@ -1,12 +1,13 @@
 "use client";
 
+import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
 
 import { Icon } from "../../components/Icon";
 import { useToast } from "../../components/Toast";
 import { ApiError, isApiConfigured } from "../../lib/api";
-import { isSetupRequired, listCountries, login, setupFirstUser, type CountryOption } from "../../lib/auth";
+import { isSetupRequired, listCountries, login, setupFirstUser, signupStatus, type CountryOption } from "../../lib/auth";
 
 /**
  * Login, and first-run setup when no account exists yet — the same two states
@@ -26,9 +27,14 @@ export default function LoginClient() {
   const [countries, setCountries] = useState<CountryOption[]>([]);
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
+  const [signupOpen, setSignupOpen] = useState(false);
 
   useEffect(() => {
     let cancelled = false;
+
+    signupStatus().then((status) => {
+      if (!cancelled) setSignupOpen(status.open);
+    });
 
     isSetupRequired()
       .then(async (required) => {
@@ -217,6 +223,11 @@ export default function LoginClient() {
               <Icon name="check" />
               {busy ? "Bezig…" : isSetup ? "Account aanmaken" : "Inloggen"}
             </button>
+            {!isSetup && signupOpen && (
+              <p className="text-soft text-sm" style={{ marginTop: "var(--space-4)" }}>
+                Nog geen account? <Link href="/signup">Gratis aanmelden</Link>
+              </p>
+            )}
           </form>
         </div>
       </div>

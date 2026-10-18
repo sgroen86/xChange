@@ -5,6 +5,7 @@ using InvoicePlatform.Application.Learning;
 using InvoicePlatform.Application.Networks;
 using InvoicePlatform.Application.Organizations;
 using InvoicePlatform.Application.Relations;
+using InvoicePlatform.Application.Usage;
 using InvoicePlatform.Domain.Canonical;
 using InvoicePlatform.Domain.Identity;
 using InvoicePlatform.Domain.Imports;
@@ -49,6 +50,12 @@ public sealed class SignedInFactory : WebApplicationFactory<Program>
     public InMemoryImports Imports { get; } = new();
 
     public InMemoryInboxDirectory Inboxes { get; } = new();
+
+    public InMemorySignups Signups { get; } = new();
+
+    public CapturedMail Mail { get; } = new();
+
+    public InMemoryUsage Usage { get; } = new();
 
     public HttpClient As(string token)
     {
@@ -95,6 +102,9 @@ public sealed class SignedInFactory : WebApplicationFactory<Program>
             services.RemoveAll<IImportRepository>();
             services.RemoveAll<IImportQueue>();
             services.RemoveAll<IInboxDirectory>();
+            services.RemoveAll<ISignupStore>();
+            services.RemoveAll<IEmailSender>();
+            services.RemoveAll<IUsageMeter>();
 
             var identity = new SignedInIdentity();
             services.AddSingleton<IUserStore>(identity);
@@ -111,6 +121,9 @@ public sealed class SignedInFactory : WebApplicationFactory<Program>
             services.AddSingleton<IImportRepository>(Imports);
             services.AddSingleton<IImportQueue>(Imports);
             services.AddSingleton<IInboxDirectory>(Inboxes);
+            services.AddSingleton<ISignupStore>(Signups);
+            services.AddSingleton<IEmailSender>(Mail);
+            services.AddSingleton<IUsageMeter>(Usage);
         });
     }
 
@@ -332,6 +345,97 @@ public sealed class InMemoryPlatform : IPlatformStore
         {
             return Task.FromResult(_invitations.Remove(codeHash));
         }
+    }
+}
+
+/// <summary>Pending sign-ups in memory; taking one removes it, as the conditional delete does.</summary>
+public sealed class InMemorySignups : ISignupStore
+{
+    private readonly Dictionary<string, PendingSignup> _byHash = [];
+
+    public Task SaveAsync(PendingSignup signup, CancellationToken cancellationToken = default)
+    {
+        lock (_byHash)
+        {
+            _byHash[signup.CodeHash] = signup;
+        }
+
+        return Task.CompletedTask;
+    }
+
+    public Task<PendingSignup?> TryTakeAsync(string codeHash, CancellationToken cancellationToken = default)
+    {
+        lock (_byHash)
+        {
+            return Task.FromResult(_byHash.Remove(codeHash, out var signup) ? signup : null);
+        }
+    }
+}
+
+/// <summary>Mail that would have gone out through SES.</summary>
+public sealed class CapturedMail : IEmailSender
+{
+    public List<(string To, string Subject, string Body)> Sent { get; } = [];
+
+    public Task SendAsync(string to, string subject, string body, CancellationToken cancellationToken = default)
+    {
+        lock (Sent)
+        {
+            Sent.Add((to, subject, body));
+        }
+
+        return Task.CompletedTask;
+    }
+}
+
+/// <summary>Conversions in memory: no limit unless one is set.</summary>
+public sealed class InMemoryUsage : IUsageMeter
+{
+    private readonly Dictionary<string, (int Used, int? Limit)> _usage = [];
+
+    public Task<bool> TryConsumeAsync(string organizationId, CancellationToken cancellationToken = default)
+    {
+        lock (_usage)
+        {
+            var (used, limit) = _usage.GetValueOrDefault(organizationId);
+            if (limit is { } max && used >= max)
+            {
+                return Task.FromResult(false);
+            }
+
+            _usage[organizationId] = (used + 1, limit);
+            return Task.FromResult(true);
+        }
+    }
+
+    public Task RefundAsync(string organizationId, CancellationToken cancellationToken = default)
+    {
+        lock (_usage)
+        {
+            var (used, limit) = _usage.GetValueOrDefault(organizationId);
+            _usage[organizationId] = (Math.Max(0, used - 1), limit);
+        }
+
+        return Task.CompletedTask;
+    }
+
+    public Task<UsageSummary> GetAsync(string organizationId, CancellationToken cancellationToken = default)
+    {
+        lock (_usage)
+        {
+            var (used, limit) = _usage.GetValueOrDefault(organizationId);
+            return Task.FromResult(new UsageSummary(used, limit));
+        }
+    }
+
+    public Task SetLimitAsync(string organizationId, int? limit, CancellationToken cancellationToken = default)
+    {
+        lock (_usage)
+        {
+            _usage[organizationId] = (_usage.GetValueOrDefault(organizationId).Used, limit);
+        }
+
+        return Task.CompletedTask;
     }
 }
 

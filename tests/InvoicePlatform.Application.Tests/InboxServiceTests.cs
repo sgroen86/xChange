@@ -30,7 +30,7 @@ public class InboxServiceTests
         var relations = new RelationService(new FakeRelationStore(), clock, new InvoiceRulesetRegistry());
         var extraction = new ExtractInvoiceService(
             new NeverCalled(), new InvoiceEnrichment(new FakeSettingsStore(), relations), new InvoiceCalculationValidator(),
-            new CanonicalInvoiceXmlSerializer(), new LearningService(new FakeLearningStore(), clock), new FakePlatformStore());
+            new CanonicalInvoiceXmlSerializer(), new LearningService(new FakeLearningStore(), clock), new FakePlatformStore(), new FakeUsageMeter());
         var imports = new ImportService(_imports, _imports, new FakeInvoiceStore(), extraction, clock);
         _inbox = new InboxService(_directory, _mail, imports, new InboxSettings(Domain));
     }

@@ -13,6 +13,9 @@ using Amazon.DynamoDBv2;
 using Amazon.Lambda;
 using Amazon.S3;
 using Amazon.SQS;
+using Amazon.SimpleEmailV2;
+using InvoicePlatform.Application.Usage;
+using InvoicePlatform.Infrastructure.Usage;
 using InvoicePlatform.Application.Identity;
 using InvoicePlatform.Infrastructure.Imports;
 using InvoicePlatform.Infrastructure.Invoices;
@@ -88,6 +91,17 @@ public static class DependencyInjection
         services.AddSingleton<IPasswordHasher, BcryptPasswordHasher>();
         services.AddSingleton<IClock, SystemClock>();
         services.AddScoped<AuthService>();
+
+        // Self sign-up: pending sign-ups expire by themselves; the confirmation goes out through SES.
+        services
+            .AddOptions<EmailOptions>()
+            .Bind(configuration.GetSection(EmailOptions.SectionName));
+        services.AddSingleton(sp => new SignupSettings(
+            sp.GetRequiredService<Microsoft.Extensions.Options.IOptions<EmailOptions>>().Value.AppUrl.TrimEnd('/')));
+        services.AddSingleton<IAmazonSimpleEmailServiceV2>(_ => new AmazonSimpleEmailServiceV2Client());
+        services.AddSingleton<ISignupStore, DynamoDbSignupStore>();
+        services.AddSingleton<IEmailSender, SesEmailSender>();
+        services.AddScoped<SignupService>();
         services.AddScoped<OrganizationSettingsService>();
         services.AddScoped<PlatformService>();
 
@@ -110,6 +124,9 @@ public static class DependencyInjection
         services.AddScoped<RelationService>();
         services.AddSingleton<ILearningStore, DynamoDbLearningStore>();
         services.AddScoped<LearningService>();
+
+        // Conversions per organisation: a trial limit for self-signed-up ones.
+        services.AddSingleton<IUsageMeter, DynamoDbUsageMeter>();
 
         // Batch and email import: records in DynamoDB, the queue on SQS, read by the worker.
         services

@@ -329,6 +329,17 @@ public sealed class AuthService(
     public Task LogoutAsync(string token, CancellationToken cancellationToken = default)
         => sessions.DeleteAsync(token, cancellationToken);
 
+    /// <summary>Signs a user in that was just created elsewhere (self sign-up), clearing the address's attempts.</summary>
+    internal async Task<AuthResult> SignInAsync(User user, string clientKey, CancellationToken cancellationToken)
+    {
+        await attempts.ClearAsync(clientKey, cancellationToken).ConfigureAwait(false);
+        return await IssueSessionAsync(user, cancellationToken).ConfigureAwait(false);
+    }
+
+    /// <summary>Counts an attempt towards the per-address lockout (login, invitations, sign-up).</summary>
+    internal Task RecordAttemptAsync(string clientKey, LoginAttempts? existing, DateTimeOffset now, CancellationToken cancellationToken)
+        => RecordFailureAsync(clientKey, existing, now, cancellationToken);
+
     private async Task<AuthResult> IssueSessionAsync(User user, CancellationToken cancellationToken)
     {
         var now = clock.UtcNow;
@@ -367,7 +378,7 @@ public sealed class AuthService(
     }
 
     /// <returns>An error message, or null when the input is acceptable.</returns>
-    private static string? ValidateCredentials(string email, string password, string name)
+    internal static string? ValidateCredentials(string email, string password, string name)
     {
         if (string.IsNullOrWhiteSpace(email) || !email.Contains('@', StringComparison.Ordinal))
         {

@@ -15,6 +15,7 @@ export function ModelSetting() {
   const showToast = useToast();
   const [settings, setSettings] = useState<PlatformSettings | null>(null);
   const [choice, setChoice] = useState("");
+  const [signupOpen, setSignupOpen] = useState(false);
   const [saving, setSaving] = useState(false);
 
   useEffect(() => {
@@ -24,6 +25,7 @@ export function ModelSetting() {
         if (cancelled) return;
         setSettings(loaded);
         setChoice(loaded.extractionModel ?? "");
+        setSignupOpen(loaded.signupOpen);
       })
       .catch(() => undefined);
     return () => {
@@ -36,9 +38,9 @@ export function ModelSetting() {
   const save = async () => {
     setSaving(true);
     try {
-      const saved = await updatePlatformSettings(choice || null);
+      const saved = await updatePlatformSettings(choice || null, signupOpen);
       setSettings(saved);
-      showToast("Leesmodel opgeslagen.", "success");
+      showToast("Instellingen opgeslagen.", "success");
     } catch (cause) {
       showToast(cause instanceof Error ? cause.message : "Opslaan is mislukt.", "danger");
     } finally {
@@ -49,7 +51,7 @@ export function ModelSetting() {
   return (
     <div className="card form" style={{ marginBottom: "var(--space-4)" }}>
       <div className="card__header">
-        <h3>Leesmodel</h3>
+        <h3>Leesmodel en aanmelden</h3>
       </div>
       <div className="card__body">
         <div className="form__row">
@@ -69,7 +71,7 @@ export function ModelSetting() {
               type="button"
               className="btn btn--primary"
               onClick={() => void save()}
-              disabled={saving || choice === (settings.extractionModel ?? "")}
+              disabled={saving || (choice === (settings.extractionModel ?? "") && signupOpen === settings.signupOpen)}
             >
               <Icon name="save" /> {saving ? "Bezig…" : "Opslaan"}
             </button>
@@ -78,6 +80,13 @@ export function ModelSetting() {
         <div className="form-help">
           Geldt voor alle organisaties, voor elke volgende upload en import. Het aantal tokens per
           factuur staat in de logboeken, zodat het effect op de kosten te meten is.
+        </div>
+        <label className="checkbox" style={{ display: "flex", gap: "var(--space-2)", alignItems: "center", marginTop: "var(--space-4)" }}>
+          <input type="checkbox" checked={signupOpen} onChange={(event) => setSignupOpen(event.target.checked)} />
+          Zelf aanmelden open (nieuwe organisaties krijgen een proefperiode)
+        </label>
+        <div className="form-help">
+          Pas openzetten bij de lancering: tot dan kan niemand zelf een account aanmaken.
         </div>
       </div>
     </div>

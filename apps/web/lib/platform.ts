@@ -53,14 +53,19 @@ export interface PlatformSettings {
   /** Null: the configured default. */
   extractionModel: string | null;
   models: { id: string; name: string }[];
+  /** Whether anyone may sign up on their own. */
+  signupOpen: boolean;
 }
 
 export function getPlatformSettings(): Promise<PlatformSettings> {
   return call<PlatformSettings>("/api/v1/platform/settings");
 }
 
-export function updatePlatformSettings(extractionModel: string | null): Promise<PlatformSettings> {
-  return call<PlatformSettings>("/api/v1/platform/settings", { method: "PUT", body: JSON.stringify({ extractionModel }) });
+export function updatePlatformSettings(extractionModel: string | null, signupOpen?: boolean): Promise<PlatformSettings> {
+  return call<PlatformSettings>("/api/v1/platform/settings", {
+    method: "PUT",
+    body: JSON.stringify({ extractionModel, signupOpen }),
+  });
 }
 
 export function listOrganizations(): Promise<PlatformOrganization[]> {

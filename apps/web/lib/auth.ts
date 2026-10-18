@@ -224,6 +224,31 @@ export async function acceptInvitation(code: string, name: string, password: str
   return session;
 }
 
+/** Whether anyone may sign up on their own (the platform administrator opens it at launch). */
+export async function signupStatus(): Promise<{ open: boolean; trialConversions: number }> {
+  if (!isApiConfigured) return { open: false, trialConversions: 0 };
+  const response = await fetch(`${API_BASE_URL}/api/v1/signup/status`).catch(() => null);
+  return response?.ok ? ((await response.json()) as { open: boolean; trialConversions: number }) : { open: false, trialConversions: 0 };
+}
+
+/** Sends the confirmation mail. The answer is the same whether or not the address already has an account. */
+export async function startSignup(input: {
+  name: string;
+  email: string;
+  password: string;
+  organizationName: string;
+  countryCode: string;
+}): Promise<void> {
+  await post<void>("/api/v1/signup", input);
+}
+
+/** The link in the confirmation mail: creates the organisation and signs in. */
+export async function confirmSignup(code: string): Promise<Session> {
+  const session = await post<Session>("/api/v1/signup/confirm", { code });
+  store(session);
+  return session;
+}
+
 export async function logout(): Promise<void> {
   try {
     await post<void>("/api/v1/auth/logout", {});

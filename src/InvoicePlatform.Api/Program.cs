@@ -107,6 +107,7 @@ api.MapReceiverEndpoints();
 api.MapLearningEndpoints();
 api.MapImportEndpoints();
 api.MapInboxEndpoints();
+api.MapSignupEndpoints();
 
 app.Run();
 

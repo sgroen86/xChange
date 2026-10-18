@@ -1,5 +1,6 @@
 using InvoicePlatform.Api.Identity;
 using InvoicePlatform.Application.Invoices;
+using InvoicePlatform.Application.Usage;
 using InvoicePlatform.Contracts.Invoices;
 using InvoicePlatform.Domain.Validation;
 using InvoicePlatform.Infrastructure.Anthropic;
@@ -79,6 +80,10 @@ public static class ExtractInvoiceEndpoint
             var user = request.HttpContext.GetAuthenticatedUser()!;
             var result = await service.ExtractAsync(user.OrganizationId, bytes, cancellationToken).ConfigureAwait(false);
             return Results.Ok(ToResponse(result));
+        }
+        catch (ConversionLimitReachedException exception)
+        {
+            return Problem(StatusCodes.Status402PaymentRequired, "Tegoed op", exception.Message);
         }
         catch (InvoiceInterpretationException exception)
         {

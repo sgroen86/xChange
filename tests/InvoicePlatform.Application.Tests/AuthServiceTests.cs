@@ -404,14 +404,14 @@ public class AuthServiceTests
     }
 
     /// <summary>Reversible stand-in for bcrypt: the real one is deliberately slow.</summary>
-    private sealed class FakeHasher : IPasswordHasher
+    internal sealed class FakeHasher : IPasswordHasher
     {
         public string Hash(string password) => "hashed:" + password;
 
         public bool Verify(string password, string hash) => hash == "hashed:" + password;
     }
 
-    private sealed class FakeStore : IUserStore, ISessionStore, ILoginAttemptStore
+    internal sealed class FakeStore : IUserStore, ISessionStore, ILoginAttemptStore
     {
         private readonly Dictionary<string, User> _byEmail = [];
         private readonly Dictionary<string, AuthSession> _sessions = [];

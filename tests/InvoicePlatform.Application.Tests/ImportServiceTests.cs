@@ -31,7 +31,7 @@ public class ImportServiceTests
             new InvoiceEnrichment(new FakeSettingsStore(), relations),
             new InvoiceCalculationValidator(),
             new CanonicalInvoiceXmlSerializer(),
-            new LearningService(new FakeLearningStore(), _clock), new FakePlatformStore());
+            new LearningService(new FakeLearningStore(), _clock), new FakePlatformStore(), new FakeUsageMeter());
         _service = new ImportService(_imports, _imports, _documents, extraction, _clock);
     }
 

@@ -9,6 +9,12 @@ public sealed record PlatformSettings
     /// because the platform pays for every token.
     /// </summary>
     public string? ExtractionModel { get; init; }
+
+    /// <summary>
+    /// Whether anyone may sign up on their own. Off until launch, so nobody
+    /// can create an account (and spend model credit) before then.
+    /// </summary>
+    public bool SignupOpen { get; init; }
 }
 
 /// <param name="Id">The provider's model id, as the API expects it.</param>

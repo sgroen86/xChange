@@ -35,6 +35,11 @@ Parameters:
     Type: String
     Description: Key of the background worker zip (src/InvoicePlatform.Worker) for this commit.
 
+  AppUrl:
+    Type: String
+    Default: https://greenitsolutions.net/xchange
+    Description: Where the app lives, for links in mails (sign-up confirmation).
+
   InboxDomain:
     Type: String
     Default: inbox.greenitsolutions.net
@@ -123,6 +128,8 @@ Resources:
                   # Booking takes the upload's extraction (read and delete in one call),
                   # and a reviewer can make xChange forget a correction.
                   - dynamodb:DeleteItem
+                  # Conversions are counted with one conditional update.
+                  - dynamodb:UpdateItem
                 Resource: !GetAtt InvoiceTable.Arn
               - Effect: Allow
                 Action:
@@ -133,6 +140,10 @@ Resources:
               - Effect: Allow
                 Action: sqs:SendMessage
                 Resource: !GetAtt ImportQueue.Arn
+              # The sign-up confirmation mail, from an address on a verified identity.
+              - Effect: Allow
+                Action: ses:SendEmail
+                Resource: !Sub arn:aws:ses:${AWS::Region}:${AWS::AccountId}:identity/*
 
   # Users, sessions and login-attempt counters.
   #
@@ -256,6 +267,8 @@ Resources:
           OfficialValidation__FunctionName: !Ref ValidatorAlias
           Imports__QueueUrl: !Ref ImportQueue
           Inbox__Domain: !Ref InboxDomain
+          Email__From: !Sub "xChange <noreply@${InboxDomain}>"
+          Email__AppUrl: !Ref AppUrl
       Tags:
         - Key: Project
           Value: xchange
@@ -434,13 +447,14 @@ Resources:
                   - sqs:DeleteMessage
                   - sqs:GetQueueAttributes
                 Resource: !GetAtt ImportQueue.Arn
-              # Imports, learning and relations live in the invoice table.
+              # Imports, learning, relations and the conversion count live in the invoice table.
               - Effect: Allow
                 Action:
                   - dynamodb:GetItem
                   - dynamodb:PutItem
                   - dynamodb:Query
                   - dynamodb:DeleteItem
+                  - dynamodb:UpdateItem
                 Resource: !GetAtt InvoiceTable.Arn
               # The organisation's settings fill the seller's electronic address.
               - Effect: Allow

@@ -25,6 +25,7 @@ public class LearningFlowTests
     private readonly TestClock _clock = new(DateTimeOffset.Parse("2026-10-19T09:00:00Z"));
     private readonly ScriptedInterpreter _interpreter = new();
     private readonly FakePlatformStore _platform = new();
+    private readonly FakeUsageMeter _usage = new();
     private readonly ExtractInvoiceService _extract;
     private readonly BookInvoiceService _book;
 
@@ -33,7 +34,7 @@ public class LearningFlowTests
         var learning = new LearningService(_store, _clock);
         var relations = new RelationService(new FakeRelationStore(), _clock, new InvoiceRulesetRegistry());
         _extract = new ExtractInvoiceService(
-            _interpreter, new InvoiceEnrichment(_settings, relations), new InvoiceCalculationValidator(), new CanonicalInvoiceXmlSerializer(), learning, _platform);
+            _interpreter, new InvoiceEnrichment(_settings, relations), new InvoiceCalculationValidator(), new CanonicalInvoiceXmlSerializer(), learning, _platform, _usage);
         _book = new BookInvoiceService(_invoices, _invoices, _clock, relations, learning);
     }
 

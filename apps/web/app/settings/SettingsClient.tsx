@@ -10,6 +10,7 @@ import { FALLBACK_SETTINGS, getSettings, updateSettings, type OrganizationSettin
 import { ENDPOINT_SCHEMES } from "../invoices/[invoiceId]/review/fields";
 import { InboxAddress } from "./InboxAddress";
 import { LearnedCorrections } from "./LearnedCorrections";
+import { UsageCard } from "./UsageCard";
 
 /**
  * The organisation's settings: the format the export menu opens on, and the
@@ -188,6 +189,8 @@ export default function SettingsClient() {
           </div>
         </form>
       )}
+
+      <UsageCard />
 
       <InboxAddress canEdit={canEdit} />
 

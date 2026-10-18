@@ -189,7 +189,7 @@ public static class AuthEndpoints
             : null;
     }
 
-    private static object ToResponse(AuthResult result) => new
+    internal static object ToResponse(AuthResult result) => new
     {
         token = result.Token,
         expiresAt = result.ExpiresAt,

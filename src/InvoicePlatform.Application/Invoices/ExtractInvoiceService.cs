@@ -1,3 +1,4 @@
+using InvoicePlatform.Application.Usage;
 using InvoicePlatform.Application.Organizations;
 using InvoicePlatform.Application.Interpretation;
 using InvoicePlatform.Application.Learning;
@@ -21,12 +22,36 @@ public sealed class ExtractInvoiceService(
     InvoiceCalculationValidator validator,
     CanonicalInvoiceXmlSerializer serializer,
     LearningService learning,
-    IPlatformStore platform)
+    IPlatformStore platform,
+    IUsageMeter usage)
 {
     public async Task<ExtractInvoiceResult> ExtractAsync(
         string organizationId,
         ReadOnlyMemory<byte> pdf,
         CancellationToken cancellationToken = default)
+    {
+        // One conversion per PDF read, counted before the model is asked and
+        // given back if reading fails: a trial stops at its limit, not after it.
+        if (!await usage.TryConsumeAsync(organizationId, cancellationToken).ConfigureAwait(false))
+        {
+            throw new ConversionLimitReachedException();
+        }
+
+        try
+        {
+            return await ReadAsync(organizationId, pdf, cancellationToken).ConfigureAwait(false);
+        }
+        catch
+        {
+            await usage.RefundAsync(organizationId, CancellationToken.None).ConfigureAwait(false);
+            throw;
+        }
+    }
+
+    private async Task<ExtractInvoiceResult> ReadAsync(
+        string organizationId,
+        ReadOnlyMemory<byte> pdf,
+        CancellationToken cancellationToken)
     {
         var extractionId = Guid.NewGuid().ToString("n");
         var hints = await learning.HintsAsync(organizationId, cancellationToken).ConfigureAwait(false);

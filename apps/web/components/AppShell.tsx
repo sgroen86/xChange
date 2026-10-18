@@ -32,7 +32,7 @@ function activeNavId(pathname: string): string {
   if (pathname.includes("/settings")) return "instellingen";
   if (pathname.includes("/relations")) return "relations";
   if (pathname.includes("/platform")) return "platform";
-  if (pathname.includes("/invite")) return "invite";
+  if (pathname.includes("/invite") || pathname.includes("/signup")) return "invite";
   return "upload";
 }
 
@@ -42,8 +42,8 @@ export function AppShell({ children }: { children: React.ReactNode }) {
   const [collapsed, setCollapsed] = useState(false);
   const [mobileOpen, setMobileOpen] = useState(false);
 
-  // Pages for people without a session: logging in, and accepting an invitation.
-  const onLoginPage = pathname.startsWith("/login") || pathname.startsWith("/invite");
+  // Pages for people without a session: logging in, signing up, and accepting an invitation.
+  const onLoginPage = pathname.startsWith("/login") || pathname.startsWith("/invite") || pathname.startsWith("/signup");
 
   /* The session is an external store, not React state. useSyncExternalStore
      reads it without an effect and re-renders when it changes; the server

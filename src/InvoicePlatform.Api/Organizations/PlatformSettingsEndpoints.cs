@@ -11,9 +11,13 @@ public static class PlatformSettingsEndpoints
 
     public sealed record PlatformSettingsResponse(
         [property: JsonPropertyName("extractionModel")] string? ExtractionModel,
-        [property: JsonPropertyName("models")] IReadOnlyList<ModelOption> Models);
+        [property: JsonPropertyName("models")] IReadOnlyList<ModelOption> Models,
+        [property: JsonPropertyName("signupOpen")] bool SignupOpen);
 
-    public sealed record UpdatePlatformSettingsRequest([property: JsonPropertyName("extractionModel")] string? ExtractionModel);
+    /// <param name="SignupOpen">Null leaves it as it is.</param>
+    public sealed record UpdatePlatformSettingsRequest(
+        [property: JsonPropertyName("extractionModel")] string? ExtractionModel,
+        [property: JsonPropertyName("signupOpen")] bool? SignupOpen = null);
 
     public static RouteGroupBuilder MapPlatformSettingsEndpoints(this RouteGroupBuilder group)
     {
@@ -40,12 +44,12 @@ public static class PlatformSettingsEndpoints
             return RequestBody.Invalid();
         }
 
-        var error = await platform.UpdateSettingsAsync(request.ExtractionModel, cancellationToken).ConfigureAwait(false);
+        var error = await platform.UpdateSettingsAsync(request.ExtractionModel, request.SignupOpen, cancellationToken).ConfigureAwait(false);
         return error is null
             ? Results.Ok(ToResponse(await platform.GetSettingsAsync(cancellationToken).ConfigureAwait(false)))
             : Results.Problem(detail: error, title: "Instelling niet opgeslagen", statusCode: StatusCodes.Status400BadRequest);
     }
 
     private static PlatformSettingsResponse ToResponse(PlatformSettings settings)
-        => new(settings.ExtractionModel, [.. ExtractionModels.All.Select(m => new ModelOption(m.Id, m.Name))]);
+        => new(settings.ExtractionModel, [.. ExtractionModels.All.Select(m => new ModelOption(m.Id, m.Name))], settings.SignupOpen);
 }

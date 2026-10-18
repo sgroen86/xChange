@@ -81,8 +81,9 @@ public sealed class PlatformService(IPlatformStore store, IUserStore users, IClo
         => store.GetSettingsAsync(cancellationToken);
 
     /// <param name="extractionModel">One of <see cref="ExtractionModels.All"/>, or null for the configured default.</param>
+    /// <param name="signupOpen">Whether self sign-up is open; null leaves it as it is.</param>
     /// <returns>Null when saved; otherwise why not.</returns>
-    public async Task<string?> UpdateSettingsAsync(string? extractionModel, CancellationToken cancellationToken = default)
+    public async Task<string?> UpdateSettingsAsync(string? extractionModel, bool? signupOpen = null, CancellationToken cancellationToken = default)
     {
         var model = string.IsNullOrWhiteSpace(extractionModel) ? null : extractionModel.Trim();
         if (model is not null && !ExtractionModels.IsAllowed(model))
@@ -91,7 +92,9 @@ public sealed class PlatformService(IPlatformStore store, IUserStore users, IClo
         }
 
         var current = await store.GetSettingsAsync(cancellationToken).ConfigureAwait(false);
-        await store.SaveSettingsAsync(current with { ExtractionModel = model }, cancellationToken).ConfigureAwait(false);
+        await store.SaveSettingsAsync(
+            current with { ExtractionModel = model, SignupOpen = signupOpen ?? current.SignupOpen },
+            cancellationToken).ConfigureAwait(false);
         return null;
     }
 
