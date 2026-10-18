@@ -1,31 +1,36 @@
-# PEPPOL validation
+# Official validation
 
-`validate.sh` checks UBL files against the official PEPPOL BIS Billing 3.0 rules, release
-**3.0.21** (mandatory from 17 August 2026):
+Every PEPPOL file xChange produces is checked against the **complete official rules** before
+it can be downloaded. The same check runs in CI on the writer's reference files.
 
 ```
-tools/peppol-validation/validate.sh tests/InvoicePlatform.Domain.Tests/EInvoicing/Ubl/Expected/*.xml
+tools/peppol-validation/validate.sh peppol-bis-billing-3.0 tests/InvoicePlatform.Domain.Tests/EInvoicing/Ubl/Expected/*.xml
 ```
 
-It prints every failed assert and exits 1 when any is `fatal`. CI runs it on the writer's
-reference files before deploying the API (`.github/workflows/deploy-api.yml`). The writer
-tests require the writer's output to equal those files, so a pass means the writer produces
-valid documents for those invoices.
+It prints every failed assert and exits 1 when any is `fatal`. It needs a JDK 21 (set
+`JAVA_HOME` if the `java` on `PATH` is older) and Python 3.
 
-It needs Java 8 or later, `curl`, `unzip` and `sha256sum`. Artefacts are downloaded once into
-`.cache/` (gitignored), pinned by version and SHA-256:
+## How it fits together
 
-| Artefact | Source | Why |
+| Piece | What it is |
+|---|---|
+| `validation/rulesets.json` | Per ruleset: the release and the official artefacts (URL, SHA-256, file inside the archive). The single source for CI and production. |
+| `validator/dependencies.json` | The validator's own jars (Saxon-HE 12, xmlresolver, aws-lambda-java-core), pinned. |
+| `validation/fetch.py` | Downloads and verifies both, cached in `validation/.cache/`. |
+| `validator/` | Java 21: `OfficialRules` compiles the rules once and runs them; `Handler` is the `xchange-validator` Lambda; `Cli` is the command line above. `build.sh` builds both. |
+| `src/InvoicePlatform.Infrastructure/Validator/` | The API calls the Lambda after writing a file and before returning it. A fatal failure blocks the download; an unreachable validator does too. |
+
+## Current artefacts
+
+| Ruleset | Release | Artefacts |
 |---|---|---|
-| Saxon-HE 9.9.1-8 | Maven Central | Runs XSLT 2.0, still on Java 8 |
-| `EN16931-UBL-validation.xslt` 1.3.16 | ConnectingEurope `validation-1.3.16` release | The CEN rules, the version PEPPOL 3.0.21 adopts |
-| `PEPPOL-EN16931-UBL.xslt` | `phive-rules-peppol` 4.6.3, Maven Central | OpenPeppol publishes only Schematron for 3.0.21; this compiled copy has rule texts identical to it |
+| `peppol-bis-billing-3.0` | 3.0.21 | CEN EN 16931 UBL 1.3.16 (official ConnectingEurope XSLT); PEPPOL BIS 3.0.21 (compiled XSLT from `phive-rules-peppol` 4.6.3 - OpenPeppol publishes only Schematron for 3.0.21, and these rule texts are identical to it) |
 
-## Moving to a new release
+## Adding a ruleset or moving to a new release
 
-PEPPOL publishes in May and November. For a new release:
+1. Add or change the entry in `validation/rulesets.json` (URL, SHA-256, entry, file name).
+2. For a new ruleset: add its C# ruleset class (as `PeppolBisBilling30Ruleset`) and register it.
+3. Regenerate the writer's reference files (`XCHANGE_UPDATE_REFERENCE_FILES=1 dotnet test`),
+   review the diff, and run this script on them.
 
-1. Update the URLs and hashes in `validate.sh` (and the release in this file).
-2. Update `PeppolBisBilling30Ruleset.RulesRelease` and any changed runtime rules.
-3. Regenerate the reference files (`XCHANGE_UPDATE_REFERENCE_FILES=1 dotnet test`), review
-   the diff, and run this script on them.
+PEPPOL publishes new BIS releases in May and November.

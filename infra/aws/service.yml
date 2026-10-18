@@ -27,6 +27,10 @@ Parameters:
     Type: String
     Description: Secrets Manager ARN holding the Anthropic API key.
 
+  ValidatorArtifactKey:
+    Type: String
+    Description: Key of the official-rules validator zip (validator/build.sh) for this commit.
+
   AnthropicModel:
     Type: String
     Default: claude-opus-5
@@ -84,6 +88,16 @@ Resources:
                   # Listing organisations and counting their users.
                   - dynamodb:Query
                 Resource: !GetAtt IdentityTable.Arn
+
+        - PolicyName: official-validator
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              # Only the published alias, never $LATEST: the alias is the
+              # SnapStart-enabled version.
+              - Effect: Allow
+                Action: lambda:InvokeFunction
+                Resource: !Ref ValidatorAlias
 
         - PolicyName: invoice-storage
           PolicyDocument:
@@ -215,6 +229,7 @@ Resources:
           InvoiceStorage__BucketName: !Ref DocumentBucket
           Cors__AllowedOrigins__0: !Ref AllowedOrigin
           Cors__AllowedOrigins__1: !Ref AllowedOriginWww
+          OfficialValidation__FunctionName: !Ref ValidatorAlias
       Tags:
         - Key: Project
           Value: xchange
@@ -240,9 +255,18 @@ Resources:
         AllowOrigins:
           - !Ref AllowedOrigin
           - !Ref AllowedOriginWww
+        # The function URL answers preflights itself, so every method the API
+        # uses must be listed here; without PUT, saving settings, correcting a
+        # relation or editing an organisation is blocked in the browser.
         AllowMethods:
           - POST
           - GET
+          - PUT
+        # Response headers a browser may read cross-origin: the download's
+        # file name, and the official warnings that come with an export.
+        ExposeHeaders:
+          - content-disposition
+          - x-validation-warnings
         AllowHeaders:
           - content-type
           # Without this the browser's preflight rejects the login token and
@@ -270,6 +294,75 @@ Resources:
       Action: lambda:InvokeFunctionUrl
       Principal: '*'
       FunctionUrlAuthType: NONE
+
+  # ── Official-rules validator ──────────────────────────────────────────────
+  #
+  # The complete official rules are XSLT 2.0, which .NET cannot run, so they
+  # run here: Java 21 and Saxon-HE (validator/). The API invokes the "live"
+  # alias after writing each file and before handing it out.
+  #
+  # SnapStart snapshots the function after its initialiser has compiled the
+  # rules, so a cold start restores them instead of compiling for seconds. It
+  # applies to published versions only: each deploy publishes one (the
+  # artefact key in the description changes per commit, which replaces the
+  # version) and moves the alias to it.
+  ValidatorRole:
+    Type: AWS::IAM::Role
+    Properties:
+      # Named, because the deploy role may only manage roles it knows by name
+      # (infra/aws/bootstrap.yml).
+      RoleName: xchange-validator-lambda
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: lambda.amazonaws.com
+            Action: sts:AssumeRole
+      # Nothing beyond its own logs: it reads no data and calls nothing.
+      ManagedPolicyArns:
+        - arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole
+      Tags:
+        - Key: Project
+          Value: xchange
+
+  ValidatorFunction:
+    Type: AWS::Lambda::Function
+    Properties:
+      FunctionName: xchange-validator
+      Runtime: java21
+      Handler: xchange.validator.Handler::handleRequest
+      Role: !GetAtt ValidatorRole.Arn
+      # Compiling the rules is CPU-bound; more memory is more CPU.
+      MemorySize: 1024
+      Timeout: 60
+      SnapStart:
+        ApplyOn: PublishedVersions
+      Code:
+        S3Bucket: !Ref ArtifactBucket
+        S3Key: !Ref ValidatorArtifactKey
+      Tags:
+        - Key: Project
+          Value: xchange
+
+  ValidatorLogs:
+    Type: AWS::Logs::LogGroup
+    Properties:
+      LogGroupName: !Sub /aws/lambda/${ValidatorFunction}
+      RetentionInDays: 14
+
+  ValidatorVersion:
+    Type: AWS::Lambda::Version
+    Properties:
+      FunctionName: !Ref ValidatorFunction
+      Description: !Ref ValidatorArtifactKey
+
+  ValidatorAlias:
+    Type: AWS::Lambda::Alias
+    Properties:
+      FunctionName: !Ref ValidatorFunction
+      FunctionVersion: !GetAtt ValidatorVersion.Version
+      Name: live
 
 Outputs:
   ServiceUrl:

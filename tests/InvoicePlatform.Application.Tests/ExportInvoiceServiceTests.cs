@@ -17,12 +17,13 @@ public class ExportInvoiceServiceTests
 
     private readonly FakeInvoiceStore _invoices = new();
     private readonly FakeSettingsStore _settings = new();
+    private readonly FakeOfficialValidator _official = new();
     private readonly ExportInvoiceService _service;
 
     public ExportInvoiceServiceTests()
     {
         var registry = new InvoiceRulesetRegistry([new PeppolBisBilling30Ruleset(), new RenamedPeppol()]);
-        _service = new ExportInvoiceService(_invoices, _settings, registry, new InvoiceEnrichment(_settings, new RelationService(new FakeRelationStore(), new TestClock(DateTimeOffset.UnixEpoch))), new UblInvoiceWriter());
+        _service = new ExportInvoiceService(_invoices, _settings, registry, new InvoiceEnrichment(_settings, new RelationService(new FakeRelationStore(), new TestClock(DateTimeOffset.UnixEpoch))), new UblInvoiceWriter(), _official);
     }
 
     private async Task<string> Book(CanonicalInvoiceDraft draft, string organizationId = OrgA)
@@ -52,6 +53,56 @@ public class ExportInvoiceServiceTests
         var xml = Encoding.UTF8.GetString(outcome.Content!);
         Assert.StartsWith("<?xml", xml, StringComparison.Ordinal);
         Assert.Contains("<cbc:ID>F-2026/041</cbc:ID>", xml, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task A_fatal_official_failure_blocks_the_file()
+    {
+        _official.Verdict = new OfficialValidation(true, "3.0.21",
+            [new OfficialFailure("fatal", "BR-CO-16", "Amount due for payment ...", "/Invoice[1]/LegalMonetaryTotal[1]")]);
+        var id = await Book(CompleteInvoice.Create());
+
+        var outcome = await _service.ExportAsync(OrgA, id, null);
+
+        Assert.Equal(ExportOutcomeKind.Incomplete, outcome.Kind);
+        var violation = Assert.Single(outcome.Violations!);
+        Assert.Equal(("BR-CO-16", "/Invoice[1]/LegalMonetaryTotal[1]"), (violation.RuleId, violation.Path));
+        Assert.Null(outcome.Content);
+    }
+
+    [Fact]
+    public async Task Official_warnings_come_with_the_file_without_blocking_it()
+    {
+        _official.Verdict = new OfficialValidation(true, "3.0.21",
+            [new OfficialFailure("warning", "PEPPOL-COMMON-R054", "KVK format", "/Invoice[1]")]);
+        var id = await Book(CompleteInvoice.Create());
+
+        var outcome = await _service.ExportAsync(OrgA, id, null);
+
+        Assert.Equal(ExportOutcomeKind.Exported, outcome.Kind);
+        Assert.Equal("PEPPOL-COMMON-R054", Assert.Single(outcome.Warnings!).RuleId);
+    }
+
+    [Fact]
+    public async Task No_verdict_means_no_file()
+    {
+        _official.Verdict = OfficialValidation.Unavailable("down");
+        var id = await Book(CompleteInvoice.Create());
+
+        var outcome = await _service.ExportAsync(OrgA, id, null);
+
+        Assert.Equal(ExportOutcomeKind.ValidationUnavailable, outcome.Kind);
+        Assert.Null(outcome.Content);
+    }
+
+    [Fact]
+    public async Task An_invoice_the_runtime_rules_refuse_is_never_sent_to_the_official_validator()
+    {
+        var id = await Book(CompleteInvoice.Create() with { InvoiceNumber = null });
+
+        await _service.ExportAsync(OrgA, id, null);
+
+        Assert.Equal(0, _official.Calls);
     }
 
     [Fact]

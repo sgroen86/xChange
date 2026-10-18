@@ -152,6 +152,14 @@ Resources:
                   - lambda:UpdateFunctionCode
                   - lambda:UpdateFunctionConfiguration
                   - lambda:UpdateFunctionUrlConfig
+                  # The validator is published as a version behind an alias,
+                  # which SnapStart requires.
+                  - lambda:PublishVersion
+                  - lambda:ListVersionsByFunction
+                  - lambda:CreateAlias
+                  - lambda:GetAlias
+                  - lambda:UpdateAlias
+                  - lambda:DeleteAlias
                 Resource: !Sub arn:aws:lambda:${AWS::Region}:${AWS::AccountId}:function:xchange-*
 
               - Sid: IdentityTable
@@ -196,8 +204,8 @@ Resources:
                   - logs:ListTagsForResource
                 Resource: '*'
 
-              # The service stack creates the function's own execution role, so
-              # CI needs to manage and pass that one role - and only that one.
+              # The service stack creates the functions' own execution roles, so
+              # CI needs to manage and pass those roles - and only those.
               - Sid: ManageTheFunctionRole
                 Effect: Allow
                 Action:
@@ -213,7 +221,9 @@ Resources:
                   - iam:PutRolePolicy
                   - iam:TagRole
                   - iam:PassRole
-                Resource: !Sub arn:aws:iam::${AWS::AccountId}:role/xchange-api-lambda
+                Resource:
+                  - !Sub arn:aws:iam::${AWS::AccountId}:role/xchange-api-lambda
+                  - !Sub arn:aws:iam::${AWS::AccountId}:role/xchange-validator-lambda
 
               - Sid: UploadDeploymentArtifacts
                 Effect: Allow

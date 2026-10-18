@@ -27,6 +27,8 @@ on:
       - 'infra/aws/**'
       - 'tests/**'
       - 'tools/peppol-validation/**'
+      - 'validation/**'
+      - 'validator/**'
       - '.github/workflows/deploy-api.yml'
   workflow_dispatch:
 
@@ -63,17 +65,21 @@ jobs:
       - name: Test
         run: dotnet test --nologo
 
+      # The official-rules validator (validator/) runs in its own Lambda in
+      # production and, built once here, checks the reference files below.
       - name: Setup Java
         uses: actions/setup-java@v4
         with:
           distribution: temurin
-          java-version: '17'
+          java-version: '21'
 
       # The UBL writer's reference files against the official PEPPOL BIS 3.0.21
-      # rules. The writer tests require its output to equal these files, so a
-      # pass means the writer produces valid documents for those invoices.
+      # rules, with the same validator and artefacts production uses. The writer
+      # tests require its output to equal these files, so a pass means the
+      # writer produces valid documents for those invoices. This also builds
+      # validator/build/xchange-validator.zip for the upload below.
       - name: Validate UBL reference files against PEPPOL BIS 3.0.21
-        run: tools/peppol-validation/validate.sh tests/InvoicePlatform.Domain.Tests/EInvoicing/Ubl/Expected/*.xml
+        run: tools/peppol-validation/validate.sh peppol-bis-billing-3.0 tests/InvoicePlatform.Domain.Tests/EInvoicing/Ubl/Expected/*.xml
 
       - name: Publish and package
         id: package
@@ -87,6 +93,7 @@ jobs:
           (cd publish && zip -qr ../xchange-api.zip .)
 
           echo "key=xchange-api/${GITHUB_SHA}.zip" >> "$GITHUB_OUTPUT"
+          echo "validator_key=xchange-validator/${GITHUB_SHA}.zip" >> "$GITHUB_OUTPUT"
           echo "Package size: $(du -h xchange-api.zip | cut -f1)"
 
       - name: Configure AWS credentials
@@ -138,6 +145,8 @@ jobs:
           set -e
           aws s3 cp xchange-api.zip \
             "s3://${{ steps.bootstrap.outputs.bucket }}/${{ steps.package.outputs.key }}"
+          aws s3 cp validator/build/xchange-validator.zip \
+            "s3://${{ steps.bootstrap.outputs.bucket }}/${{ steps.package.outputs.validator_key }}"
 
       - name: Deploy the service stack
         id: service
@@ -165,6 +174,7 @@ jobs:
             --parameter-overrides \
               ArtifactBucket="${{ steps.bootstrap.outputs.bucket }}" \
               ArtifactKey="${{ steps.package.outputs.key }}" \
+              ValidatorArtifactKey="${{ steps.package.outputs.validator_key }}" \
               AnthropicSecretArn="${{ steps.secret.outputs.arn }}"
 
           URL=$(aws cloudformation describe-stacks --stack-name "$SERVICE_STACK" \

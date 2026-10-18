@@ -89,6 +89,7 @@ export default function ReviewClient() {
   const [checking, setChecking] = useState(false);
   const [checkFailed, setCheckFailed] = useState(false);
   const [downloading, setDownloading] = useState(false);
+  const [officialWarnings, setOfficialWarnings] = useState<RuleViolation[]>([]);
 
   const [pdf, setPdf] = useState<PdfState>(() => (invoiceId ? { status: "loading" } : { status: "missing" }));
 
@@ -300,11 +301,18 @@ export default function ReviewClient() {
       const result = await exportInvoice(invoiceId, format);
       if (result.kind === "incomplete") {
         setViolations(result.violations);
-        showToast("Het bestand is nog niet compleet. Vul eerst aan wat ontbreekt.", "warning");
+        setOfficialWarnings([]);
+        showToast("Het bestand voldoet niet aan de officiële regels. Zie de meldingen.", "warning");
         return;
       }
       download(result.blob, result.fileName);
-      showToast(`${result.fileName} gedownload.`, "success");
+      setOfficialWarnings(result.warnings);
+      showToast(
+        result.warnings.length > 0
+          ? `${result.fileName} gedownload, met ${result.warnings.length} waarschuwing(en).`
+          : `${result.fileName} gedownload.`,
+        result.warnings.length > 0 ? "warning" : "success",
+      );
     } catch (cause) {
       showToast(cause instanceof Error ? cause.message : "Exporteren is mislukt.", "danger");
     } finally {
@@ -414,6 +422,7 @@ export default function ReviewClient() {
             onFormat={setChosenFormat}
             localIssues={local}
             violations={isRuleset ? violations : []}
+            officialWarnings={isRuleset ? officialWarnings : []}
             checking={checking}
             checkFailed={checkFailed}
             exportable={booked && !dirty}

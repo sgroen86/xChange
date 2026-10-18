@@ -20,5 +20,6 @@ next-env.d.ts
 # Tests
 TestResults/
 
-# PEPPOL validation downloads
-tools/peppol-validation/.cache/
+# Official validation: downloaded artefacts and the validator build
+validation/.cache/
+validator/build/

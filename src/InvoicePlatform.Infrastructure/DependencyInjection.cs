@@ -7,9 +7,11 @@ using InvoicePlatform.Domain.EInvoicing.Ubl;
 using InvoicePlatform.Domain.Serialization;
 using InvoicePlatform.Domain.Validation;
 using Amazon.DynamoDBv2;
+using Amazon.Lambda;
 using Amazon.S3;
 using InvoicePlatform.Application.Identity;
 using InvoicePlatform.Infrastructure.Invoices;
+using InvoicePlatform.Infrastructure.Validator;
 using InvoicePlatform.Infrastructure.Relations;
 using InvoicePlatform.Infrastructure.Anthropic;
 using InvoicePlatform.Infrastructure.Identity;
@@ -101,6 +103,13 @@ public static class DependencyInjection
         services.AddScoped<RelationService>();
         services.AddScoped<BookInvoiceService>();
         services.AddScoped<ExportInvoiceService>();
+
+        // The complete official rules run in a separate Lambda (validator/).
+        services
+            .AddOptions<OfficialValidationOptions>()
+            .Bind(configuration.GetSection(OfficialValidationOptions.SectionName));
+        services.AddSingleton<IAmazonLambda>(_ => new AmazonLambdaClient());
+        services.AddSingleton<IOfficialValidator, LambdaOfficialValidator>();
 
         return services;
     }

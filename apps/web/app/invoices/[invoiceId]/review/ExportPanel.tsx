@@ -14,6 +14,8 @@ interface Props {
   /** Numbers the server cannot read yet; they come before anything else. */
   localIssues: LocalIssue[];
   violations: RuleViolation[];
+  /** Official warnings from the last download; they did not block it. */
+  officialWarnings: RuleViolation[];
   checking: boolean;
   checkFailed: boolean;
   /** Booked, and nothing changed since: only then is there a record to export. */
@@ -120,10 +122,32 @@ export function ExportPanel(props: Props) {
               )}
             </div>
           )}
+          {props.officialWarnings.length > 0 && (
+            <>
+              <div className="card__header">
+                <h3>Waarschuwingen bij de laatste download</h3>
+                <span className="badge badge--warning">{props.officialWarnings.length}</span>
+              </div>
+              <div className="issue-list">
+                {props.officialWarnings.map((warning) => (
+                  <div className="issue" key={`${warning.ruleId}-${warning.path}`}>
+                    <span className="badge badge--warning">Let op</span>
+                    <div className="issue__body">
+                      <div className="issue__message">{warning.message}</div>
+                      <div className="issue__path">
+                        {warning.ruleId} · {warning.path}
+                      </div>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </>
+          )}
           <div className="card__body">
             <p className="text-muted text-xs">
-              Gecontroleerd op verplichte velden en kernregels (release {ruleset.rulesRelease}). De
-              ontvanger kan op de volledige officiële regelset controleren.
+              Tijdens het typen: verplichte velden en kernregels. Bij downloaden: de volledige
+              officiële regels (release {ruleset.rulesRelease}); een bestand met een fout wordt niet
+              vrijgegeven.
             </p>
           </div>
         </div>

@@ -120,10 +120,26 @@ export async function checkInvoice(
 }
 
 export type ExportResult =
-  | { kind: "file"; blob: Blob; fileName: string }
+  | { kind: "file"; blob: Blob; fileName: string; warnings: RuleViolation[] }
   | { kind: "incomplete"; violations: RuleViolation[] };
 
-/** Exports the invoice as booked. A 422 is not an error: it lists what is missing. */
+/** Official warnings come with the file in a header, as base64 JSON. */
+function readWarnings(response: Response): RuleViolation[] {
+  const header = response.headers.get("X-Validation-Warnings");
+  if (!header) return [];
+  try {
+    const bytes = Uint8Array.from(atob(header), (c) => c.charCodeAt(0));
+    return JSON.parse(new TextDecoder().decode(bytes)) as RuleViolation[];
+  } catch {
+    return [];
+  }
+}
+
+/**
+ * Exports the invoice as booked, after the complete official rules. A 422 is
+ * not an error: it lists what is missing. A 503 means the official check could
+ * not run, so there is no file.
+ */
 export async function exportInvoice(invoiceId: string, rulesetId: string): Promise<ExportResult> {
   const response = await send(
     `/api/v1/invoices/${invoiceId}/export?ruleset=${encodeURIComponent(rulesetId)}`,
@@ -138,7 +154,7 @@ export async function exportInvoice(invoiceId: string, rulesetId: string): Promi
 
   const disposition = response.headers.get("Content-Disposition") ?? "";
   const fileName = /filename="?([^";]+)"?/.exec(disposition)?.[1] ?? `${invoiceId}-${rulesetId}.xml`;
-  return { kind: "file", blob: await response.blob(), fileName };
+  return { kind: "file", blob: await response.blob(), fileName, warnings: readWarnings(response) };
 }
 
 /**
