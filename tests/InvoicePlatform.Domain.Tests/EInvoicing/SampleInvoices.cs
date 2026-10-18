@@ -177,4 +177,95 @@ internal static class SampleInvoices
         ],
         Totals = new CanonicalTotals { PrepaidAmount = 100.00m },
     };
+
+    /// <summary>A Singapore GST invoice in SGD, as PINT-SG wants it.</summary>
+    public static CanonicalInvoiceDraft Singapore() => new()
+    {
+        TypeCode = "380",
+        InvoiceNumber = "SG-2026-0101",
+        DocumentUuid = "6f2c1a3e-8b4d-4c7e-9a10-2b3c4d5e6f70",
+        IssueDate = "2026-10-01",
+        DueDate = "2026-10-31",
+        CurrencyCode = "SGD",
+        BuyerReference = "PO-88",
+        Seller = new CanonicalParty
+        {
+            Name = "Green IT Solutions Pte. Ltd.",
+            VatIdentifier = "M2-1234567-K",
+            LegalRegistrationId = "201912345K",
+            ElectronicAddress = "SGUEN201912345K",
+            ElectronicAddressScheme = "0195",
+            Address = new CanonicalAddress
+            {
+                StreetName = "1 Raffles Place",
+                PostalZone = "048616",
+                CityName = "Singapore",
+                CountryCode = "SG",
+            },
+        },
+        Buyer = new CanonicalParty
+        {
+            Name = "Tan Trading Pte. Ltd.",
+            LegalRegistrationId = "200212345Z",
+            ElectronicAddress = "SGUEN200212345Z",
+            ElectronicAddressScheme = "0195",
+            Address = new CanonicalAddress
+            {
+                StreetName = "10 Anson Road",
+                PostalZone = "079903",
+                CityName = "Singapore",
+                CountryCode = "SG",
+            },
+        },
+        Payment = new CanonicalPaymentDetails
+        {
+            PaymentMeansCode = "30",
+            Iban = "0123456789",
+            AccountName = "Green IT Solutions Pte. Ltd.",
+            PaymentReference = "SG-2026-0101",
+        },
+        Lines =
+        [
+            new CanonicalInvoiceLine
+            {
+                LineId = "1",
+                Description = "IT consulting",
+                Quantity = 10m,
+                UnitCode = "HUR",
+                UnitPrice = 150.00m,
+                VatCategoryCode = "SR",
+                VatPercentage = 9m,
+            },
+            new CanonicalInvoiceLine
+            {
+                LineId = "2",
+                Description = "Network switch, 24 ports",
+                Quantity = 2m,
+                UnitCode = "C62",
+                UnitPrice = 389.90m,
+                VatCategoryCode = "SR",
+                VatPercentage = 9m,
+            },
+        ],
+    };
+
+    /// <summary>The same invoice in US dollars, with the IRAS rate the user entered.</summary>
+    public static CanonicalInvoiceDraft SingaporeInUsDollars() => Singapore() with
+    {
+        InvoiceNumber = "SG-2026-0102",
+        DocumentUuid = "0b9e8d7c-6a5f-4e3d-8c2b-1a0f9e8d7c6b",
+        CurrencyCode = "USD",
+        TaxCurrencyRate = 1.3425m,
+    };
+
+    /// <summary>A Singapore credit note, with the reason PINT-SG requires.</summary>
+    public static CanonicalInvoiceDraft SingaporeCreditNote() => Singapore() with
+    {
+        TypeCode = "381",
+        InvoiceNumber = "SG-CN-2026-0007",
+        DocumentUuid = "3c4d5e6f-7a8b-4c9d-8e0f-1a2b3c4d5e6f",
+        Note = "Credit for two consulting hours not delivered.",
+        PrecedingInvoiceReference = "SG-2026-0101",
+        Lines = [Singapore().Lines[0] with { Quantity = 2m }],
+    };
 }

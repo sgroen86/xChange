@@ -2,18 +2,21 @@
 
 import { Icon } from "../../../../components/Icon";
 import type { CanonicalInvoiceLine } from "../../../../lib/canonical";
-import { CellInput, CellSelect, UNIT_CODES, VAT_CATEGORIES } from "./fields";
+import { CellInput, CellSelect, UNIT_CODES, type Option } from "./fields";
 
 interface Props {
   lines: CanonicalInvoiceLine[];
   /** Calculated net per line, in line order. */
   nets: (string | null)[];
+  /** The tax categories of the chosen format, and its tax name ("Btw", "GST"). */
+  taxCategories: Option[];
+  taxName: string;
   readOnly: boolean;
   onAdd: () => void;
   onRemove: (index: number) => void;
 }
 
-export function LinesCard({ lines, nets, readOnly, onAdd, onRemove }: Props) {
+export function LinesCard({ lines, nets, taxCategories, taxName, readOnly, onAdd, onRemove }: Props) {
   return (
     <div className="card">
       <div className="card__header">
@@ -33,8 +36,8 @@ export function LinesCard({ lines, nets, readOnly, onAdd, onRemove }: Props) {
                 <th>Aantal</th>
                 <th>Eenheid</th>
                 <th>Prijs</th>
-                <th>Btw</th>
-                <th>Btw %</th>
+                <th>{taxName}</th>
+                <th>{taxName} %</th>
                 <th className="cell-amount">Netto</th>
                 <th />
               </tr>
@@ -61,10 +64,10 @@ export function LinesCard({ lines, nets, readOnly, onAdd, onRemove }: Props) {
                     <CellInput path={`lines[${index}].unitPrice`} label="Prijs" amount />
                   </td>
                   <td>
-                    <CellSelect path={`lines[${index}].vatCategoryCode`} label="Btw-categorie" options={VAT_CATEGORIES} />
+                    <CellSelect path={`lines[${index}].vatCategoryCode`} label={`${taxName}-categorie`} options={taxCategories} />
                   </td>
                   <td>
-                    <CellInput path={`lines[${index}].vatPercentage`} label="Btw-percentage" amount />
+                    <CellInput path={`lines[${index}].vatPercentage`} label={`${taxName}-percentage`} amount />
                   </td>
                   <td className="cell-amount">{nets[index] ?? "—"}</td>
                   <td>

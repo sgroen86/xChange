@@ -3,27 +3,28 @@ using InvoicePlatform.Domain.Canonical;
 namespace InvoicePlatform.Domain.EInvoicing;
 
 /// <summary>
-/// The EN 16931 core rules (CEN artefacts 1.3.16, as adopted by PEPPOL BIS
-/// 3.0.21) that can be expressed on the canonical model. Shared by every
-/// ruleset built on EN 16931.
+/// The structural rules every ruleset in xChange shares: what EN 16931 calls
+/// BR-02 to BR-63 and the decimals rules, and what PINT carries over from it
+/// as ibr-*. Rule ids are the EN 16931 ones. Where rulesets differ - the tax
+/// categories, the payment codes, whether a tax number starts with a country
+/// prefix - the <see cref="TaxRegime"/> says how.
 ///
 /// Rules that hold by construction are not repeated here: the totals and the
-/// VAT breakdown are calculated (BR-12..15, BR-45..48, BR-CO-10..18, BR-S-08
-/// and the like), line ids are always written (BR-21), and the writer never
-/// emits an element twice (UBL-SR-*).
+/// tax breakdown are calculated (BR-12..15, BR-45..48, BR-CO-10..18), line ids
+/// are always written (BR-21), and the writer never emits an element twice
+/// (UBL-SR-*).
 /// </summary>
-internal static class En16931CoreRules
+internal static class CommonRules
 {
-    public static IReadOnlyList<RuleViolation> Check(CanonicalInvoiceDraft invoice)
+    public static IReadOnlyList<RuleViolation> Check(CanonicalInvoiceDraft invoice, TaxRegime regime)
     {
         var findings = new Findings();
 
         Header(invoice, findings);
-        Parties(invoice, findings);
-        Lines(invoice, findings);
+        Parties(invoice, regime, findings);
+        Lines(invoice, regime, findings);
         DocumentAllowancesAndCharges(invoice, findings);
-        VatCategories(invoice, findings);
-        Payment(invoice, findings);
+        Payment(invoice, regime, findings);
         Totals(invoice, findings);
 
         return findings.Violations;
@@ -57,7 +58,7 @@ internal static class En16931CoreRules
         }
     }
 
-    private static void Parties(CanonicalInvoiceDraft invoice, Findings findings)
+    private static void Parties(CanonicalInvoiceDraft invoice, TaxRegime regime, Findings findings)
     {
         var seller = invoice.Seller;
         var buyer = invoice.Buyer;
@@ -78,11 +79,14 @@ internal static class En16931CoreRules
         if (Findings.Missing(seller?.VatIdentifier) && Findings.Missing(seller?.LegalRegistrationId))
         {
             findings.Add("BR-CO-26", "BT-31", "seller.vatIdentifier",
-                "Vermeld het btw-nummer of het KvK-nummer van de verkoper.");
+                $"Vermeld het {regime.TaxName}-nummer of het registratienummer van de verkoper.");
         }
 
-        VatPrefix(seller?.VatIdentifier, "seller.vatIdentifier", "BT-31", "verkoper", findings);
-        VatPrefix(buyer?.VatIdentifier, "buyer.vatIdentifier", "BT-48", "afnemer", findings);
+        if (regime.TaxNumbersHaveCountryPrefix)
+        {
+            VatPrefix(seller?.VatIdentifier, "seller.vatIdentifier", "BT-31", "verkoper", findings);
+            VatPrefix(buyer?.VatIdentifier, "buyer.vatIdentifier", "BT-48", "afnemer", findings);
+        }
 
         EndpointScheme(seller, "seller", "BR-62", "BT-34", "verkoper", findings);
         EndpointScheme(buyer, "buyer", "BR-63", "BT-49", "afnemer", findings);
@@ -148,7 +152,7 @@ internal static class En16931CoreRules
         }
     }
 
-    private static void Lines(CanonicalInvoiceDraft invoice, Findings findings)
+    private static void Lines(CanonicalInvoiceDraft invoice, TaxRegime regime, Findings findings)
     {
         if (invoice.Lines.Count == 0)
         {
@@ -202,12 +206,13 @@ internal static class En16931CoreRules
 
             if (Findings.Missing(line.VatCategoryCode))
             {
-                findings.Add("BR-CO-04", "BT-151", $"{path}.vatCategoryCode", $"Regel {number}: btw-categorie ontbreekt.");
+                findings.Add("BR-CO-04", "BT-151", $"{path}.vatCategoryCode",
+                    $"Regel {number}: {regime.TaxName}-categorie ontbreekt.");
             }
-            else if (!CodeLists.VatCategories.Contains(line.VatCategoryCode!))
+            else if (!regime.Categories.Contains(line.VatCategoryCode!))
             {
                 findings.Add("BR-CL-18", "BT-151", $"{path}.vatCategoryCode",
-                    $"Regel {number}: '{line.VatCategoryCode}' is geen btw-categorie.");
+                    $"Regel {number}: '{line.VatCategoryCode}' is geen {regime.TaxName}-categorie.");
             }
 
             for (var adjustmentIndex = 0; adjustmentIndex < line.AllowancesAndCharges.Count; adjustmentIndex++)
@@ -265,7 +270,7 @@ internal static class En16931CoreRules
             if (Findings.Missing(adjustment.VatCategoryCode))
             {
                 findings.Add(isCharge ? "BR-37" : "BR-32", isCharge ? "BT-102" : "BT-95", $"{path}.vatCategoryCode",
-                    $"{kind} {number} op factuurniveau: btw-categorie ontbreekt.");
+                    $"{kind} {number} op factuurniveau: belastingcategorie ontbreekt.");
             }
 
             if (Findings.Missing(adjustment.Reason) && Findings.Missing(adjustment.ReasonCode))
@@ -288,152 +293,7 @@ internal static class En16931CoreRules
         }
     }
 
-    private static void VatCategories(CanonicalInvoiceDraft invoice, Findings findings)
-    {
-        // Rates, per line and per document allowance or charge.
-        for (var index = 0; index < invoice.Lines.Count; index++)
-        {
-            var line = invoice.Lines[index];
-            Rate(line.VatCategoryCode, line.VatPercentage, CategorySource.Line,
-                $"lines[{index}]", $"Regel {Findings.Number(index)}", findings);
-        }
-
-        for (var index = 0; index < invoice.AllowancesAndCharges.Count; index++)
-        {
-            var adjustment = invoice.AllowancesAndCharges[index];
-            Rate(adjustment.VatCategoryCode, adjustment.VatPercentage,
-                adjustment.IsCharge ? CategorySource.Charge : CategorySource.Allowance,
-                $"allowancesAndCharges[{index}]",
-                $"{(adjustment.IsCharge ? "Toeslag" : "Korting")} {Findings.Number(index)} op factuurniveau", findings);
-        }
-
-        // Identifiers each category requires (or, for O, forbids).
-        var seller = invoice.Seller;
-        var buyer = invoice.Buyer;
-        var sellerHasVatOrTaxId = !Findings.Missing(seller?.VatIdentifier) || !Findings.Missing(seller?.TaxRegistrationId);
-        var used = InvoiceFacts.CategoriesInUse(invoice).ToList();
-
-        foreach (var (category, source) in used)
-        {
-            var suffix = source switch
-            {
-                CategorySource.Line => "02",
-                CategorySource.Allowance => "03",
-                _ => "04",
-            };
-
-            switch (category)
-            {
-                case "S" or "Z" or "E" when !sellerHasVatOrTaxId:
-                    findings.Add($"BR-{category}-{suffix}", "BT-31", "seller.vatIdentifier",
-                        $"Btw-nummer van de verkoper is verplicht bij btw-categorie {category}.");
-                    break;
-
-                case "AE":
-                    if (!sellerHasVatOrTaxId)
-                    {
-                        findings.Add($"BR-AE-{suffix}", "BT-31", "seller.vatIdentifier",
-                            "Btw-nummer van de verkoper is verplicht bij verlegde btw (AE).");
-                    }
-
-                    if (Findings.Missing(buyer?.VatIdentifier) && Findings.Missing(buyer?.LegalRegistrationId))
-                    {
-                        findings.Add($"BR-AE-{suffix}", "BT-48", "buyer.vatIdentifier",
-                            "Btw-nummer of KvK-nummer van de afnemer is verplicht bij verlegde btw (AE).");
-                    }
-
-                    break;
-
-                case "G" when Findings.Missing(seller?.VatIdentifier):
-                    findings.Add($"BR-G-{suffix}", "BT-31", "seller.vatIdentifier",
-                        "Btw-nummer van de verkoper is verplicht bij export buiten de EU (G).");
-                    break;
-
-                case "O":
-                    if (!Findings.Missing(seller?.VatIdentifier))
-                    {
-                        findings.Add($"BR-O-{suffix}", "BT-31", "seller.vatIdentifier",
-                            "Bij 'niet onderworpen aan btw' (O) mag het btw-nummer van de verkoper niet op de factuur staan.");
-                    }
-
-                    if (!Findings.Missing(buyer?.VatIdentifier))
-                    {
-                        findings.Add($"BR-O-{suffix}", "BT-48", "buyer.vatIdentifier",
-                            "Bij 'niet onderworpen aan btw' (O) mag het btw-nummer van de afnemer niet op de factuur staan.");
-                    }
-
-                    break;
-            }
-        }
-
-        if (used.Any(u => u.Category == "O") && used.Any(u => u.Category != "O"))
-        {
-            findings.Add("BR-O-12", "BT-151", "lines",
-                "Btw-categorie O (niet onderworpen aan btw) kan niet samen met andere btw-categorieën op één factuur.");
-        }
-
-        // Exemption reasons in the calculated breakdown.
-        for (var index = 0; index < invoice.VatBreakdown.Count; index++)
-        {
-            var bucket = invoice.VatBreakdown[index];
-            var path = $"vatBreakdown[{index}].exemptionReason";
-            var hasReason = !Findings.Missing(bucket.ExemptionReason);
-
-            switch (bucket.VatCategoryCode)
-            {
-                case "S" or "Z" when hasReason:
-                    findings.Add($"BR-{bucket.VatCategoryCode}-10", "BT-120", path,
-                        $"Bij btw-categorie {bucket.VatCategoryCode} hoort geen vrijstellingsreden.");
-                    break;
-
-                case "E" or "AE" or "G" or "O" when !hasReason:
-                    findings.Add($"BR-{bucket.VatCategoryCode}-10", "BT-120", path,
-                        $"Vrijstellingsreden ontbreekt voor btw-categorie {bucket.VatCategoryCode}.");
-                    break;
-            }
-        }
-    }
-
-    /// <summary>
-    /// The rate each category requires. O has no rate at all; the writer leaves
-    /// it out, so it is not something the reviewer needs to fix.
-    /// </summary>
-    private static void Rate(
-        string? category, decimal? rate, CategorySource source, string path, string label, Findings findings)
-    {
-        var suffix = source switch
-        {
-            CategorySource.Line => "05",
-            CategorySource.Allowance => "06",
-            _ => "07",
-        };
-
-        switch (category)
-        {
-            case "S" when rate is not > 0m:
-                findings.Add($"BR-S-{suffix}", "BT-152", $"{path}.vatPercentage",
-                    $"{label}: btw-categorie S (standaardtarief) vraagt een btw-percentage boven nul.");
-                break;
-
-            case "Z" or "E" or "AE" or "G" when rate is { } actual && actual != 0m:
-                findings.Add($"BR-{category}-{suffix}", "BT-152", $"{path}.vatPercentage",
-                    $"{label}: btw-categorie {category} vraagt btw-percentage 0.");
-                break;
-
-            case "K":
-                findings.Add("XC-VAT-UNSUPPORTED", "BT-151", $"{path}.vatCategoryCode",
-                    $"{label}: btw-categorie K (intracommunautaire levering) vraagt een leverdatum en leveringsland, "
-                    + "die xChange nog niet vastlegt.");
-                break;
-
-            case "L" or "M" or "B":
-                findings.Add("XC-VAT-UNSUPPORTED", "BT-151", $"{path}.vatCategoryCode",
-                    $"{label}: btw-categorie {category} wordt niet ondersteund.");
-                break;
-        }
-    }
-
-    private static void Payment(CanonicalInvoiceDraft invoice, Findings findings)
+    private static void Payment(CanonicalInvoiceDraft invoice, TaxRegime regime, Findings findings)
     {
         if (!InvoiceFacts.HasPayment(invoice))
         {
@@ -448,7 +308,7 @@ internal static class En16931CoreRules
             return;
         }
 
-        if (!CodeLists.IsPaymentMeansCode(payment.PaymentMeansCode))
+        if (!regime.IsPaymentMeansCode(payment.PaymentMeansCode))
         {
             findings.Add("BR-CL-16", "BT-81", "payment.paymentMeansCode",
                 $"'{payment.PaymentMeansCode}' is geen geldige betaalwijze.");

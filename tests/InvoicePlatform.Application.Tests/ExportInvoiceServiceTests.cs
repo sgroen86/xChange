@@ -18,12 +18,13 @@ public class ExportInvoiceServiceTests
     private readonly FakeInvoiceStore _invoices = new();
     private readonly FakeSettingsStore _settings = new();
     private readonly FakeOfficialValidator _official = new();
+    private readonly FakePlatformStore _platform = new();
     private readonly ExportInvoiceService _service;
 
     public ExportInvoiceServiceTests()
     {
         var registry = new InvoiceRulesetRegistry([new PeppolBisBilling30Ruleset(), new RenamedPeppol()]);
-        _service = new ExportInvoiceService(_invoices, _settings, registry, new InvoiceEnrichment(_settings, new RelationService(new FakeRelationStore(), new TestClock(DateTimeOffset.UnixEpoch))), new UblInvoiceWriter(), _official);
+        _service = new ExportInvoiceService(_invoices, _settings, registry, new InvoiceEnrichment(_settings, new RelationService(new FakeRelationStore(), new TestClock(DateTimeOffset.UnixEpoch))), new UblInvoiceWriter(), _official, _platform);
     }
 
     private async Task<string> Book(CanonicalInvoiceDraft draft, string organizationId = OrgA)
@@ -53,6 +54,32 @@ public class ExportInvoiceServiceTests
         var xml = Encoding.UTF8.GetString(outcome.Content!);
         Assert.StartsWith("<?xml", xml, StringComparison.Ordinal);
         Assert.Contains("<cbc:ID>F-2026/041</cbc:ID>", xml, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task A_singapore_organisation_exports_pint_sg_by_default_with_a_stable_uuid()
+    {
+        await _platform.SaveOrganizationAsync(new InvoicePlatform.Domain.Organizations.Organization
+        {
+            OrganizationId = OrgA,
+            Name = "Green IT Solutions Pte. Ltd.",
+            CountryCode = "SG",
+            CreatedAt = DateTimeOffset.UnixEpoch,
+        });
+        var service = new ExportInvoiceService(
+            _invoices, _settings, new InvoiceRulesetRegistry(), new InvoiceEnrichment(_settings, new RelationService(new FakeRelationStore(), new TestClock(DateTimeOffset.UnixEpoch))),
+            new UblInvoiceWriter(), _official, _platform);
+        var id = await Book(CompleteInvoice.Singapore());
+
+        var first = await service.ExportAsync(OrgA, id, null);
+        var again = await service.ExportAsync(OrgA, id, null);
+
+        Assert.Equal(ExportOutcomeKind.Exported, first.Kind);
+        Assert.EndsWith("-pint-sg-billing-1.xml", first.FileName, StringComparison.Ordinal);
+        var xml = Encoding.UTF8.GetString(first.Content!);
+        Assert.Contains("<cbc:CustomizationID>urn:peppol:pint:billing-1@sg-1</cbc:CustomizationID>", xml, StringComparison.Ordinal);
+        Assert.Contains($"<cbc:UUID>{DocumentUuids.For(OrgA, id)}</cbc:UUID>", xml, StringComparison.Ordinal);
+        Assert.Equal(xml, Encoding.UTF8.GetString(again.Content!));
     }
 
     [Fact]
@@ -200,6 +227,11 @@ public class ExportInvoiceServiceTests
         public InvoiceSyntax Syntax => _inner.Syntax;
         public string CustomizationId => _inner.CustomizationId;
         public string ProfileId => _inner.ProfileId;
+        public string TaxName => _inner.TaxName;
+        public IReadOnlyList<TaxCategory> TaxCategories => _inner.TaxCategories;
+        public string? TaxCurrency => _inner.TaxCurrency;
+        public UblDialect Ubl => _inner.Ubl;
+        public CanonicalInvoiceDraft Prepare(CanonicalInvoiceDraft draft) => _inner.Prepare(draft);
         public IReadOnlyList<RuleViolation> Check(CanonicalInvoiceDraft invoice) => _inner.Check(invoice);
     }
 }

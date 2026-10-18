@@ -12,6 +12,26 @@ public sealed record RulesetInfo
 
     [JsonPropertyName("rulesRelease")]
     public required string RulesRelease { get; init; }
+
+    /// <summary>"btw" or "GST", for labels.</summary>
+    [JsonPropertyName("taxName")]
+    public required string TaxName { get; init; }
+
+    [JsonPropertyName("taxCategories")]
+    public required IReadOnlyList<TaxCategoryInfo> TaxCategories { get; init; }
+
+    /// <summary>When set (PINT-SG: SGD), an invoice in another currency needs an exchange rate.</summary>
+    [JsonPropertyName("taxCurrency")]
+    public string? TaxCurrency { get; init; }
+}
+
+public sealed record TaxCategoryInfo
+{
+    [JsonPropertyName("code")]
+    public required string Code { get; init; }
+
+    [JsonPropertyName("label")]
+    public required string Label { get; init; }
 }
 
 /// <summary>Wire shape of GET and PUT /api/v1/organization/settings.</summary>
@@ -26,6 +46,10 @@ public sealed record OrganizationSettingsResponse
 
     [JsonPropertyName("defaultRulesetId")]
     public string? DefaultRulesetId { get; init; }
+
+    /// <summary>What the export menu opens on: the organisation's choice, else its country's default.</summary>
+    [JsonPropertyName("effectiveDefaultRulesetId")]
+    public string? EffectiveDefaultRulesetId { get; init; }
 
     [JsonPropertyName("endpointId")]
     public string? EndpointId { get; init; }

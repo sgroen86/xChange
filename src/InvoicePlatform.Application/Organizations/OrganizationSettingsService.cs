@@ -17,6 +17,13 @@ public sealed class OrganizationSettingsService(
     public Task<Organization?> GetOrganizationAsync(string organizationId, CancellationToken cancellationToken = default)
         => platform.FindOrganizationAsync(organizationId, cancellationToken);
 
+    /// <summary>
+    /// The format the export menu opens on: the organisation's own choice, else
+    /// its country's default, else the system default.
+    /// </summary>
+    public IInvoiceRuleset EffectiveDefault(OrganizationSettings settings, Organization? organization)
+        => rulesets.Resolve(null, settings.DefaultRulesetId, Countries.Find(organization?.CountryCode)?.DefaultRulesetId)!;
+
     public IReadOnlyList<IInvoiceRuleset> Rulesets => rulesets.All;
 
     /// <summary>The stored settings, or empty ones when nothing was saved yet.</summary>

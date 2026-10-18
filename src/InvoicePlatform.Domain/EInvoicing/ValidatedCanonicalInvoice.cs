@@ -25,15 +25,16 @@ public sealed class ValidatedCanonicalInvoice
     public IInvoiceRuleset Ruleset { get; }
 
     /// <summary>
-    /// Calculates the totals, then checks the result against the ruleset. The
-    /// rules see the calculated invoice, which is also what gets written.
+    /// Lets the ruleset fill what it derives, calculates the totals, then checks
+    /// the result against the ruleset. The rules see the calculated invoice,
+    /// which is also what gets written.
     /// </summary>
     public static InvoiceValidationResult Validate(IInvoiceRuleset ruleset, CanonicalInvoiceDraft draft)
     {
         ArgumentNullException.ThrowIfNull(ruleset);
         ArgumentNullException.ThrowIfNull(draft);
 
-        var calculated = InvoiceTotalsCalculator.Apply(draft);
+        var calculated = InvoiceTotalsCalculator.Apply(ruleset.Prepare(draft));
         var violations = ruleset.Check(calculated);
 
         return new InvoiceValidationResult(

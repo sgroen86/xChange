@@ -4,6 +4,7 @@ using InvoicePlatform.Application.Organizations;
 using InvoicePlatform.Domain.Canonical;
 using InvoicePlatform.Domain.EInvoicing;
 using InvoicePlatform.Domain.EInvoicing.Ubl;
+using InvoicePlatform.Domain.Organizations;
 
 namespace InvoicePlatform.Application.Invoices;
 
@@ -19,7 +20,8 @@ public sealed partial class ExportInvoiceService(
     InvoiceRulesetRegistry rulesets,
     InvoiceEnrichment enrichment,
     UblInvoiceWriter writer,
-    IOfficialValidator officialValidator)
+    IOfficialValidator officialValidator,
+    IPlatformStore platform)
 {
     public const string MediaType = "application/xml";
 
@@ -49,7 +51,11 @@ public sealed partial class ExportInvoiceService(
         CancellationToken cancellationToken = default)
     {
         var organization = await settings.GetAsync(organizationId, cancellationToken).ConfigureAwait(false);
-        var ruleset = rulesets.Resolve(requestedRulesetId, organization?.DefaultRulesetId);
+        var record = await platform.FindOrganizationAsync(organizationId, cancellationToken).ConfigureAwait(false);
+        var ruleset = rulesets.Resolve(
+            requestedRulesetId,
+            organization?.DefaultRulesetId,
+            Countries.Find(record?.CountryCode)?.DefaultRulesetId);
         if (ruleset is null)
         {
             return ExportOutcome.UnknownRuleset;
@@ -63,7 +69,13 @@ public sealed partial class ExportInvoiceService(
         }
 
         var enriched = await enrichment.EnrichAsync(organizationId, stored.Invoice, cancellationToken).ConfigureAwait(false);
-        var result = ValidatedCanonicalInvoice.Validate(ruleset, enriched.Draft);
+        var draft = enriched.Draft with
+        {
+            // Stable per stored invoice, so a re-export carries the same UUID.
+            DocumentUuid = enriched.Draft.DocumentUuid ?? DocumentUuids.For(organizationId, invoiceId),
+        };
+
+        var result = ValidatedCanonicalInvoice.Validate(ruleset, draft);
         if (result.Invoice is null)
         {
             return new ExportOutcome(ExportOutcomeKind.Incomplete, Violations: result.Violations);

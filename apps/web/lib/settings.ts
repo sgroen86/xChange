@@ -6,10 +6,20 @@
 import { API_BASE_URL, ApiError, isApiConfigured } from "./api";
 import { authHeaders } from "./auth";
 
+export interface TaxCategoryInfo {
+  code: string;
+  label: string;
+}
+
 export interface RulesetInfo {
   id: string;
   displayName: string;
   rulesRelease: string;
+  /** "btw" or "GST", for labels. */
+  taxName: string;
+  taxCategories: TaxCategoryInfo[];
+  /** When set (PINT-SG: SGD), an invoice in another currency needs an exchange rate. */
+  taxCurrency: string | null;
 }
 
 export interface OrganizationSettings {
@@ -17,6 +27,8 @@ export interface OrganizationSettings {
   organizationName?: string | null;
   countryCode?: string | null;
   defaultRulesetId: string | null;
+  /** What the export menu opens on: the organisation's choice, else its country's default. */
+  effectiveDefaultRulesetId?: string | null;
   endpointId: string | null;
   endpointScheme: string | null;
   /** Every ruleset that can be chosen, the system default first. */
@@ -28,7 +40,23 @@ export const FALLBACK_SETTINGS: OrganizationSettings = {
   defaultRulesetId: null,
   endpointId: null,
   endpointScheme: null,
-  rulesets: [{ id: "peppol-bis-billing-3.0", displayName: "PEPPOL BIS Billing 3.0", rulesRelease: "3.0.21" }],
+  rulesets: [
+    {
+      id: "peppol-bis-billing-3.0",
+      displayName: "PEPPOL BIS Billing 3.0",
+      rulesRelease: "3.0.21",
+      taxName: "btw",
+      taxCategories: [
+        { code: "S", label: "standaardtarief" },
+        { code: "Z", label: "nultarief" },
+        { code: "E", label: "vrijgesteld" },
+        { code: "AE", label: "btw verlegd" },
+        { code: "G", label: "export buiten de EU" },
+        { code: "O", label: "niet onderworpen" },
+      ],
+      taxCurrency: null,
+    },
+  ],
 };
 
 async function call(method: "GET" | "PUT", body?: unknown): Promise<OrganizationSettings> {
@@ -65,7 +93,8 @@ export function updateSettings(update: {
   return call("PUT", update);
 }
 
-/** The ruleset the format menu opens on: the organisation's choice, else the first. */
+/** The ruleset the format menu opens on: the organisation's choice, else its country's, else the first. */
 export function defaultRulesetOf(settings: OrganizationSettings): RulesetInfo {
-  return settings.rulesets.find((r) => r.id === settings.defaultRulesetId) ?? settings.rulesets[0];
+  const id = settings.effectiveDefaultRulesetId ?? settings.defaultRulesetId;
+  return settings.rulesets.find((r) => r.id === id) ?? settings.rulesets[0];
 }

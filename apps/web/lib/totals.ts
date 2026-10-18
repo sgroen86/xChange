@@ -50,6 +50,8 @@ export interface TotalsInput {
   lines: LineInput[];
   allowancesAndCharges: AdjustmentInput[];
   totals: { prepaidAmount: string | null; roundingAmount: string | null } | null;
+  /** Rate to the tax currency (PINT-SG: SGD); when given, the totals are also converted. */
+  taxCurrencyRate?: string | null;
 }
 
 export interface VatBucket {
@@ -73,6 +75,8 @@ export interface CalculatedTotals {
   prepaid: string | null;
   rounding: string | null;
   payable: string;
+  /** Without tax and the tax each rounded to the cent, with tax their sum - as the server does. */
+  inTaxCurrency: { exclusive: string; tax: string; inclusive: string } | null;
 }
 
 function signed(adjustment: AdjustmentInput): Dec {
@@ -137,6 +141,20 @@ export function calculateTotals(input: TotalsInput): CalculatedTotals {
   const rounding = parseDecimal(input.totals?.roundingAmount ?? null);
   const payable = round(add(sub(taxInclusive, prepaid ?? ZERO), rounding ?? ZERO), 2);
 
+  const rate = parseDecimal(input.taxCurrencyRate ?? null);
+  const inTaxCurrency =
+    rate === null
+      ? null
+      : (() => {
+          const exclusive = round(mul(taxExclusive, rate), 2);
+          const taxConverted = round(mul(tax, rate), 2);
+          return {
+            exclusive: format(exclusive, 2),
+            tax: format(taxConverted, 2),
+            inclusive: format(add(exclusive, taxConverted), 2),
+          };
+        })();
+
   return {
     lineNet: nets.map((n) => (n === null ? null : format(n, 2))),
     vatBreakdown: breakdown.map(({ bucket, taxable, tax: bucketTax }) => ({
@@ -154,5 +172,6 @@ export function calculateTotals(input: TotalsInput): CalculatedTotals {
     prepaid: prepaid === null ? null : format(prepaid, 2),
     rounding: rounding === null ? null : format(rounding, 2),
     payable: format(payable, 2),
+    inTaxCurrency,
   };
 }

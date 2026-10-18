@@ -89,6 +89,9 @@ export interface CanonicalTotals {
   prepaidAmount: Amount;
   roundingAmount: Amount;
   payableAmount: Amount;
+  taxExclusiveAmountInTaxCurrency: Amount;
+  taxAmountInTaxCurrency: Amount;
+  taxInclusiveAmountInTaxCurrency: Amount;
 }
 
 export interface FieldEvidence {
@@ -110,6 +113,12 @@ export interface CanonicalInvoice {
   purchaseOrderReference: string | null;
   buyerReference: string | null;
   precedingInvoiceReference: string | null;
+  /** BT-SG-003; filled in by the server on export. */
+  documentUuid: string | null;
+  /** BT-6; set by the ruleset (PINT-SG: SGD), not by the user. */
+  taxCurrencyCode: string | null;
+  /** Units of the tax currency per unit of the invoice currency, entered by the user. */
+  taxCurrencyRate: Amount;
   payment: CanonicalPaymentDetails | null;
   lines: CanonicalInvoiceLine[];
   allowancesAndCharges: CanonicalAllowanceCharge[];
@@ -211,6 +220,9 @@ export function normalizeInvoice(value: unknown): CanonicalInvoice {
     purchaseOrderReference: text(raw.purchaseOrderReference),
     buyerReference: text(raw.buyerReference),
     precedingInvoiceReference: text(raw.precedingInvoiceReference),
+    documentUuid: text(raw.documentUuid),
+    taxCurrencyCode: text(raw.taxCurrencyCode),
+    taxCurrencyRate: amount(raw.taxCurrencyRate),
     payment: payment
       ? {
           paymentMeansCode: text(payment.paymentMeansCode),
@@ -254,6 +266,9 @@ export function normalizeInvoice(value: unknown): CanonicalInvoice {
           prepaidAmount: amount(totals.prepaidAmount),
           roundingAmount: amount(totals.roundingAmount),
           payableAmount: amount(totals.payableAmount),
+          taxExclusiveAmountInTaxCurrency: amount(totals.taxExclusiveAmountInTaxCurrency),
+          taxAmountInTaxCurrency: amount(totals.taxAmountInTaxCurrency),
+          taxInclusiveAmountInTaxCurrency: amount(totals.taxInclusiveAmountInTaxCurrency),
         }
       : null,
     evidence: list(raw.evidence).map((item) => ({
@@ -364,6 +379,9 @@ export function withCalculatedTotals(invoice: CanonicalInvoice): CanonicalInvoic
       prepaidAmount: totals.prepaid,
       roundingAmount: totals.rounding,
       payableAmount: totals.payable,
+      taxExclusiveAmountInTaxCurrency: totals.inTaxCurrency?.exclusive ?? null,
+      taxAmountInTaxCurrency: totals.inTaxCurrency?.tax ?? null,
+      taxInclusiveAmountInTaxCurrency: totals.inTaxCurrency?.inclusive ?? null,
     },
   };
 }
@@ -442,6 +460,7 @@ export function localIssues(invoice: CanonicalInvoice): LocalIssue[] {
     check(line.vatPercentage, `lines[${index}].vatPercentage`, `Regel ${n}: btw-percentage is geen getal.`);
     check(line.baseQuantity, `lines[${index}].baseQuantity`, `Regel ${n}: basishoeveelheid is geen getal.`);
   });
+  check(invoice.taxCurrencyRate, "taxCurrencyRate", "De wisselkoers is geen getal. Gebruik een punt als decimaalteken.");
   check(invoice.totals?.prepaidAmount ?? null, "totals.prepaidAmount", "Vooruitbetaald bedrag is geen getal.");
 
   return issues;

@@ -73,13 +73,24 @@ jobs:
           distribution: temurin
           java-version: '21'
 
-      # The UBL writer's reference files against the official PEPPOL BIS 3.0.21
-      # rules, with the same validator and artefacts production uses. The writer
-      # tests require its output to equal these files, so a pass means the
-      # writer produces valid documents for those invoices. This also builds
+      # The UBL writer's reference files against the official rules of their
+      # ruleset, with the same validator and artefacts production uses. The
+      # writer tests require its output to equal these files, so a pass means
+      # the writer produces valid documents for those invoices. pint-sg-*.xml
+      # are PINT-SG files, the rest BIS 3.0. This also builds
       # validator/build/xchange-validator.zip for the upload below.
-      - name: Validate UBL reference files against PEPPOL BIS 3.0.21
-        run: tools/peppol-validation/validate.sh peppol-bis-billing-3.0 tests/InvoicePlatform.Domain.Tests/EInvoicing/Ubl/Expected/*.xml
+      - name: Validate UBL reference files against the official rules
+        run: |
+          set -e
+          bis=(); pint_sg=()
+          for file in tests/InvoicePlatform.Domain.Tests/EInvoicing/Ubl/Expected/*.xml; do
+            case "$(basename "$file")" in
+              pint-sg-*) pint_sg+=("$file") ;;
+              *) bis+=("$file") ;;
+            esac
+          done
+          tools/peppol-validation/validate.sh peppol-bis-billing-3.0 "${bis[@]}"
+          tools/peppol-validation/validate.sh pint-sg-billing-1 "${pint_sg[@]}"
 
       - name: Publish and package
         id: package
@@ -226,6 +237,13 @@ jobs:
             [ "$attempt" = "10" ] && { echo "Never became healthy."; cat /tmp/health.txt; exit 1; }
             sleep 10
           done
+
+          # Exactly one Access-Control-Allow-Origin for the site: the app is the
+          # only CORS layer. A second one (say, a Cors block on the function URL)
+          # makes browsers reject every call from the site.
+          origins=$(curl -sS -o /dev/null -D - --max-time 30                       -H "Origin: https://greenitsolutions.net" "$API_URL/health"                     | grep -ci '^access-control-allow-origin:' || true)
+          echo "Access-Control-Allow-Origin headers: $origins"
+          [ "$origins" = "1" ] || { echo "Expected exactly one Access-Control-Allow-Origin header."; exit 1; }
 
       - name: Summary
         if: always()

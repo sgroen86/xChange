@@ -2,7 +2,14 @@
 
 import { CURRENCIES, SelectField, TextAreaField, TextField, TYPE_CODES } from "./fields";
 
-export function InvoiceDetailsCard({ creditNote, status }: { creditNote: boolean; status: React.ReactNode }) {
+interface Props {
+  creditNote: boolean;
+  status: React.ReactNode;
+  /** Asks for the rate when the format needs tax in another currency (PINT-SG: SGD). */
+  rate: { from: string; to: string } | null;
+}
+
+export function InvoiceDetailsCard({ creditNote, status, rate }: Props) {
   return (
     <div className="card">
       <div className="card__header">
@@ -19,6 +26,16 @@ export function InvoiceDetailsCard({ creditNote, status }: { creditNote: boolean
           <TextField path="issueDate" label="Factuurdatum" type="date" />
           <TextField path="dueDate" label="Vervaldatum" type="date" />
         </div>
+        {rate && (
+          <div className="form__row">
+            <TextField
+              path="taxCurrencyRate"
+              label={`Wisselkoers ${rate.from} → ${rate.to}`}
+              placeholder="1.3425"
+              hint={`Aantal ${rate.to} voor 1 ${rate.from}, op de factuurdatum. De belasting wordt ook in ${rate.to} vermeld.`}
+            />
+          </div>
+        )}
         <div className="form__row">
           <TextField path="buyerReference" label="Referentie afnemer" hint="Of een inkoopordernummer: één van beide is verplicht." />
           <TextField path="purchaseOrderReference" label="Inkoopordernummer" />

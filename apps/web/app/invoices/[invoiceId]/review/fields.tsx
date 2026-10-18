@@ -152,9 +152,9 @@ export const TYPE_CODES: Option[] = [
   { value: "381", label: "Creditnota (381)" },
 ];
 
-export const CURRENCIES: Option[] = ["EUR", "USD", "GBP"].map((code) => ({ value: code, label: code }));
+export const CURRENCIES: Option[] = ["EUR", "USD", "GBP", "SGD"].map((code) => ({ value: code, label: code }));
 
-/** Electronic address schemes (EAS) that matter for Dutch and Belgian trading partners. */
+/** Electronic address schemes (EAS) that matter for Dutch, Belgian and Singapore trading partners. */
 export const ENDPOINT_SCHEMES: Option[] = [
   { value: "0106", label: "0106 · KvK-nummer" },
   { value: "0190", label: "0190 · OIN (overheid)" },
@@ -162,22 +162,14 @@ export const ENDPOINT_SCHEMES: Option[] = [
   { value: "0208", label: "0208 · Belgisch ondernemingsnummer" },
   { value: "9925", label: "9925 · Belgisch btw-nummer" },
   { value: "0088", label: "0088 · GLN" },
+  { value: "0195", label: "0195 · Singapore UEN" },
 ];
 
 export const REGISTRATION_SCHEMES: Option[] = [
   { value: "0106", label: "0106 · KvK" },
   { value: "0190", label: "0190 · OIN" },
   { value: "0208", label: "0208 · Belgisch ondernemingsnummer" },
-];
-
-/** K, L, M and B are left out: the PEPPOL export does not support them. */
-export const VAT_CATEGORIES: Option[] = [
-  { value: "S", label: "S · standaard" },
-  { value: "Z", label: "Z · nultarief" },
-  { value: "E", label: "E · vrijgesteld" },
-  { value: "AE", label: "AE · btw verlegd" },
-  { value: "G", label: "G · export buiten de EU" },
-  { value: "O", label: "O · niet onderworpen" },
+  { value: "0195", label: "0195 · Singapore UEN" },
 ];
 
 export const UNIT_CODES: Option[] = [

@@ -47,4 +47,44 @@ internal static class CompleteInvoice
             },
         ],
     };
+
+    /// <summary>A Singapore GST invoice that satisfies PINT-SG.</summary>
+    public static CanonicalInvoiceDraft Singapore() => new()
+    {
+        TypeCode = "380",
+        InvoiceNumber = "SG-2026-0101",
+        IssueDate = "2026-10-01",
+        DueDate = "2026-10-31",
+        CurrencyCode = "SGD",
+        BuyerReference = "PO-88",
+        Seller = new CanonicalParty
+        {
+            Name = "Green IT Solutions Pte. Ltd.",
+            VatIdentifier = "M2-1234567-K",
+            LegalRegistrationId = "201912345K",
+            ElectronicAddress = "SGUEN201912345K",
+            ElectronicAddressScheme = "0195",
+            Address = new CanonicalAddress { StreetName = "1 Raffles Place", PostalZone = "048616", CityName = "Singapore", CountryCode = "SG" },
+        },
+        Buyer = new CanonicalParty
+        {
+            Name = "Tan Trading Pte. Ltd.",
+            ElectronicAddress = "SGUEN200212345Z",
+            ElectronicAddressScheme = "0195",
+            Address = new CanonicalAddress { StreetName = "10 Anson Road", PostalZone = "079903", CityName = "Singapore", CountryCode = "SG" },
+        },
+        Payment = new CanonicalPaymentDetails { PaymentMeansCode = "30", Iban = "0123456789" },
+        Lines =
+        [
+            new CanonicalInvoiceLine
+            {
+                Description = "IT consulting",
+                Quantity = 10m,
+                UnitCode = "HUR",
+                UnitPrice = 150.00m,
+                VatCategoryCode = "SR",
+                VatPercentage = 9m,
+            },
+        ],
+    };
 }
