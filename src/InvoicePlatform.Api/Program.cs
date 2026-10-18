@@ -1,6 +1,7 @@
 using Amazon.Lambda.AspNetCoreServer.Hosting;
 using InvoicePlatform.Api.Identity;
 using InvoicePlatform.Api.Invoices;
+using InvoicePlatform.Api.Organizations;
 using InvoicePlatform.Contracts.Json;
 using InvoicePlatform.Infrastructure;
 using Microsoft.AspNetCore.HttpOverrides;
@@ -89,6 +90,8 @@ var api = app.MapGroup("/api/v1");
 api.MapAuthEndpoints();
 api.MapInvoiceEndpoints();
 api.MapStoredInvoiceEndpoints();
+api.MapExportEndpoints();
+api.MapOrganizationEndpoints();
 
 app.Run();
 
