@@ -281,3 +281,25 @@
 /* -- Stack utility -- */
 .stack { display: flex; flex-direction: column; gap: var(--space-4); }
 .stack--sm { gap: var(--space-2); }
+
+/* -- Field marked by a rule violation, and violations that lead to their field -- */
+.form input.input--invalid,
+.form select.input--invalid,
+.form textarea.input--invalid,
+.cell-input.input--invalid {
+  border-color: var(--color-danger);
+  box-shadow: 0 0 0 3px var(--color-danger-bg);
+}
+.issue--action {
+  width: 100%;
+  text-align: left;
+  background: none;
+  border: none;
+  border-bottom: 1px solid var(--color-border-light);
+  cursor: pointer;
+  font: inherit;
+  color: inherit;
+}
+.issue--action:hover { background: var(--color-surface-raised); }
+.issue--action .issue__message,
+.issue--action .issue__path { display: block; }

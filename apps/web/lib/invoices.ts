@@ -1,24 +1,34 @@
 /**
- * Client for stored invoices.
+ * Client for stored invoices, checks and exports.
  *
  * The organisation is never sent: the API takes it from the session, so the
  * browser cannot ask for another tenant's data by changing a parameter.
  */
 
 import { API_BASE_URL, ApiError, isApiConfigured } from "./api";
-import { authHeaders } from "./auth";
-import type { CanonicalInvoiceDraft } from "./canonical";
+import { authHeaders, clearSession } from "./auth";
+import type { CanonicalInvoice } from "./canonical";
 
 export interface StoredInvoice {
   invoiceId: string;
   status: "Draft" | "Booked";
-  canonicalInvoice: Record<string, unknown>;
+  /** The server's CanonicalInvoiceDraft; pass it through normalizeInvoice before use. */
+  canonicalInvoice: unknown;
   sourceFileName: string | null;
   providerModel: string | null;
   bookedAt: string | null;
 }
 
-async function request<T>(path: string, init?: RequestInit): Promise<T> {
+/** A rule the invoice breaks, from the server's ruleset. */
+export interface RuleViolation {
+  ruleId: string;
+  businessTerm: string | null;
+  /** Dotted field path; equal to the id of the review screen's input. */
+  path: string;
+  message: string;
+}
+
+async function send(path: string, init?: RequestInit): Promise<Response> {
   if (!isApiConfigured) {
     throw new ApiError("Er is geen API geconfigureerd.", 0);
   }
@@ -33,11 +43,22 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
     throw new ApiError("De API is niet bereikbaar.", 0);
   }
 
-  if (!response.ok) {
-    const problem = (await response.json().catch(() => null)) as { detail?: string } | null;
-    throw new ApiError(problem?.detail ?? `De API gaf status ${response.status}.`, response.status);
+  if (response.status === 401) {
+    clearSession();
+    throw new ApiError("Uw sessie is verlopen. Log opnieuw in.", 401);
   }
 
+  return response;
+}
+
+async function failure(response: Response): Promise<ApiError> {
+  const problem = (await response.json().catch(() => null)) as { detail?: string } | null;
+  return new ApiError(problem?.detail ?? `De API gaf status ${response.status}.`, response.status);
+}
+
+async function request<T>(path: string, init?: RequestInit): Promise<T> {
+  const response = await send(path, init);
+  if (!response.ok) throw await failure(response);
   return (await response.json()) as T;
 }
 
@@ -54,7 +75,7 @@ async function toBase64(blob: Blob): Promise<string> {
 
 export async function bookInvoice(input: {
   invoiceId?: string;
-  canonicalInvoice: CanonicalInvoiceDraft;
+  canonicalInvoice: CanonicalInvoice;
   pdf: Blob;
   sourceFileName: string;
   providerModel?: string;
@@ -78,6 +99,46 @@ export function listInvoices(): Promise<StoredInvoice[]> {
 
 export function getInvoice(invoiceId: string): Promise<StoredInvoice> {
   return request<StoredInvoice>(`/api/v1/invoices/${invoiceId}`);
+}
+
+/** Checks the draft as it is being edited. Nothing is stored. */
+export async function checkInvoice(
+  rulesetId: string,
+  invoice: CanonicalInvoice,
+  signal?: AbortSignal,
+): Promise<RuleViolation[]> {
+  const body = await request<{ violations: RuleViolation[] }>(
+    `/api/v1/rulesets/${encodeURIComponent(rulesetId)}/check`,
+    {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(invoice),
+      signal,
+    },
+  );
+  return body.violations;
+}
+
+export type ExportResult =
+  | { kind: "file"; blob: Blob; fileName: string }
+  | { kind: "incomplete"; violations: RuleViolation[] };
+
+/** Exports the invoice as booked. A 422 is not an error: it lists what is missing. */
+export async function exportInvoice(invoiceId: string, rulesetId: string): Promise<ExportResult> {
+  const response = await send(
+    `/api/v1/invoices/${invoiceId}/export?ruleset=${encodeURIComponent(rulesetId)}`,
+  );
+
+  if (response.status === 422) {
+    const body = (await response.json()) as { violations: RuleViolation[] };
+    return { kind: "incomplete", violations: body.violations };
+  }
+
+  if (!response.ok) throw await failure(response);
+
+  const disposition = response.headers.get("Content-Disposition") ?? "";
+  const fileName = /filename="?([^";]+)"?/.exec(disposition)?.[1] ?? `${invoiceId}-${rulesetId}.xml`;
+  return { kind: "file", blob: await response.blob(), fileName };
 }
 
 /**

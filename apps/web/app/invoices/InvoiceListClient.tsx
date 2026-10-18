@@ -4,21 +4,14 @@ import Link from "next/link";
 import { useEffect, useState } from "react";
 
 import { Icon } from "../../components/Icon";
+import { normalizeInvoice } from "../../lib/canonical";
 import { listInvoices, type StoredInvoice } from "../../lib/invoices";
+import { formatMoney } from "../../lib/money";
 
 type State =
   | { status: "loading" }
   | { status: "ready"; invoices: StoredInvoice[] }
   | { status: "error"; message: string };
-
-/** Shape read off the stored canonical invoice for the table columns. */
-interface InvoiceSummary {
-  invoiceNumber?: string;
-  issueDate?: string;
-  currencyCode?: string;
-  seller?: { name?: string };
-  totals?: { payableAmount?: number | null };
-}
 
 export default function InvoiceListClient() {
   const [state, setState] = useState<State>({ status: "loading" });
@@ -89,7 +82,7 @@ export default function InvoiceListClient() {
                 <thead>
                   <tr>
                     <th>Nummer</th>
-                    <th>Leverancier</th>
+                    <th>Afnemer</th>
                     <th>Datum</th>
                     <th className="cell-amount">Bedrag</th>
                     <th>Status</th>
@@ -97,8 +90,7 @@ export default function InvoiceListClient() {
                 </thead>
                 <tbody>
                   {state.invoices.map((invoice) => {
-                    const summary = invoice.canonicalInvoice as unknown as InvoiceSummary;
-                    const payable = summary.totals?.payableAmount;
+                    const summary = normalizeInvoice(invoice.canonicalInvoice);
                     return (
                       <tr key={invoice.invoiceId}>
                         <td>
@@ -106,12 +98,10 @@ export default function InvoiceListClient() {
                             {summary.invoiceNumber ?? "zonder nummer"}
                           </Link>
                         </td>
-                        <td>{summary.seller?.name ?? "—"}</td>
+                        <td>{summary.buyer?.name ?? "—"}</td>
                         <td>{summary.issueDate ?? "—"}</td>
                         <td className="cell-amount">
-                          {payable === null || payable === undefined
-                            ? "—"
-                            : `${summary.currencyCode ?? ""} ${payable}`.trim()}
+                          {formatMoney(summary.totals?.payableAmount, summary.currencyCode)}
                         </td>
                         <td>
                           <span className="badge badge--success">Geboekt</span>
