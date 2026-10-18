@@ -10,9 +10,9 @@ import type { NextConfig } from "next";
  * - images.unoptimized   -> there is no image optimiser in a static export
  *
  * The base path is baked in at build time, so it is an input rather than a
- * constant: production builds with the default, and a future staging lane at
- * https://www.greenitsolutions.net/DEV/xchange/ only needs
- * XCHANGE_BASE_PATH=/DEV/xchange.
+ * constant. www.xchangeinvoice.com builds with XCHANGE_BASE_PATH="" (the app
+ * at the root of its own domain); the old greenitsolutions.net/xchange with
+ * the default.
  */
 const basePath = process.env.XCHANGE_BASE_PATH ?? "/xchange";
 

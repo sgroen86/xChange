@@ -4,10 +4,13 @@ name: Deploy xChange UI
 # greenitsolutions repo: its own GitHub environment, its own secrets, its own
 # target directory. Nothing here can affect the main site or Bookkeeping.
 #
-# Target: https://greenitsolutions.net/xchange/  (www 301-redirects here)
-# The home directory on that host is the web root (in the greenitsolutions repo,
-# deploy.yml uploads greenitsolutions.net/* to ~/ with strip_components: 1), so
-# /xchange/ is ~/xchange.
+# Targets, both on the same Strato webspace (its home directory is the web root):
+#
+#   https://www.xchangeinvoice.com/        ~/xchangeinvoice  base path ""   (the app's own domain)
+#   https://greenitsolutions.net/xchange/  ~/xchange         base path "/xchange"
+#
+# The second is the old address. It is published as well until the new domain
+# is live everywhere; then it becomes a redirect.
 #
 # Transfer is a single archive, not per-file SFTP. The Bookkeeping workflow in
 # that repo documents why: per-file transfers left public/ half-synced and broke
@@ -30,20 +33,32 @@ concurrency:
   group: deploy-xchange-ui
   cancel-in-progress: false
 
-env:
-  # Directory under the web root, and the URL prefix baked into the build.
-  # These two must agree or the assets 404.
-  DEPLOY_DIR: xchange
-  BASE_PATH: /xchange
-  # Canonical origin. The host 301-redirects www -> non-www, so the smoke test
-  # asks for the canonical name directly (and follows redirects regardless).
-  SITE_ORIGIN: https://greenitsolutions.net
-
 jobs:
   deploy:
-    name: Build and publish
+    name: Build and publish (${{ matrix.target.name }})
     runs-on: ubuntu-latest
     environment: xchange-production
+    strategy:
+      # One target failing must not stop the other from being published.
+      fail-fast: false
+      # Never two uploads to the same webspace at once.
+      max-parallel: 1
+      matrix:
+        target:
+          # Directory under the web root, and the URL prefix baked into the
+          # build. These two must agree or the assets 404.
+          - name: xchangeinvoice.com
+            deploy_dir: xchangeinvoice
+            base_path: ""
+            site_origin: https://www.xchangeinvoice.com
+          - name: greenitsolutions.net
+            deploy_dir: xchange
+            base_path: /xchange
+            site_origin: https://greenitsolutions.net
+    env:
+      DEPLOY_DIR: ${{ matrix.target.deploy_dir }}
+      BASE_PATH: ${{ matrix.target.base_path }}
+      SITE_ORIGIN: ${{ matrix.target.site_origin }}
 
     steps:
       - name: Checkout code
@@ -106,8 +121,8 @@ jobs:
         working-directory: apps/web
         run: |
           # `-C out .` includes dotfiles, so .htaccess travels with the build.
-          tar czf ../../xchange-ui.tar.gz -C out .
-          echo "Archive size: $(du -h ../../xchange-ui.tar.gz | cut -f1)"
+          tar czf "../../xchange-ui-${DEPLOY_DIR}.tar.gz" -C out .
+          echo "Archive size: $(du -h "../../xchange-ui-${DEPLOY_DIR}.tar.gz" | cut -f1)"
 
       - name: Upload archive
         uses: appleboy/scp-action@v0.1.7
@@ -115,7 +130,7 @@ jobs:
           host: ${{ secrets.XCHANGE_SFTP_HOST }}
           username: ${{ secrets.XCHANGE_SFTP_USERNAME }}
           password: ${{ secrets.XCHANGE_SFTP_PASSWORD }}
-          source: "xchange-ui.tar.gz"
+          source: "xchange-ui-${{ matrix.target.deploy_dir }}.tar.gz"
           target: "~/"
           overwrite: true
 
@@ -140,7 +155,7 @@ jobs:
             # fresh directory stops old _next chunks accumulating forever.
             rm -rf "$DEPLOY_DIR.new"
             mkdir -p "$DEPLOY_DIR.new"
-            tar xzf ~/xchange-ui.tar.gz -C "$DEPLOY_DIR.new"
+            tar xzf ~/"xchange-ui-$DEPLOY_DIR.tar.gz" -C "$DEPLOY_DIR.new"
 
             # Refuse to publish an archive that arrived incomplete.
             test -f "$DEPLOY_DIR.new/upload/index.html" || { echo "Upload page missing after extract — aborting, live site untouched."; exit 1; }
@@ -152,7 +167,7 @@ jobs:
             mkdir -p "$(dirname "$DEPLOY_DIR")"
             mv "$DEPLOY_DIR.new" "$DEPLOY_DIR"
             rm -rf "$DEPLOY_DIR.old"
-            rm -f ~/xchange-ui.tar.gz
+            rm -f ~/"xchange-ui-$DEPLOY_DIR.tar.gz"
 
             # ── The database is never touched by this workflow. ──
             # This deploys static frontend files only.
@@ -161,14 +176,18 @@ jobs:
             ls -la "$DEPLOY_DIR" | head -20
 
       - name: Smoke-test the live site
+        # Until www.xchangeinvoice.com resolves and has a certificate, its check
+        # cannot pass; the files are published regardless. Remove this line
+        # once the domain is live.
+        continue-on-error: ${{ matrix.target.deploy_dir == 'xchangeinvoice' }}
         run: |
           set -e
 
           check() {
             local path="$1" expect="$2"
             local url="${SITE_ORIGIN}${BASE_PATH}${path}"
-            # -L matters: the host canonicalises www -> non-www with a 301, and
-            # an unfollowed redirect looks identical to a broken deploy.
+            # -L matters: a host may canonicalise www and bare names with a 301,
+            # and an unfollowed redirect looks identical to a broken deploy.
             local code
             code=$(curl -sSL -o /tmp/page.html -w '%{http_code}' --max-time 30 "$url" || echo 000)
             echo "HTTP $code  $url"

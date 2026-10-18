@@ -18,7 +18,7 @@ public class InboxTests : IClassFixture<SignedInFactory>
         var pdf = Convert.ToBase64String("%PDF-1.4 hello"u8.ToArray());
         var raw = string.Join("\r\n",
             "From: Boekhouding <boekhouding@klant.nl>",
-            "To: abc@inbox.greenitsolutions.net",
+            "To: abc@inbox.xchangeinvoice.com",
             "Subject: Facturen oktober",
             "MIME-Version: 1.0",
             "Content-Type: multipart/mixed; boundary=\"b1\"",
@@ -61,7 +61,7 @@ public class InboxTests : IClassFixture<SignedInFactory>
 
         Assert.Equal(HttpStatusCode.Forbidden, byUser.StatusCode);
         var address = (await created.Content.ReadFromJsonAsync<JsonElement>()).GetProperty("address").GetString();
-        Assert.EndsWith("@inbox.greenitsolutions.net", address, StringComparison.Ordinal);
+        Assert.EndsWith("@inbox.xchangeinvoice.com", address, StringComparison.Ordinal);
         Assert.Equal(address, seen.GetProperty("address").GetString());
         Assert.NotEqual(address, otherOrg.GetProperty("address").GetString());
     }

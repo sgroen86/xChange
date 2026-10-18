@@ -37,7 +37,7 @@ Parameters:
 
   InboxDomain:
     Type: String
-    Default: inbox.greenitsolutions.net
+    Default: inbox.xchangeinvoice.com
     Description: >
       The subdomain organisations' invoice inboxes live on. Its MX record points
       at inbound-smtp.eu-central-1.amazonaws.com, and the DKIM records from
@@ -54,6 +54,16 @@ Parameters:
   AllowedOriginWww:
     Type: String
     Default: https://www.greenitsolutions.net
+
+  # The app's own domain (from 2026-10-18). Its bare form redirects to www, but
+  # both are allowed so a stray bare URL still works.
+  AppOrigin:
+    Type: String
+    Default: https://www.xchangeinvoice.com
+
+  AppOriginBare:
+    Type: String
+    Default: https://xchangeinvoice.com
 
   MemorySize:
     Type: Number
@@ -253,6 +263,8 @@ Resources:
           InvoiceStorage__BucketName: !Ref DocumentBucket
           Cors__AllowedOrigins__0: !Ref AllowedOrigin
           Cors__AllowedOrigins__1: !Ref AllowedOriginWww
+          Cors__AllowedOrigins__2: !Ref AppOrigin
+          Cors__AllowedOrigins__3: !Ref AppOriginBare
           OfficialValidation__FunctionName: !Ref ValidatorAlias
           Imports__QueueUrl: !Ref ImportQueue
           Inbox__Domain: !Ref InboxDomain

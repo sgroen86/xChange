@@ -13,7 +13,7 @@ public sealed class InboxOptions
 {
     public const string SectionName = "Inbox";
 
-    public string Domain { get; set; } = "inbox.greenitsolutions.net";
+    public string Domain { get; set; } = "inbox.xchangeinvoice.com";
 
     /// <summary>The bucket SES writes received mail to, under "inbound/".</summary>
     public string MailBucketName { get; set; } = string.Empty;
