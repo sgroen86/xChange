@@ -101,3 +101,17 @@ test("rates written differently land in the same bucket", () => {
   assert.equal(result.vatBreakdown.length, 1);
   assert.equal(result.vatBreakdown[0].taxable, "20.00");
 });
+
+test("an invoice in another currency is also totalled in the tax currency (PINT-SG: SGD)", () => {
+  // The server's PintSgBilling1RulesetTests example: 2279.80 USD, GST 205.18, rate 1.3425.
+  const result = calculateTotals(
+    invoice({
+      lines: [line("10", "150.00", "SR", "9"), line("2", "389.90", "SR", "9")],
+      taxCurrencyRate: "1.3425",
+    }),
+  );
+
+  assert.equal(result.taxExclusive, "2279.80");
+  assert.equal(result.tax, "205.18");
+  assert.deepEqual(result.inTaxCurrency, { exclusive: "3060.63", tax: "275.45", inclusive: "3336.08" });
+});

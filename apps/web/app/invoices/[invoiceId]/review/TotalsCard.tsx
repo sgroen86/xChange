@@ -10,6 +10,10 @@ const NEEDS_REASON = new Set(["E", "AE", "G", "O"]);
 interface Props {
   totals: CalculatedTotals;
   currency: string | null;
+  /** "btw" or "GST". */
+  taxName: string;
+  /** Set when the totals must also be stated in the tax currency (PINT-SG: SGD). */
+  taxCurrency: string | null;
   documentAdjustments: CanonicalAllowanceCharge[];
   reasonFor: (category: string, rate: string) => string;
   onReason: (category: string, rate: string, reason: string) => void;
@@ -21,7 +25,9 @@ interface Props {
  * Calculated, not editable: the same figures the exported file will carry.
  * Only the exemption reason per VAT category is entered here.
  */
-export function TotalsCard({ totals, currency, documentAdjustments, reasonFor, onReason, invalid, readOnly }: Props) {
+export function TotalsCard(props: Props) {
+  const { totals, currency, taxName, taxCurrency, documentAdjustments, reasonFor, onReason, invalid, readOnly } = props;
+  const inTaxCurrency = taxCurrency ? totals.inTaxCurrency : null;
   return (
     <div className="card">
       <div className="card__header">
@@ -49,7 +55,7 @@ export function TotalsCard({ totals, currency, documentAdjustments, reasonFor, o
           ))}
 
           <div className="totals__row">
-            <span>Totaal exclusief btw</span>
+            <span>Totaal exclusief {taxName}</span>
             <span className="totals__value">{formatMoney(totals.taxExclusive, currency)}</span>
           </div>
 
@@ -59,7 +65,7 @@ export function TotalsCard({ totals, currency, documentAdjustments, reasonFor, o
               <div key={`${bucket.category}-${bucket.rate}`}>
                 <div className="totals__row">
                   <span>
-                    Btw {bucket.category} {bucket.category === "O" ? "" : `${bucket.rate}% `}over{" "}
+                    {taxName} {bucket.category} {bucket.category === "O" ? "" : `${bucket.rate}% `}over{" "}
                     {formatMoney(bucket.taxable, currency)}
                   </span>
                   <span className="totals__value">{formatMoney(bucket.tax, currency)}</span>
@@ -91,6 +97,23 @@ export function TotalsCard({ totals, currency, documentAdjustments, reasonFor, o
             <span>Te betalen</span>
             <span className="totals__value">{formatMoney(totals.payable, currency)}</span>
           </div>
+
+          {inTaxCurrency && (
+            <>
+              <div className="totals__row">
+                <span>Totaal exclusief {taxName} in {taxCurrency}</span>
+                <span className="totals__value">{formatMoney(inTaxCurrency.exclusive, taxCurrency)}</span>
+              </div>
+              <div className="totals__row">
+                <span>{taxName} in {taxCurrency}</span>
+                <span className="totals__value">{formatMoney(inTaxCurrency.tax, taxCurrency)}</span>
+              </div>
+              <div className="totals__row">
+                <span>Totaal inclusief {taxName} in {taxCurrency}</span>
+                <span className="totals__value">{formatMoney(inTaxCurrency.inclusive, taxCurrency)}</span>
+              </div>
+            </>
+          )}
         </div>
       </div>
     </div>

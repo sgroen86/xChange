@@ -124,7 +124,12 @@ export default function SettingsClient() {
                 disabled={!canEdit}
                 onChange={(event) => setDefaultRulesetId(event.target.value)}
               >
-                <option value="">Systeemstandaard ({settings.rulesets[0]?.displayName})</option>
+                <option value="">
+                  {settings.countryCode ? `Standaard voor ${countryName(settings.countryCode)}` : "Systeemstandaard"}
+                  {/* Without an own choice, the effective default is the country's. */}
+                  {!settings.defaultRulesetId &&
+                    ` (${(settings.rulesets.find((r) => r.id === settings.effectiveDefaultRulesetId) ?? settings.rulesets[0])?.displayName})`}
+                </option>
                 {settings.rulesets.map((ruleset) => (
                   <option key={ruleset.id} value={ruleset.id}>
                     {ruleset.displayName} (regels {ruleset.rulesRelease})

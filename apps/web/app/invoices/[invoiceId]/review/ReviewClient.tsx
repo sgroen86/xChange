@@ -84,6 +84,13 @@ export default function ReviewClient() {
   const [settings, setSettings] = useState<OrganizationSettings>(FALLBACK_SETTINGS);
   const [chosenFormat, setChosenFormat] = useState<string | null>(null);
   const format = chosenFormat ?? defaultRulesetOf(settings).id;
+  /** Tax categories, tax name and tax currency follow the chosen format; the canonical XML uses the default's. */
+  const taxRuleset = settings.rulesets.find((r) => r.id === format) ?? defaultRulesetOf(settings);
+  const taxName = taxRuleset.taxName === "btw" ? "Btw" : taxRuleset.taxName;
+  const taxCategories = useMemo(
+    () => taxRuleset.taxCategories.map((c) => ({ value: c.code, label: `${c.code} · ${c.label}` })),
+    [taxRuleset],
+  );
 
   const [violations, setViolations] = useState<RuleViolation[]>([]);
   const [checking, setChecking] = useState(false);
@@ -446,12 +453,22 @@ export default function ReviewClient() {
 
           {tab === "invoice" && (
             <div className="stack form">
-              <InvoiceDetailsCard creditNote={invoice.typeCode === "381"} status={statusBadge} />
+              <InvoiceDetailsCard
+                creditNote={invoice.typeCode === "381"}
+                status={statusBadge}
+                rate={
+                  taxRuleset.taxCurrency && invoice.currencyCode && invoice.currencyCode !== taxRuleset.taxCurrency
+                    ? { from: invoice.currencyCode, to: taxRuleset.taxCurrency }
+                    : null
+                }
+              />
               <PartyCard side="seller" title="Verkoper (uw organisatie)" />
               <PartyCard side="buyer" title="Afnemer" />
               <LinesCard
                 lines={invoice.lines}
                 nets={totals.lineNet}
+                taxCategories={taxCategories}
+                taxName={taxName}
                 readOnly={readOnly}
                 onAdd={() => update((current) => ({ ...current, lines: [...current.lines, emptyLine()] }))}
                 onRemove={(index) =>
@@ -462,6 +479,10 @@ export default function ReviewClient() {
               <TotalsCard
                 totals={totals}
                 currency={invoice.currencyCode}
+                taxName={taxName}
+                taxCurrency={
+                  taxRuleset.taxCurrency && invoice.currencyCode !== taxRuleset.taxCurrency ? taxRuleset.taxCurrency : null
+                }
                 documentAdjustments={invoice.allowancesAndCharges}
                 reasonFor={(category, rate) => exemptionReasonOf(invoice, category, rate)}
                 onReason={(category, rate, reason) =>
