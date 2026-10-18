@@ -13,7 +13,7 @@ export const legalEn: LegalContent = {
       {
         heading: "Who is responsible",
         paragraphs: [
-          `The controller for the processing described in this policy is ${company.name}, ${formatAddress()}. Registration number: ${company.registrationNumber}. VAT number: ${company.vatNumber}.`,
+          `The controller for the processing described in this policy is ${company.name}, ${formatAddress()}. Registration number: ${company.registrationNumber}.${company.vatNumber ? ` VAT number: ${company.vatNumber}.` : ""}`,
           `For any question about privacy or this policy, email ${company.contactEmail}.`,
         ],
       },

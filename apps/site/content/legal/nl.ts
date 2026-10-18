@@ -20,7 +20,7 @@ export const legalNl: LegalContent = {
           `${company.name}`,
           `Adres: ${formatAddress()}`,
           `Ondernemingsnummer: ${company.registrationNumber}`,
-          `Btw-nummer: ${company.vatNumber}`,
+          ...(company.vatNumber ? [`Btw-nummer: ${company.vatNumber}`] : []),
           `E-mail: ${company.contactEmail}`,
         ],
       },

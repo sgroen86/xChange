@@ -1,23 +1,24 @@
 /**
  * The company that sells xChange.
  *
- * PLACEHOLDERS — the selling entity has not been decided yet. Every value in
- * square brackets must be replaced by the owner before the site goes public;
- * the legal pages (privacy policy, terms, trust & security) and the contact
- * page read these values directly.
+ * Green IT Solutions Pte. Ltd., Singapore (as on greenitsolutions.net). Values
+ * still in square brackets must be replaced by the owner before the site goes
+ * public; the legal pages (privacy policy, terms, trust & security) and the
+ * contact page read these values directly.
  */
 export const company = {
   /** Legal name of the selling company, including legal form. */
-  name: "[Bedrijfsnaam]",
+  name: "Green IT Solutions Pte. Ltd.",
   address: {
-    street: "[Straat en huisnummer]",
-    postalCode: "[Postcode]",
-    city: "[Plaats]",
-    country: "[Land]",
+    street: "160 Robinson Road, #14-04, Singapore Business Federation Center",
+    postalCode: "068914",
+    city: "Singapore",
+    country: "Singapore",
   },
   /** Company registration number (e.g. KBO/BCE in Belgium, KvK in the Netherlands). */
-  registrationNumber: "[Ondernemingsnummer]",
-  vatNumber: "[Btw-nummer]",
+  registrationNumber: "202535720K (UEN)",
+  /** Null while the company has no VAT/GST number; the line is then left out. */
+  vatNumber: null as string | null,
   /** General, sales and privacy questions. */
   contactEmail: "info@xchangeinvoice.com",
   /** Help with the application. */
@@ -40,5 +41,9 @@ export const company = {
 export type Company = typeof company;
 
 export function formatAddress(c: Company = company): string {
-  return `${c.address.street}, ${c.address.postalCode} ${c.address.city}, ${c.address.country}`;
+  const { street, postalCode, city, country } = c.address;
+  // A city-state is written "Singapore 068914", without repeating the country.
+  return city === country
+    ? `${street}, ${city} ${postalCode}`
+    : `${street}, ${postalCode} ${city}, ${country}`;
 }

@@ -57,10 +57,12 @@ export default async function ContactPage({ params }: LangParams) {
                 <dt>{t.registrationLabel}</dt>
                 <dd>{company.registrationNumber}</dd>
               </div>
-              <div>
-                <dt>{t.vatLabel}</dt>
-                <dd>{company.vatNumber}</dd>
-              </div>
+              {company.vatNumber && (
+                <div>
+                  <dt>{t.vatLabel}</dt>
+                  <dd>{company.vatNumber}</dd>
+                </div>
+              )}
             </dl>
           </div>
         </div>

@@ -14,7 +14,7 @@ export const legalFr: LegalContent = {
         heading: "Responsable du traitement",
         paragraphs: [
           `Le responsable du traitement est ${company.name}, ${formatAddress()}.`,
-          `Numéro d’entreprise : ${company.registrationNumber}. Numéro de TVA : ${company.vatNumber}.`,
+          `Numéro d’entreprise : ${company.registrationNumber}.${company.vatNumber ? ` Numéro de TVA : ${company.vatNumber}.` : ""}`,
           `Pour toute question relative à la vie privée, écrivez-nous à ${company.contactEmail}.`,
         ],
       },
