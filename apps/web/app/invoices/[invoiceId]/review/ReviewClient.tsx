@@ -445,7 +445,7 @@ export default function ReviewClient() {
             onFormat={setChosenFormat}
             defaultNote={
               chosenFormat === null && customerFormat
-                ? `Standaardformaat van ${customer?.name ?? "deze afnemer"}.`
+                ? `Standaardformaat van afnemer ${customer?.name ?? "(onbekend)"}`
                 : null
             }
             localIssues={local}
