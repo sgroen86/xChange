@@ -1,4 +1,5 @@
 using InvoicePlatform.Application.Identity;
+using InvoicePlatform.Application.Organizations;
 using InvoicePlatform.Domain.Identity;
 
 namespace InvoicePlatform.Application.Tests;
@@ -10,14 +11,15 @@ namespace InvoicePlatform.Application.Tests;
 public class AuthServiceTests
 {
     private readonly FakeStore _store = new();
+    private readonly FakePlatformStore _platform = new();
     private readonly TestClock _clock = new(DateTimeOffset.Parse("2026-09-08T10:00:00Z"));
     private readonly AuthService _auth;
 
     public AuthServiceTests()
-        => _auth = new AuthService(_store, _store, _store, new FakeHasher(), _clock);
+        => _auth = new AuthService(_store, _store, _store, new FakeHasher(), _clock, _platform);
 
     private async Task<AuthResult> SetupAsync(string password = "correct-horse-battery")
-        => await _auth.SetupFirstUserAsync("Stefan@Example.NL ", password, "Stefan", "Green IT");
+        => await _auth.SetupFirstUserAsync("Stefan@Example.NL ", password, "Stefan", "Green IT", "SG");
 
     [Fact]
     public async Task Setup_creates_the_first_admin_and_signs_them_in()
@@ -37,7 +39,7 @@ public class AuthServiceTests
     {
         await SetupAsync();
 
-        var second = await _auth.SetupFirstUserAsync("other@example.nl", "another-long-password", "Other", "Org");
+        var second = await _auth.SetupFirstUserAsync("other@example.nl", "another-long-password", "Other", "Org", "NL");
 
         Assert.False(second.Succeeded);
         Assert.Contains("bestaat al", second.Error);
@@ -54,7 +56,7 @@ public class AuthServiceTests
         _store.PretendNoUsersExist = true;
 
         var second = await _auth.SetupFirstUserAsync(
-            "stefan@example.nl", "another-long-password", "Stefan", "Org");
+            "stefan@example.nl", "another-long-password", "Stefan", "Org", "NL");
 
         Assert.False(second.Succeeded);
         Assert.Contains("bestaat al", second.Error);
@@ -63,7 +65,7 @@ public class AuthServiceTests
     [Fact]
     public async Task Setup_rejects_a_short_password()
     {
-        var result = await _auth.SetupFirstUserAsync("a@b.nl", "short", "Name", "Org");
+        var result = await _auth.SetupFirstUserAsync("a@b.nl", "short", "Name", "Org", "NL");
 
         Assert.False(result.Succeeded);
         Assert.Contains("12 tekens", result.Error);
@@ -260,6 +262,136 @@ public class AuthServiceTests
 
         Assert.DoesNotContain("hash", serialized, StringComparison.OrdinalIgnoreCase);
         Assert.DoesNotContain("correct-horse-battery", serialized, StringComparison.Ordinal);
+    }
+
+    // ── Organisations and invitations ────────────────────────────────────────
+
+    [Fact]
+    public async Task Setup_makes_the_first_account_platform_administrator_and_records_the_organisation()
+    {
+        var result = await SetupAsync();
+
+        Assert.True(result.User!.IsPlatformAdmin);
+        var organization = await _platform.FindOrganizationAsync(result.User.OrganizationId);
+        Assert.Equal(("Green IT", "SG"), (organization!.Name, organization.CountryCode));
+    }
+
+    [Theory]
+    [InlineData("UK")]
+    [InlineData("")]
+    public async Task Setup_needs_a_served_country(string country)
+    {
+        var result = await _auth.SetupFirstUserAsync("a@b.nl", "long-enough-password", "A", "Org", country);
+
+        Assert.False(result.Succeeded);
+    }
+
+    private async Task<(string OrganizationId, string Code)> InviteAsync(string email = "Jan@Klant.SG")
+    {
+        var platform = new PlatformService(_platform, _store, _clock);
+        var created = await platform.CreateOrganizationAsync("platform-admin", "Klant Pte Ltd", "SG", "Jan", email);
+        return (created.Organization!.OrganizationId, created.InvitationCode!);
+    }
+
+    [Fact]
+    public async Task Accepting_an_invitation_makes_an_admin_of_that_organisation_and_signs_them_in()
+    {
+        var (organizationId, code) = await InviteAsync();
+
+        var result = await _auth.AcceptInvitationAsync(code, "Jan Tan", "a-long-enough-password", "10.0.0.1");
+
+        Assert.True(result.Succeeded);
+        Assert.NotNull(result.Token);
+        Assert.Equal(organizationId, result.User!.OrganizationId);
+        Assert.Equal(UserRole.Admin, result.User.Role);
+        Assert.Equal("jan@klant.sg", result.User.Email);
+        Assert.False(result.User.IsPlatformAdmin);
+        Assert.Null((await _platform.FindOrganizationAsync(organizationId))!.PendingInvitationHash);
+    }
+
+    [Fact]
+    public async Task An_invitation_works_once()
+    {
+        var (_, code) = await InviteAsync();
+        await _auth.AcceptInvitationAsync(code, "Jan", "a-long-enough-password", "10.0.0.1");
+
+        var again = await _auth.AcceptInvitationAsync(code, "Jan", "a-long-enough-password", "10.0.0.2");
+
+        Assert.False(again.Succeeded);
+        Assert.Equal("Deze uitnodiging is ongeldig of verlopen.", again.Error);
+    }
+
+    [Fact]
+    public async Task An_invitation_expires_after_seven_days()
+    {
+        var (_, code) = await InviteAsync();
+        _clock.Advance(TimeSpan.FromDays(7));
+
+        var result = await _auth.AcceptInvitationAsync(code, "Jan", "a-long-enough-password", "10.0.0.1");
+
+        Assert.False(result.Succeeded);
+    }
+
+    [Fact]
+    public async Task Reissuing_an_invitation_invalidates_the_previous_link()
+    {
+        var (organizationId, oldCode) = await InviteAsync();
+        var platform = new PlatformService(_platform, _store, _clock);
+        var reissued = await platform.ReissueInvitationAsync(organizationId, "Jan", "jan@klant.sg");
+
+        var withOld = await _auth.AcceptInvitationAsync(oldCode, "Jan", "a-long-enough-password", "10.0.0.1");
+        var withNew = await _auth.AcceptInvitationAsync(reissued.InvitationCode!, "Jan", "a-long-enough-password", "10.0.0.1");
+
+        Assert.False(withOld.Succeeded);
+        Assert.True(withNew.Succeeded);
+    }
+
+    [Fact]
+    public async Task Only_the_hash_of_an_invitation_code_is_stored()
+    {
+        var (_, code) = await InviteAsync();
+
+        var stored = Assert.Single(_platform.Invitations.Values);
+        Assert.NotEqual(code, stored.CodeHash);
+        Assert.Equal(Invitation.HashOf(code), stored.CodeHash);
+    }
+
+    [Fact]
+    public async Task A_short_password_does_not_use_up_the_invitation()
+    {
+        var (_, code) = await InviteAsync();
+
+        var tooShort = await _auth.AcceptInvitationAsync(code, "Jan", "short", "10.0.0.1");
+        var proper = await _auth.AcceptInvitationAsync(code, "Jan", "a-long-enough-password", "10.0.0.1");
+
+        Assert.False(tooShort.Succeeded);
+        Assert.True(proper.Succeeded);
+    }
+
+    [Fact]
+    public async Task Guessing_invitation_codes_locks_the_address_out()
+    {
+        for (var i = 0; i < LoginAttempts.MaxAttempts; i++)
+        {
+            await _auth.GetInvitationAsync($"guess-{i}", "10.0.0.9");
+        }
+
+        var (_, code) = await InviteAsync();
+        var lookup = await _auth.GetInvitationAsync(code, "10.0.0.9");
+
+        Assert.Null(lookup.Invitation);
+        Assert.Contains("Te veel pogingen", lookup.Error);
+    }
+
+    [Fact]
+    public async Task An_invitation_shows_its_organisation_and_email()
+    {
+        var (_, code) = await InviteAsync();
+
+        var lookup = await _auth.GetInvitationAsync(code, "10.0.0.1");
+
+        Assert.Equal(("Klant Pte Ltd", "SG", "jan@klant.sg", "Jan"),
+            (lookup.Invitation!.OrganizationName, lookup.Invitation.CountryCode, lookup.Invitation.Email, lookup.Invitation.Name));
     }
 
     // ── Test doubles ─────────────────────────────────────────────────────────
