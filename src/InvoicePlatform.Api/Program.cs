@@ -1,3 +1,4 @@
+using InvoicePlatform.Domain.Localization;
 using Amazon.Lambda.AspNetCoreServer.Hosting;
 using InvoicePlatform.Api.Identity;
 using InvoicePlatform.Api.Imports;
@@ -79,6 +80,16 @@ if (app.Environment.IsDevelopment())
 
 app.UseCors(CorsPolicy);
 app.UseStatusCodePages();
+
+// The language of this request's messages, from Accept-Language; Dutch by default.
+// Before authentication, so "not signed in" is already in the caller's language.
+app.Use(async (context, next) =>
+{
+    using (Texts.Use(Texts.FromAcceptLanguage(context.Request.Headers.AcceptLanguage)))
+    {
+        await next(context);
+    }
+});
 
 // Identifies the caller if a bearer token is present. Enforcement is per route.
 app.UseMiddleware<AuthenticationMiddleware>();
