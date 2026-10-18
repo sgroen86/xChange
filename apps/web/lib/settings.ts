@@ -43,7 +43,7 @@ export const FALLBACK_SETTINGS: OrganizationSettings = {
   rulesets: [
     {
       id: "peppol-bis-billing-3.0",
-      displayName: "PEPPOL BIS Billing 3.0",
+      displayName: "PEPPOL BIS Billing 3.0 (VK, België, Nederland)",
       rulesRelease: "3.0.21",
       taxName: "btw",
       taxCategories: [

@@ -1,3 +1,4 @@
+using InvoicePlatform.Domain.EInvoicing.Nlcius;
 using InvoicePlatform.Domain.EInvoicing.Peppol;
 using InvoicePlatform.Domain.EInvoicing.Pint;
 
@@ -10,7 +11,7 @@ public sealed class InvoiceRulesetRegistry
 
     /// <summary>Every ruleset xChange ships, PEPPOL BIS Billing 3.0 first.</summary>
     public InvoiceRulesetRegistry()
-        : this([new PeppolBisBilling30Ruleset(), new PintSgBilling1Ruleset()])
+        : this([new PeppolBisBilling30Ruleset(), new PintSgBilling1Ruleset(), new NlciusSiUbl20Ruleset()])
     {
     }
 

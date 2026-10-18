@@ -36,5 +36,16 @@
         "file": "pint-sg.xslt"
       }
     ]
+  },
+  "nlcius-si-ubl-2.0": {
+    "release": "2.0.3.13",
+    "artefacts": [
+      {
+        "name": "SI-UBL 2.0.3.13 (NLCIUS, Nederlandse Peppol Autoriteit 2026-05-21)",
+        "url": "https://raw.githubusercontent.com/peppolautoriteit-nl/validation/2026-05-21/xsl/si-ubl-2.0.xsl",
+        "sha256": "73da3db0b8cf6a37a8ad17051ac1603a83a695e2fa066820803aa1283a06e140",
+        "file": "si-ubl-2.0.xslt"
+      }
+    ]
   }
 }

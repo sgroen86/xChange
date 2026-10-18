@@ -23,7 +23,7 @@ public sealed class PintSgBilling1Ruleset : IInvoiceRuleset
 
     public string Id => RulesetId;
 
-    public string DisplayName => "PINT-SG Billing (InvoiceNow)";
+    public string DisplayName => "PINT-SG (Singapore, InvoiceNow)";
 
     public string RulesRelease => "1.4.1";
 

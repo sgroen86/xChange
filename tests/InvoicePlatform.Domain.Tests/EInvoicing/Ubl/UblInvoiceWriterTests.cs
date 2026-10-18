@@ -2,6 +2,7 @@ using System.Runtime.CompilerServices;
 using System.Xml.Linq;
 using InvoicePlatform.Domain.Canonical;
 using InvoicePlatform.Domain.EInvoicing;
+using InvoicePlatform.Domain.EInvoicing.Nlcius;
 using InvoicePlatform.Domain.EInvoicing.Peppol;
 using InvoicePlatform.Domain.EInvoicing.Pint;
 using InvoicePlatform.Domain.EInvoicing.Ubl;
@@ -34,7 +35,8 @@ public class UblInvoiceWriterTests
 
     /// <summary>
     /// Each reference file with the ruleset it belongs to. CI validates the
-    /// pint-sg-* files with the PINT-SG rules and the others with BIS 3.0.
+    /// pint-sg-* files with the PINT-SG rules, nlcius-* with SI-UBL 2.0 and
+    /// the others with BIS 3.0.
     /// </summary>
     public static TheoryData<string> ReferenceFiles => new()
     {
@@ -47,6 +49,8 @@ public class UblInvoiceWriterTests
         "invoice-gb-standard.xml",
         "invoice-be-standard.xml",
         "invoice-sg-to-gb.xml",
+        "nlcius-invoice-nl.xml",
+        "nlcius-creditnote-nl.xml",
     };
 
     private static (CanonicalInvoiceDraft Draft, IInvoiceRuleset Ruleset) SampleFor(string file) => file switch
@@ -60,6 +64,8 @@ public class UblInvoiceWriterTests
         "invoice-gb-standard.xml" => (SampleInvoices.UnitedKingdom(), new PeppolBisBilling30Ruleset()),
         "invoice-be-standard.xml" => (SampleInvoices.Belgium(), new PeppolBisBilling30Ruleset()),
         "invoice-sg-to-gb.xml" => (SampleInvoices.SingaporeToUnitedKingdom(), new PeppolBisBilling30Ruleset()),
+        "nlcius-invoice-nl.xml" => (SampleInvoices.Valid(), new NlciusSiUbl20Ruleset()),
+        "nlcius-creditnote-nl.xml" => (SampleInvoices.CreditNote(), new NlciusSiUbl20Ruleset()),
         _ => throw new ArgumentOutOfRangeException(nameof(file)),
     };
 

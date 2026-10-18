@@ -8,7 +8,9 @@ against its SHA-256 and cached in validation/.cache, so a second run is
 offline. Writes into <destination>:
 
     lib/<jar>                          the validator's dependencies
-    rulesets/<ruleset>/<file>.xslt     the compiled official rules
+    rulesets/<ruleset>/<file>.xslt     the compiled official rules (taken from
+                                       the archive's "entry", or the download
+                                       itself when there is no entry)
     rulesets/index.txt                 one line per ruleset, tab-separated:
                                        id, release, then name=file per artefact
 
@@ -61,9 +63,13 @@ def main() -> None:
         folder.mkdir(parents=True, exist_ok=True)
         entries = []
         for artefact in ruleset["artefacts"]:
-            archive = download(artefact["url"], artefact["sha256"])
-            with zipfile.ZipFile(archive) as zipped, zipped.open(artefact["entry"]) as source:
-                (folder / artefact["file"]).write_bytes(source.read())
+            downloaded = download(artefact["url"], artefact["sha256"])
+            if "entry" in artefact:
+                with zipfile.ZipFile(downloaded) as zipped, zipped.open(artefact["entry"]) as source:
+                    (folder / artefact["file"]).write_bytes(source.read())
+            else:
+                # Published as a plain file (SI-UBL 2.0), not inside a zip or jar.
+                shutil.copyfile(downloaded, folder / artefact["file"])
             entries.append(f"{artefact['name']}={artefact['file']}")
         index_lines.append("\t".join([ruleset_id, ruleset["release"], *entries]))
 

@@ -24,7 +24,7 @@ public sealed class PeppolBisBilling30Ruleset : IInvoiceRuleset
 
     public string Id => RulesetId;
 
-    public string DisplayName => "PEPPOL BIS Billing 3.0";
+    public string DisplayName => "PEPPOL BIS Billing 3.0 (VK, België, Nederland)";
 
     public string RulesRelease => "3.0.21";
 

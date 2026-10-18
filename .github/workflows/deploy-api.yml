@@ -77,20 +77,23 @@ jobs:
       # ruleset, with the same validator and artefacts production uses. The
       # writer tests require its output to equal these files, so a pass means
       # the writer produces valid documents for those invoices. pint-sg-*.xml
-      # are PINT-SG files, the rest BIS 3.0. This also builds
+      # are PINT-SG files, nlcius-*.xml NLCIUS / SI-UBL 2.0, the rest BIS 3.0.
+      # This also builds
       # validator/build/xchange-validator.zip for the upload below.
       - name: Validate UBL reference files against the official rules
         run: |
           set -e
-          bis=(); pint_sg=()
+          bis=(); pint_sg=(); nlcius=()
           for file in tests/InvoicePlatform.Domain.Tests/EInvoicing/Ubl/Expected/*.xml; do
             case "$(basename "$file")" in
               pint-sg-*) pint_sg+=("$file") ;;
+              nlcius-*) nlcius+=("$file") ;;
               *) bis+=("$file") ;;
             esac
           done
           tools/peppol-validation/validate.sh peppol-bis-billing-3.0 "${bis[@]}"
           tools/peppol-validation/validate.sh pint-sg-billing-1 "${pint_sg[@]}"
+          tools/peppol-validation/validate.sh nlcius-si-ubl-2.0 "${nlcius[@]}"
 
       - name: Publish and package
         id: package
