@@ -462,9 +462,16 @@ Resources:
               - Effect: Allow
                 Action: dynamodb:GetItem
                 Resource: !GetAtt IdentityTable.Arn
+              # Reading the PDF; booking a finished conversion stores it under the invoice.
               - Effect: Allow
-                Action: s3:GetObject
+                Action:
+                  - s3:GetObject
+                  - s3:PutObject
                 Resource: !Sub ${DocumentBucket.Arn}/*
+              # A conversion is checked against the official rules before it is booked.
+              - Effect: Allow
+                Action: lambda:InvokeFunction
+                Resource: !Ref ValidatorAlias
       Tags:
         - Key: Project
           Value: xchange
@@ -490,6 +497,7 @@ Resources:
           InvoiceStorage__TableName: !Ref InvoiceTable
           InvoiceStorage__BucketName: !Ref DocumentBucket
           Imports__QueueUrl: !Ref ImportQueue
+          OfficialValidation__FunctionName: !Ref ValidatorAlias
       Tags:
         - Key: Project
           Value: xchange
