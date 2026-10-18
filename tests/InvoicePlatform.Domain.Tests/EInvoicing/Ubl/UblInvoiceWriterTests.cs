@@ -3,6 +3,7 @@ using System.Xml.Linq;
 using InvoicePlatform.Domain.Canonical;
 using InvoicePlatform.Domain.EInvoicing;
 using InvoicePlatform.Domain.EInvoicing.Peppol;
+using InvoicePlatform.Domain.EInvoicing.Pint;
 using InvoicePlatform.Domain.EInvoicing.Ubl;
 
 namespace InvoicePlatform.Domain.Tests.EInvoicing.Ubl;
@@ -24,25 +25,35 @@ public class UblInvoiceWriterTests
 
     private readonly UblInvoiceWriter _writer = new();
 
-    private string Write(CanonicalInvoiceDraft draft)
+    private string Write(CanonicalInvoiceDraft draft, IInvoiceRuleset? ruleset = null)
     {
-        var result = ValidatedCanonicalInvoice.Validate(new PeppolBisBilling30Ruleset(), draft);
+        var result = ValidatedCanonicalInvoice.Validate(ruleset ?? new PeppolBisBilling30Ruleset(), draft);
         Assert.Empty(result.Violations);
         return _writer.Write(result.Invoice!);
     }
 
+    /// <summary>
+    /// Each reference file with the ruleset it belongs to. CI validates the
+    /// pint-sg-* files with the PINT-SG rules and the others with BIS 3.0.
+    /// </summary>
     public static TheoryData<string> ReferenceFiles => new()
     {
         "invoice-nl-standard.xml",
         "creditnote-nl.xml",
         "invoice-nl-mixed-vat-allowances.xml",
+        "pint-sg-invoice-sgd.xml",
+        "pint-sg-invoice-usd.xml",
+        "pint-sg-creditnote.xml",
     };
 
-    private static CanonicalInvoiceDraft SampleFor(string file) => file switch
+    private static (CanonicalInvoiceDraft Draft, IInvoiceRuleset Ruleset) SampleFor(string file) => file switch
     {
-        "invoice-nl-standard.xml" => SampleInvoices.Valid(),
-        "creditnote-nl.xml" => SampleInvoices.CreditNote(),
-        "invoice-nl-mixed-vat-allowances.xml" => SampleInvoices.MixedVatWithAllowances(),
+        "invoice-nl-standard.xml" => (SampleInvoices.Valid(), new PeppolBisBilling30Ruleset()),
+        "creditnote-nl.xml" => (SampleInvoices.CreditNote(), new PeppolBisBilling30Ruleset()),
+        "invoice-nl-mixed-vat-allowances.xml" => (SampleInvoices.MixedVatWithAllowances(), new PeppolBisBilling30Ruleset()),
+        "pint-sg-invoice-sgd.xml" => (SampleInvoices.Singapore(), new PintSgBilling1Ruleset()),
+        "pint-sg-invoice-usd.xml" => (SampleInvoices.SingaporeInUsDollars(), new PintSgBilling1Ruleset()),
+        "pint-sg-creditnote.xml" => (SampleInvoices.SingaporeCreditNote(), new PintSgBilling1Ruleset()),
         _ => throw new ArgumentOutOfRangeException(nameof(file)),
     };
 
@@ -50,7 +61,8 @@ public class UblInvoiceWriterTests
     [MemberData(nameof(ReferenceFiles))]
     public void Output_matches_the_reference_file(string file)
     {
-        var actual = Write(SampleFor(file));
+        var (draft, ruleset) = SampleFor(file);
+        var actual = Write(draft, ruleset);
 
         if (Environment.GetEnvironmentVariable("XCHANGE_UPDATE_REFERENCE_FILES") == "1")
         {
@@ -159,6 +171,42 @@ public class UblInvoiceWriterTests
         var document = XDocument.Parse(Write(draft));
 
         Assert.Empty(document.Descendants(Cbc + "Percent"));
+    }
+
+    [Fact]
+    public void A_pint_sg_document_speaks_gst_and_carries_its_uuid()
+    {
+        var root = XDocument.Parse(Write(SampleInvoices.Singapore(), new PintSgBilling1Ruleset())).Root!;
+
+        Assert.Equal("6f2c1a3e-8b4d-4c7e-9a10-2b3c4d5e6f70", root.Element(Cbc + "UUID")!.Value);
+        Assert.All(root.Descendants(Cac + "TaxScheme"), scheme => Assert.Equal("GST", scheme.Element(Cbc + "ID")!.Value));
+        Assert.Null(root.Element(Cbc + "TaxCurrencyCode"));
+    }
+
+    [Fact]
+    public void A_pint_sg_document_in_another_currency_carries_its_totals_in_sgd()
+    {
+        var root = XDocument.Parse(Write(SampleInvoices.SingaporeInUsDollars(), new PintSgBilling1Ruleset())).Root!;
+
+        Assert.Equal("SGD", root.Element(Cbc + "TaxCurrencyCode")!.Value);
+        var taxTotals = root.Elements(Cac + "TaxTotal").ToList();
+        Assert.Equal(2, taxTotals.Count);
+        Assert.Equal("SGD", (string?)taxTotals[1].Element(Cbc + "TaxAmount")!.Attribute("currencyID"));
+        Assert.Empty(taxTotals[1].Elements(Cac + "TaxSubtotal"));
+
+        var sgdTotals = root.Elements(Cac + "AdditionalDocumentReference")
+            .ToDictionary(r => r.Element(Cbc + "DocumentTypeCode")!.Value, r => r.Element(Cbc + "DocumentDescription")!.Value);
+        Assert.Equal("3060.63", sgdTotals["sgdtotal-excl-gst"]);
+        Assert.Equal("3336.08", sgdTotals["sgdtotal-incl-gst"]);
+    }
+
+    [Fact]
+    public void A_bis_document_keeps_vat_and_no_uuid()
+    {
+        var root = XDocument.Parse(Write(SampleInvoices.Valid() with { DocumentUuid = "6f2c1a3e-8b4d-4c7e-9a10-2b3c4d5e6f70" })).Root!;
+
+        Assert.Null(root.Element(Cbc + "UUID"));
+        Assert.All(root.Descendants(Cac + "TaxScheme"), scheme => Assert.Equal("VAT", scheme.Element(Cbc + "ID")!.Value));
     }
 
     private static string SourceDirectory([CallerFilePath] string path = "") => Path.GetDirectoryName(path)!;

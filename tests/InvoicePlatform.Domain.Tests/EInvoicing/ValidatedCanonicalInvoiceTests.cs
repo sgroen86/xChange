@@ -49,6 +49,10 @@ public class ValidatedCanonicalInvoiceTests
         public InvoiceSyntax Syntax => InvoiceSyntax.Ubl21;
         public string CustomizationId => "urn:test:" + id;
         public string ProfileId => "urn:test:profile";
+        public string TaxName => "btw";
+        public IReadOnlyList<TaxCategory> TaxCategories => [new("S", "standaard")];
+        public UblDialect Ubl => new("VAT", new HashSet<string> { "O" }, false, false);
+        public CanonicalInvoiceDraft Prepare(CanonicalInvoiceDraft draft) => draft;
 
         public IReadOnlyList<RuleViolation> Check(CanonicalInvoiceDraft invoice)
         {

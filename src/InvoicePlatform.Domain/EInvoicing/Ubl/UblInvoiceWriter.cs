@@ -36,6 +36,7 @@ public sealed class UblInvoiceWriter
         }
 
         var invoice = validated.Invoice;
+        var dialect = validated.Ruleset.Ubl;
         var creditNote = CodeLists.IsCreditNoteType(invoice.TypeCode);
         var currency = invoice.CurrencyCode!;
 
@@ -51,7 +52,7 @@ public sealed class UblInvoiceWriter
         var buffer = new Utf8StringWriter();
         using (var xml = XmlWriter.Create(buffer, settings))
         {
-            var writer = new UblWriter(xml, currency);
+            var writer = new UblWriter(xml, currency, dialect);
 
             xml.WriteStartDocument();
             xml.WriteStartElement(creditNote ? "CreditNote" : "Invoice", creditNote ? CreditNoteNamespace : InvoiceNamespace);
@@ -61,6 +62,11 @@ public sealed class UblInvoiceWriter
             writer.Basic("CustomizationID", validated.Ruleset.CustomizationId);
             writer.Basic("ProfileID", validated.Ruleset.ProfileId);
             writer.Basic("ID", invoice.InvoiceNumber);
+            if (dialect.WritesDocumentUuid)
+            {
+                writer.Basic("UUID", invoice.DocumentUuid);
+            }
+
             writer.Basic("IssueDate", invoice.IssueDate);
             if (!creditNote)
             {
@@ -70,6 +76,7 @@ public sealed class UblInvoiceWriter
             writer.Basic(creditNote ? "CreditNoteTypeCode" : "InvoiceTypeCode", invoice.TypeCode);
             writer.Basic("Note", invoice.Note);
             writer.Basic("DocumentCurrencyCode", currency);
+            writer.Basic("TaxCurrencyCode", invoice.TaxCurrencyCode);
             writer.Basic("BuyerReference", invoice.BuyerReference);
 
             if (UblWriter.Present(invoice.PurchaseOrderReference))
@@ -88,6 +95,12 @@ public sealed class UblInvoiceWriter
                 writer.End();
             }
 
+            if (dialect.WritesTaxCurrencyTotals && invoice.TaxCurrencyCode is { } taxCurrency)
+            {
+                TaxCurrencyTotal(writer, taxCurrency, "sgdtotal-excl-gst", invoice.Totals!.TaxExclusiveAmountInTaxCurrency);
+                TaxCurrencyTotal(writer, taxCurrency, "sgdtotal-incl-gst", invoice.Totals!.TaxInclusiveAmountInTaxCurrency);
+            }
+
             Party(writer, "AccountingSupplierParty", invoice.Seller!, isSeller: true);
             Party(writer, "AccountingCustomerParty", invoice.Buyer!, isSeller: false);
             PaymentMeans(writer, invoice, creditNote);
@@ -98,6 +111,14 @@ public sealed class UblInvoiceWriter
             }
 
             TaxTotal(writer, invoice);
+            if (invoice.TaxCurrencyCode is { } accountingCurrency)
+            {
+                // BT-111: one more TaxTotal, without subtotals, in the tax currency.
+                writer.Start("TaxTotal");
+                writer.Amount("TaxAmount", invoice.Totals!.TaxAmountInTaxCurrency, accountingCurrency);
+                writer.End();
+            }
+
             MonetaryTotal(writer, invoice.Totals!);
 
             for (var index = 0; index < invoice.Lines.Count; index++)
@@ -110,6 +131,24 @@ public sealed class UblInvoiceWriter
         }
 
         return buffer.ToString();
+    }
+
+    /// <summary>
+    /// PINT-SG's way of carrying a total in the tax currency: the amount in
+    /// DocumentDescription, the currency as ID, no attachment.
+    /// </summary>
+    private static void TaxCurrencyTotal(UblWriter writer, string taxCurrency, string typeCode, decimal? amount)
+    {
+        if (amount is not { } value)
+        {
+            return;
+        }
+
+        writer.Start("AdditionalDocumentReference");
+        writer.Basic("ID", taxCurrency);
+        writer.Basic("DocumentTypeCode", typeCode);
+        writer.Basic("DocumentDescription", value.ToString("0.00", CultureInfo.InvariantCulture));
+        writer.End();
     }
 
     private static void Party(UblWriter writer, string role, CanonicalParty party, bool isSeller)
@@ -131,7 +170,7 @@ public sealed class UblInvoiceWriter
         writer.End();
         writer.End();
 
-        TaxScheme(writer, party.VatIdentifier, "VAT");
+        TaxScheme(writer, party.VatIdentifier, writer.Dialect.TaxSchemeId);
         if (isSeller)
         {
             // BT-32, the seller's tax registration other than VAT.
@@ -242,21 +281,21 @@ public sealed class UblInvoiceWriter
     }
 
     /// <summary>
-    /// Category O ("not subject to VAT") carries no rate at all (BR-O-05..07,
-    /// BR-48); every other category always carries one, 0 when absent.
+    /// The dialect's rate-less category (O in EN 16931, NG in PINT-SG) carries
+    /// no rate at all; every other category always carries one, 0 when absent.
     /// </summary>
     private static void TaxCategory(UblWriter writer, string element, string? category, decimal? rate, string? exemptionReason)
     {
         writer.Start(element);
         writer.Basic("ID", category);
-        if (category != "O")
+        if (category is null || !writer.Dialect.CategoriesWithoutRate.Contains(category))
         {
             writer.Decimal("Percent", rate ?? 0m);
         }
 
         writer.Basic("TaxExemptionReason", exemptionReason);
         writer.Start("TaxScheme");
-        writer.Basic("ID", "VAT");
+        writer.Basic("ID", writer.Dialect.TaxSchemeId);
         writer.End();
         writer.End();
     }
@@ -314,8 +353,10 @@ public sealed class UblInvoiceWriter
     }
 
     /// <summary>The cac/cbc vocabulary over an XmlWriter, skipping absent values.</summary>
-    private sealed class UblWriter(XmlWriter xml, string currency)
+    private sealed class UblWriter(XmlWriter xml, string currency, UblDialect dialect)
     {
+        public UblDialect Dialect => dialect;
+
         public static bool Present(string? value) => !string.IsNullOrWhiteSpace(value);
 
         public void Start(string aggregate) => xml.WriteStartElement("cac", aggregate, Cac);
@@ -351,7 +392,7 @@ public sealed class UblInvoiceWriter
             => BasicWithAttribute(name, value, "schemeID", scheme);
 
         /// <summary>Monetary amounts: currencyID and exactly two decimals (UBL-DT-01).</summary>
-        public void Amount(string name, decimal? value)
+        public void Amount(string name, decimal? value, string? inCurrency = null)
         {
             if (value is not { } actual)
             {
@@ -359,7 +400,7 @@ public sealed class UblInvoiceWriter
             }
 
             xml.WriteStartElement("cbc", name, Cbc);
-            xml.WriteAttributeString("currencyID", currency);
+            xml.WriteAttributeString("currencyID", inCurrency ?? currency);
             xml.WriteString(actual.ToString("0.00", CultureInfo.InvariantCulture));
             xml.WriteEndElement();
         }

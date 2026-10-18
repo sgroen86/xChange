@@ -66,6 +66,16 @@ public static class InvoiceTotalsCalculator
         var prepaid = draft.Totals?.PrepaidAmount;
         var rounding = draft.Totals?.RoundingAmount;
 
+        // In the tax currency (PINT-SG: SGD) when the invoice is in another:
+        // without tax and the tax each rounded to the cent, with tax their sum.
+        decimal? exclusiveInTaxCurrency = null, taxInTaxCurrency = null, inclusiveInTaxCurrency = null;
+        if (draft.TaxCurrencyCode is not null && draft.TaxCurrencyRate is { } rate)
+        {
+            exclusiveInTaxCurrency = Round(taxExclusive * rate);
+            taxInTaxCurrency = Round(tax * rate);
+            inclusiveInTaxCurrency = exclusiveInTaxCurrency + taxInTaxCurrency;
+        }
+
         return draft with
         {
             Lines = lines,
@@ -81,6 +91,9 @@ public static class InvoiceTotalsCalculator
                 PrepaidAmount = prepaid,
                 RoundingAmount = rounding,
                 PayableAmount = Round(taxInclusive - (prepaid ?? 0m) + (rounding ?? 0m)),
+                TaxExclusiveAmountInTaxCurrency = exclusiveInTaxCurrency,
+                TaxAmountInTaxCurrency = taxInTaxCurrency,
+                TaxInclusiveAmountInTaxCurrency = inclusiveInTaxCurrency,
             },
         };
     }

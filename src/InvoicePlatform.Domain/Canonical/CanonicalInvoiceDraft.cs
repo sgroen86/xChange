@@ -40,6 +40,26 @@ public sealed record CanonicalInvoiceDraft
     /// <summary>BT-25: the invoice a credit note corrects.</summary>
     public string? PrecedingInvoiceReference { get; init; }
 
+    /// <summary>
+    /// BT-SG-003: a universally unique id for the document, in the standard
+    /// UUID form. Rulesets that require it (PINT-SG) get it from xChange's own
+    /// invoice id, so it stays the same when an invoice is exported again.
+    /// </summary>
+    public string? DocumentUuid { get; init; }
+
+    /// <summary>
+    /// BT-6: the currency tax is accounted in, when it differs from the
+    /// invoice currency - SGD for a Singapore invoice in another currency. Set
+    /// by the ruleset, not by the user.
+    /// </summary>
+    public string? TaxCurrencyCode { get; init; }
+
+    /// <summary>
+    /// Units of <see cref="TaxCurrencyCode"/> per unit of the invoice currency,
+    /// entered by the user (IRAS requires an approved rate).
+    /// </summary>
+    public decimal? TaxCurrencyRate { get; init; }
+
     public CanonicalPaymentDetails? Payment { get; init; }
 
     public IReadOnlyList<CanonicalInvoiceLine> Lines { get; init; } = [];
@@ -172,4 +192,13 @@ public sealed record CanonicalTotals
 
     /// <summary>Amount actually due for payment.</summary>
     public decimal? PayableAmount { get; init; }
+
+    /// <summary>Total without tax, in the tax currency (PINT-SG: SGD). Calculated.</summary>
+    public decimal? TaxExclusiveAmountInTaxCurrency { get; init; }
+
+    /// <summary>BT-111: total tax in the tax currency. Calculated.</summary>
+    public decimal? TaxAmountInTaxCurrency { get; init; }
+
+    /// <summary>Total with tax in the tax currency: the two above added. Calculated.</summary>
+    public decimal? TaxInclusiveAmountInTaxCurrency { get; init; }
 }

@@ -17,5 +17,24 @@
         "file": "peppol.xslt"
       }
     ]
+  },
+  "pint-sg-billing-1": {
+    "release": "1.4.1",
+    "artefacts": [
+      {
+        "name": "PINT shared rules (PINT-SG 1.4.1)",
+        "url": "https://repo1.maven.org/maven2/com/helger/phive/rules/phive-rules-peppol-pint/4.6.3/phive-rules-peppol-pint-4.6.3.jar",
+        "sha256": "b9b7c6b03ff9c37e6846268e78675a26e477663c5f6e23f050c91a9bf18988a3",
+        "entry": "external/schematron/pint-sg/1.4.1/xslt/PINT-UBL-validation-preprocessed.xslt",
+        "file": "pint-shared.xslt"
+      },
+      {
+        "name": "PINT-SG Singapore rules 1.4.1",
+        "url": "https://repo1.maven.org/maven2/com/helger/phive/rules/phive-rules-peppol-pint/4.6.3/phive-rules-peppol-pint-4.6.3.jar",
+        "sha256": "b9b7c6b03ff9c37e6846268e78675a26e477663c5f6e23f050c91a9bf18988a3",
+        "entry": "external/schematron/pint-sg/1.4.1/xslt/PINT-jurisdiction-aligned-rules.xslt",
+        "file": "pint-sg.xslt"
+      }
+    ]
   }
 }
