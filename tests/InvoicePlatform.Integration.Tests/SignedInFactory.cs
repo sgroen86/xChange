@@ -57,6 +57,8 @@ public sealed class SignedInFactory : WebApplicationFactory<Program>
 
     public InMemoryUsage Usage { get; } = new();
 
+    public InMemoryApiKeys ApiKeys { get; } = new();
+
     public HttpClient As(string token)
     {
         var client = CreateClient();
@@ -105,6 +107,7 @@ public sealed class SignedInFactory : WebApplicationFactory<Program>
             services.RemoveAll<ISignupStore>();
             services.RemoveAll<IEmailSender>();
             services.RemoveAll<IUsageMeter>();
+            services.RemoveAll<IApiKeyStore>();
 
             var identity = new SignedInIdentity();
             services.AddSingleton<IUserStore>(identity);
@@ -124,6 +127,7 @@ public sealed class SignedInFactory : WebApplicationFactory<Program>
             services.AddSingleton<ISignupStore>(Signups);
             services.AddSingleton<IEmailSender>(Mail);
             services.AddSingleton<IUsageMeter>(Usage);
+            services.AddSingleton<IApiKeyStore>(ApiKeys);
         });
     }
 
@@ -453,6 +457,61 @@ public sealed class InMemoryUsage : IUsageMeter
         lock (_usage)
         {
             _usage[organizationId] = (_usage.GetValueOrDefault(organizationId).Used, limit, trial && limit is not null);
+        }
+
+        return Task.CompletedTask;
+    }
+}
+
+/// <summary>API keys in memory, found by hash as the identity table finds them.</summary>
+public sealed class InMemoryApiKeys : IApiKeyStore
+{
+    private readonly Dictionary<string, ApiKey> _byHash = [];
+
+    public Task SaveAsync(ApiKey key, CancellationToken cancellationToken = default)
+    {
+        lock (_byHash)
+        {
+            _byHash[key.Hash] = key;
+        }
+
+        return Task.CompletedTask;
+    }
+
+    public Task<ApiKey?> FindByHashAsync(string hash, CancellationToken cancellationToken = default)
+    {
+        lock (_byHash)
+        {
+            return Task.FromResult(_byHash.GetValueOrDefault(hash));
+        }
+    }
+
+    public Task<IReadOnlyList<ApiKey>> ListAsync(string organizationId, CancellationToken cancellationToken = default)
+    {
+        lock (_byHash)
+        {
+            return Task.FromResult<IReadOnlyList<ApiKey>>(_byHash.Values.Where(k => k.OrganizationId == organizationId).ToList());
+        }
+    }
+
+    public Task TouchAsync(ApiKey key, DateTimeOffset at, CancellationToken cancellationToken = default)
+    {
+        lock (_byHash)
+        {
+            if (_byHash.ContainsKey(key.Hash))
+            {
+                _byHash[key.Hash] = key with { LastUsedAt = at };
+            }
+        }
+
+        return Task.CompletedTask;
+    }
+
+    public Task DeleteAsync(ApiKey key, CancellationToken cancellationToken = default)
+    {
+        lock (_byHash)
+        {
+            _byHash.Remove(key.Hash);
         }
 
         return Task.CompletedTask;

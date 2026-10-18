@@ -10,7 +10,7 @@ public sealed record ImportResponse
     [JsonPropertyName("importId")]
     public required string ImportId { get; init; }
 
-    /// <summary>"upload" or "email".</summary>
+    /// <summary>"upload", "email" or "api" (sent to the conversion API).</summary>
     [JsonPropertyName("source")]
     public required string Source { get; init; }
 

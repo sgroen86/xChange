@@ -63,6 +63,12 @@ public static class ExportEndpoints
         var outcome = await service.ExportAsync(user.OrganizationId, invoiceId, ruleset, cancellationToken)
             .ConfigureAwait(false);
 
+        return ToResult(context, outcome, ruleset);
+    }
+
+    /// <summary>An export as HTTP: the file, or why there is none. Shared with the conversion API.</summary>
+    internal static IResult ToResult(HttpContext context, ExportOutcome outcome, string? ruleset)
+    {
         if (outcome.Kind == ExportOutcomeKind.Exported && outcome.Warnings is { Count: > 0 } warnings)
         {
             var json = System.Text.Json.JsonSerializer.SerializeToUtf8Bytes(ToResponse(warnings).Violations);
@@ -91,7 +97,7 @@ public static class ExportEndpoints
         };
     }
 
-    private static RuleViolationsResponse ToResponse(IReadOnlyList<RuleViolation> violations) => new()
+    internal static RuleViolationsResponse ToResponse(IReadOnlyList<RuleViolation> violations) => new()
     {
         Violations = [.. violations.Select(v => new RuleViolationResponse
         {

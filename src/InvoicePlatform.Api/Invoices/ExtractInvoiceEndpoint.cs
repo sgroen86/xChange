@@ -154,7 +154,7 @@ public static class ExtractInvoiceEndpoint
         return (bytes, string.IsNullOrWhiteSpace(file.FileName) ? "document.pdf" : Path.GetFileName(file.FileName), null);
     }
 
-    private static bool IsPdf(ReadOnlySpan<byte> content)
+    internal static bool IsPdf(ReadOnlySpan<byte> content)
         => content.Length >= PdfMagic.Length && content[..PdfMagic.Length].SequenceEqual(PdfMagic);
 
     private static ExtractInvoiceResponse ToResponse(ExtractInvoiceResult result) => new()

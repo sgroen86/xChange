@@ -1,4 +1,5 @@
 using InvoicePlatform.Application.Identity;
+using InvoicePlatform.Domain.Identity;
 
 namespace InvoicePlatform.Api.Identity;
 
@@ -14,12 +15,24 @@ namespace InvoicePlatform.Api.Identity;
 public sealed class AuthenticationMiddleware(RequestDelegate next)
 {
     internal const string UserKey = "xchange.user";
+    internal const string ApiKeyCallerKey = "xchange.apikey";
 
     public async Task InvokeAsync(HttpContext context, AuthService auth)
     {
         var token = AuthEndpoints.ReadBearerToken(context);
 
-        if (token is not null)
+        if (ApiKey.LooksLikeKey(token))
+        {
+            // An API key is not a user: it is kept apart, so every route that
+            // asks for a user still refuses it. Only RequireApiKey accepts it.
+            var keys = context.RequestServices.GetRequiredService<ApiKeyService>();
+            var caller = await keys.AuthenticateAsync(token!, context.RequestAborted).ConfigureAwait(false);
+            if (caller is not null)
+            {
+                context.Items[ApiKeyCallerKey] = caller;
+            }
+        }
+        else if (token is not null)
         {
             var user = await auth.ValidateAsync(token, context.RequestAborted).ConfigureAwait(false);
             if (user is not null)
@@ -38,6 +51,34 @@ public static class AuthorizationExtensions
         => context.Items.TryGetValue(AuthenticationMiddleware.UserKey, out var value)
             ? value as AuthenticatedUser
             : null;
+
+    public static ApiKeyCaller? GetApiKeyCaller(this HttpContext context)
+        => context.Items.TryGetValue(AuthenticationMiddleware.ApiKeyCallerKey, out var value)
+            ? value as ApiKeyCaller
+            : null;
+
+    /// <summary>
+    /// Rejects anyone without a valid API key with 401 - a signed-in user
+    /// included: the conversion API is for systems, the app has its own routes.
+    /// </summary>
+    public static TBuilder RequireApiKey<TBuilder>(this TBuilder builder)
+        where TBuilder : IEndpointConventionBuilder
+    {
+        builder.AddEndpointFilter(async (context, next) =>
+        {
+            if (context.HttpContext.GetApiKeyCaller() is null)
+            {
+                return Results.Problem(
+                    detail: "Stuur een geldige API-sleutel mee: Authorization: Bearer xck_…",
+                    title: "Geen geldige API-sleutel",
+                    statusCode: StatusCodes.Status401Unauthorized);
+            }
+
+            return await next(context).ConfigureAwait(false);
+        });
+
+        return builder;
+    }
 
     /// <summary>
     /// Rejects anonymous callers with 401. Applied per route rather than

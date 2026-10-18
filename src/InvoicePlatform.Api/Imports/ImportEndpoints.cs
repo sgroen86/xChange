@@ -117,7 +117,12 @@ public static class ImportEndpoints
     private static ImportResponse ToResponse(ImportRecord record, bool detail) => new()
     {
         ImportId = record.ImportId,
-        Source = record.Source == ImportSource.Email ? "email" : "upload",
+        Source = record.Source switch
+        {
+            ImportSource.Email => "email",
+            ImportSource.Api => "api",
+            _ => "upload",
+        },
         Status = record.Status == ImportStatus.AwaitingApproval ? "awaitingApproval" : record.Status.ToString().ToLowerInvariant(),
         FileName = record.FileName,
         ByteSize = record.ByteSize,
