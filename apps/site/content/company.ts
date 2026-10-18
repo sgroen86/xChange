@@ -19,9 +19,9 @@ export const company = {
   registrationNumber: "[Ondernemingsnummer]",
   vatNumber: "[Btw-nummer]",
   /** General, sales and privacy questions. */
-  contactEmail: "[contact-e-mailadres]",
+  contactEmail: "info@xchangeinvoice.com",
   /** Help with the application. */
-  supportEmail: "[support-e-mailadres]",
+  supportEmail: "support@xchangeinvoice.com",
   /** Law that governs the terms of service, e.g. "Belgian law". */
   governingLaw: "[Toepasselijk recht]",
   /** Courts competent for disputes, e.g. "the courts of Ghent". */
