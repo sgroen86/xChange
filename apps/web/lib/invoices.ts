@@ -177,3 +177,34 @@ export async function documentBlobUrl(invoiceId: string): Promise<string | null>
     return null;
   }
 }
+
+export interface ReceiverLookup {
+  status: "found" | "notFound" | "unavailable" | "nothingToLookUp";
+  network: string | null;
+  participant: { scheme: string; value: string } | null;
+  /** xChange formats the receiver takes invoices in. */
+  acceptedRulesetIds: string[];
+  documentTypeCount: number;
+  /** The addresses asked, "0106:12345678", in order of confidence. */
+  tried: string[];
+}
+
+/** Whether the buyer can receive e-invoices, and in which formats. Looked up by its numbers, never its name. */
+export function lookupReceiver(
+  buyer: {
+    vatIdentifier: string | null;
+    legalRegistrationId: string | null;
+    legalRegistrationScheme: string | null;
+    electronicAddress: string | null;
+    electronicAddressScheme: string | null;
+    countryCode: string | null;
+  },
+  signal?: AbortSignal,
+): Promise<ReceiverLookup> {
+  return request<ReceiverLookup>("/api/v1/receivers/lookup", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(buyer),
+    signal,
+  });
+}

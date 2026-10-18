@@ -25,6 +25,8 @@ import {
 import {
   bookInvoice,
   checkInvoice,
+  lookupReceiver,
+  type ReceiverLookup,
   documentBlobUrl,
   exportInvoice,
   getInvoice,
@@ -32,6 +34,7 @@ import {
 } from "../../../../lib/invoices";
 import { formatMoney } from "../../../../lib/money";
 import { getPdf } from "../../../../lib/pdfStore";
+import { chooseFormat } from "../../../../lib/formatChoice";
 import { matchRelation } from "../../../../lib/relationKeys";
 import { listRelations, type Relation } from "../../../../lib/relations";
 import { defaultRulesetOf, FALLBACK_SETTINGS, getSettings, type OrganizationSettings } from "../../../../lib/settings";
@@ -41,6 +44,7 @@ import { EditorContext } from "./fields";
 import { InvoiceDetailsCard } from "./InvoiceDetailsCard";
 import { LinesCard } from "./LinesCard";
 import { PartyCard } from "./PartyCard";
+import { ReceiverStatus } from "./ReceiverStatus";
 import { PaymentCard } from "./PaymentCard";
 import { TotalsCard } from "./TotalsCard";
 
@@ -53,6 +57,8 @@ type PdfState =
 
 /** Wait this long after the last keystroke before asking the server to check. */
 const CHECK_DELAY_MS = 600;
+/** The PEPPOL lookup waits a little longer: numbers are typed in full before they mean anything. */
+const LOOKUP_DELAY_MS = 900;
 
 function download(blob: Blob, fileName: string): void {
   const url = URL.createObjectURL(blob);
@@ -92,7 +98,34 @@ export default function ReviewClient() {
   const buyer = draft?.invoice.buyer ?? null;
   const customer = useMemo(() => matchRelation(relations, buyer), [relations, buyer]);
   const customerFormat = settings.rulesets.find((r) => r.id === customer?.defaultRulesetId) ?? null;
-  const format = chosenFormat ?? customerFormat?.id ?? defaultRulesetOf(settings).id;
+
+  /* Whether the buyer can receive e-invoices, looked up on PEPPOL by its
+     numbers shortly after they stop changing. Never blocks anything. */
+  const [receiver, setReceiver] = useState<ReceiverLookup | null>(null);
+  const [lookingUp, setLookingUp] = useState(false);
+  const [endpointFilled, setEndpointFilled] = useState(false);
+  const lookupKey = buyer
+    ? JSON.stringify([
+        buyer.vatIdentifier,
+        buyer.legalRegistrationId,
+        buyer.legalRegistrationScheme,
+        buyer.electronicAddress,
+        buyer.electronicAddressScheme,
+        buyer.address?.countryCode ?? null,
+      ])
+    : null;
+
+  const receiverAccepts =
+    receiver?.status === "found"
+      ? settings.rulesets.map((r) => r.id).filter((id) => receiver.acceptedRulesetIds.includes(id))
+      : null;
+  const formatChoice = chooseFormat({
+    chosen: chosenFormat,
+    customerFormat: customerFormat?.id ?? null,
+    receiverAccepts,
+    organizationDefault: defaultRulesetOf(settings).id,
+  });
+  const format = formatChoice.id;
   /** Tax categories, tax name and tax currency follow the chosen format; the canonical XML uses the default's. */
   const taxRuleset = settings.rulesets.find((r) => r.id === format) ?? defaultRulesetOf(settings);
   const taxName = taxRuleset.taxName === "btw" ? "Btw" : taxRuleset.taxName;
@@ -202,6 +235,55 @@ export default function ReviewClient() {
       cancelled = true;
     };
   }, []);
+
+  useEffect(() => {
+    if (!lookupKey || !isApiConfigured) return;
+
+    const [vatIdentifier, legalRegistrationId, legalRegistrationScheme, electronicAddress, electronicAddressScheme, countryCode] =
+      JSON.parse(lookupKey) as (string | null)[];
+    const controller = new AbortController();
+    const timer = window.setTimeout(() => {
+      setLookingUp(true);
+      lookupReceiver(
+        { vatIdentifier, legalRegistrationId, legalRegistrationScheme, electronicAddress, electronicAddressScheme, countryCode },
+        controller.signal,
+      )
+        .then((found) => {
+          setReceiver(found);
+          // An empty electronic address is filled from the network; one the invoice gives is never overwritten.
+          if (found.status === "found" && found.participant && !electronicAddress?.trim() && !readOnly) {
+            const participant = found.participant;
+            setDraft((current) =>
+              current && current.invoice.buyer && !current.invoice.buyer.electronicAddress?.trim()
+                ? {
+                    ...current,
+                    invoice: {
+                      ...current.invoice,
+                      buyer: {
+                        ...current.invoice.buyer,
+                        electronicAddress: participant.value,
+                        electronicAddressScheme: participant.scheme,
+                      },
+                    },
+                  }
+                : current,
+            );
+            setEndpointFilled(true);
+          }
+        })
+        .catch(() => {
+          if (!controller.signal.aborted) setReceiver(null);
+        })
+        .finally(() => {
+          if (!controller.signal.aborted) setLookingUp(false);
+        });
+    }, LOOKUP_DELAY_MS);
+
+    return () => {
+      window.clearTimeout(timer);
+      controller.abort();
+    };
+  }, [lookupKey, readOnly]);
 
   const invoice = draft?.invoice ?? null;
   const local = useMemo(() => (invoice ? localIssues(invoice) : []), [invoice]);
@@ -444,8 +526,19 @@ export default function ReviewClient() {
             format={format}
             onFormat={setChosenFormat}
             defaultNote={
-              chosenFormat === null && customerFormat
+              formatChoice.source === "customer"
                 ? `Standaardformaat van afnemer ${customer?.name ?? "(onbekend)"}`
+                : formatChoice.source === "receiver"
+                  ? "Gekozen omdat de afnemer dit via PEPPOL ontvangt."
+                  : null
+            }
+            receiverWarning={
+              isRuleset && receiver?.status === "found" && !receiver.acceptedRulesetIds.includes(format)
+                ? receiver.acceptedRulesetIds.length > 0
+                  ? `Deze afnemer ontvangt dit formaat niet via PEPPOL. Wel: ${receiver.acceptedRulesetIds
+                      .map((id) => settings.rulesets.find((r) => r.id === id)?.displayName ?? id)
+                      .join(", ")}.`
+                  : "Deze afnemer staat op PEPPOL, maar ontvangt geen van de formaten die xChange maakt."
                 : null
             }
             localIssues={local}
@@ -484,7 +577,27 @@ export default function ReviewClient() {
                 }
               />
               <PartyCard side="seller" title="Verkoper (uw organisatie)" />
-              <PartyCard side="buyer" title="Afnemer" />
+              <PartyCard side="buyer" title="Afnemer">
+                <ReceiverStatus
+                  lookup={receiver}
+                  looking={lookingUp}
+                  rulesets={settings.rulesets}
+                  current={
+                    invoice.buyer?.electronicAddress
+                      ? `${invoice.buyer.electronicAddressScheme ?? ""}:${invoice.buyer.electronicAddress}`
+                      : null
+                  }
+                  filled={endpointFilled}
+                  readOnly={readOnly}
+                  onAdopt={() => {
+                    const participant = receiver?.participant;
+                    if (!participant) return;
+                    update((current) =>
+                      setAtPath(setAtPath(current, "buyer.electronicAddress", participant.value), "buyer.electronicAddressScheme", participant.scheme),
+                    );
+                  }}
+                />
+              </PartyCard>
               <LinesCard
                 lines={invoice.lines}
                 nets={totals.lineNet}

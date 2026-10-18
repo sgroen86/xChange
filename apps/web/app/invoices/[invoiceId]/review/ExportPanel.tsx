@@ -13,6 +13,8 @@ interface Props {
   onFormat: (format: string) => void;
   /** Why the menu opened on this format, when it is not the organisation's. */
   defaultNote: string | null;
+  /** Set when the buyer is on a network and does not accept the chosen format. */
+  receiverWarning: string | null;
   /** Numbers the server cannot read yet; they come before anything else. */
   localIssues: LocalIssue[];
   violations: RuleViolation[];
@@ -89,6 +91,12 @@ export function ExportPanel(props: Props) {
           </div>
         </div>
         {blockedReason && <p className="text-soft text-sm">{blockedReason}</p>}
+        {props.receiverWarning && (
+          <div className="alert alert--warning">
+            <Icon name="info" />
+            <div>{props.receiverWarning}</div>
+          </div>
+        )}
       </div>
 
       {ruleset && props.apiConfigured && (

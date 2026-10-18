@@ -1,10 +1,12 @@
 using InvoicePlatform.Application.Identity;
 using InvoicePlatform.Application.Invoices;
+using InvoicePlatform.Application.Networks;
 using InvoicePlatform.Application.Organizations;
 using InvoicePlatform.Application.Relations;
 using InvoicePlatform.Domain.Canonical;
 using InvoicePlatform.Domain.Identity;
 using InvoicePlatform.Domain.Invoices;
+using InvoicePlatform.Domain.Networks;
 using InvoicePlatform.Domain.Organizations;
 using InvoicePlatform.Domain.Relations;
 using Microsoft.AspNetCore.Mvc.Testing;
@@ -35,6 +37,8 @@ public sealed class SignedInFactory : WebApplicationFactory<Program>
 
     /// <summary>The official verdict every export gets; by default "no failures".</summary>
     public StubOfficialValidator Official { get; } = new();
+
+    public StubReceiverNetwork Network { get; } = new();
 
     public HttpClient As(string token)
     {
@@ -76,6 +80,7 @@ public sealed class SignedInFactory : WebApplicationFactory<Program>
             services.RemoveAll<IRelationRepository>();
             services.RemoveAll<IPlatformStore>();
             services.RemoveAll<IOfficialValidator>();
+            services.RemoveAll<IReceiverNetwork>();
 
             var identity = new SignedInIdentity();
             services.AddSingleton<IUserStore>(identity);
@@ -87,6 +92,7 @@ public sealed class SignedInFactory : WebApplicationFactory<Program>
             services.AddSingleton<IRelationRepository>(Relations);
             services.AddSingleton<IPlatformStore>(Platform);
             services.AddSingleton<IOfficialValidator>(Official);
+            services.AddSingleton<IReceiverNetwork>(Network);
         });
     }
 
@@ -299,6 +305,17 @@ public sealed class InMemoryPlatform : IPlatformStore
             return Task.FromResult(_invitations.Remove(codeHash));
         }
     }
+}
+
+/// <summary>A PEPPOL network without the network: registered participants are listed by hand.</summary>
+public sealed class StubReceiverNetwork : IReceiverNetwork
+{
+    public Dictionary<string, NetworkAnswer> Answers { get; } = [];
+
+    public string Name => "peppol";
+
+    public Task<NetworkAnswer> FindAsync(ParticipantIdentifier participant, CancellationToken cancellationToken = default)
+        => Task.FromResult(Answers.TryGetValue(participant.ToString(), out var answer) ? answer : NetworkAnswer.NotRegistered);
 }
 
 public sealed class StubOfficialValidator : IOfficialValidator

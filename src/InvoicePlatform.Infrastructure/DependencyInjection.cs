@@ -1,5 +1,6 @@
 using InvoicePlatform.Application.Interpretation;
 using InvoicePlatform.Application.Invoices;
+using InvoicePlatform.Application.Networks;
 using InvoicePlatform.Application.Organizations;
 using InvoicePlatform.Application.Relations;
 using InvoicePlatform.Domain.EInvoicing;
@@ -11,6 +12,7 @@ using Amazon.Lambda;
 using Amazon.S3;
 using InvoicePlatform.Application.Identity;
 using InvoicePlatform.Infrastructure.Invoices;
+using InvoicePlatform.Infrastructure.Networks;
 using InvoicePlatform.Infrastructure.Validator;
 using InvoicePlatform.Infrastructure.Relations;
 using InvoicePlatform.Infrastructure.Anthropic;
@@ -110,6 +112,13 @@ public static class DependencyInjection
             .Bind(configuration.GetSection(OfficialValidationOptions.SectionName));
         services.AddSingleton<IAmazonLambda>(_ => new AmazonLambdaClient());
         services.AddSingleton<IOfficialValidator, LambdaOfficialValidator>();
+
+        // Where a buyer can receive e-invoices: PEPPOL's public SML and SMPs, read-only.
+        services
+            .AddOptions<PeppolOptions>()
+            .Bind(configuration.GetSection(PeppolOptions.SectionName));
+        services.AddSingleton<IReceiverNetwork, PeppolNetwork>();
+        services.AddScoped<ReceiverLookupService>();
 
         return services;
     }

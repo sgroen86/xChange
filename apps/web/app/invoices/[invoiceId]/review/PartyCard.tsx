@@ -3,13 +3,14 @@
 import { ENDPOINT_SCHEMES, REGISTRATION_SCHEMES, SelectField, TextField } from "./fields";
 
 /** Seller or buyer. The organisation itself is the seller: these are its own sales invoices. */
-export function PartyCard({ side, title }: { side: "seller" | "buyer"; title: string }) {
+export function PartyCard({ side, title, children }: { side: "seller" | "buyer"; title: string; children?: React.ReactNode }) {
   return (
     <div className="card">
       <div className="card__header">
         <h3>{title}</h3>
       </div>
       <div className="card__body">
+        {children}
         <div className="form__row">
           <TextField path={`${side}.name`} label="Naam" />
           <TextField path={`${side}.vatIdentifier`} label="Btw-nummer" placeholder="NL123456789B01" />
