@@ -10,7 +10,7 @@
  */
 
 import { authHeaders, clearSession } from "./auth";
-import type { CanonicalInvoiceDraft } from "./canonical";
+import { normalizeInvoice, type ReviewDraft } from "./canonical";
 
 export const API_BASE_URL = (process.env.NEXT_PUBLIC_XCHANGE_API_URL ?? "").replace(/\/$/, "");
 
@@ -20,9 +20,9 @@ export interface ApiValidationWarning {
   code: string;
   path: string;
   message: string;
-  severity: "warning" | "error";
-  extractedValue: number | null;
-  calculatedValue: number | null;
+  severity: "warning" | "error" | "info";
+  extractedValue: string | null;
+  calculatedValue: string | null;
 }
 
 export interface ApiProviderExecution {
@@ -31,65 +31,10 @@ export interface ApiProviderExecution {
   durationMs: number;
 }
 
-/** The backend's canonical invoice. Shaped by the C# CanonicalInvoiceDraft. */
-export interface ApiCanonicalInvoice {
-  typeCode: string | null;
-  invoiceNumber: string | null;
-  issueDate: string | null;
-  dueDate: string | null;
-  currencyCode: string | null;
-  note: string | null;
-  seller: ApiParty | null;
-  buyer: ApiParty | null;
-  purchaseOrderReference: string | null;
-  buyerReference: string | null;
-  payment: Record<string, string | null> | null;
-  lines: ApiLine[];
-  allowancesAndCharges: unknown[];
-  vatBreakdown: ApiVatLine[];
-  totals: Record<string, number | null> | null;
-  evidence: ApiEvidence[];
-}
-
-export interface ApiParty {
-  name: string | null;
-  vatIdentifier: string | null;
-  address: {
-    streetName: string | null;
-    postalZone: string | null;
-    cityName: string | null;
-    countryCode: string | null;
-  } | null;
-}
-
-export interface ApiLine {
-  lineId: string | null;
-  description: string | null;
-  quantity: number | null;
-  unitCode: string | null;
-  unitPrice: number | null;
-  netAmount: number | null;
-  vatCategoryCode: string | null;
-  vatPercentage: number | null;
-}
-
-export interface ApiVatLine {
-  vatCategoryCode: string | null;
-  vatPercentage: number | null;
-  taxableAmount: number | null;
-  taxAmount: number | null;
-}
-
-export interface ApiEvidence {
-  field: string;
-  confidence: number | null;
-  pageNumber: number | null;
-  sourceText: string | null;
-}
-
 export interface ExtractInvoiceApiResponse {
   invoiceId: string;
-  canonicalInvoice: ApiCanonicalInvoice;
+  /** The server's CanonicalInvoiceDraft, amounts as strings. Normalised by toDraft. */
+  canonicalInvoice: unknown;
   canonicalXml: string;
   warnings: ApiValidationWarning[];
   providerExecution: ApiProviderExecution;
@@ -168,60 +113,20 @@ async function describeFailure(response: Response): Promise<string> {
   return `De API gaf status ${response.status}.`;
 }
 
-/** Maps the API response onto the draft shape the review screen already uses. */
+/** The API response as a review draft: the server's model, normalised. */
 export function toDraft(
   response: ExtractInvoiceApiResponse,
   fileName: string,
   byteSize: number,
-): CanonicalInvoiceDraft {
-  const invoice = response.canonicalInvoice;
-
-  // Amounts arrive as JSON numbers and are re-stringified immediately: the
-  // review screen carries them as strings so editing never rounds them.
-  const amount = (value: number | null | undefined): string =>
-    value === null || value === undefined ? "" : String(value);
-
-  const confidence = response.warnings.length === 0 ? 0.9 : 0.6;
-
+): ReviewDraft {
   return {
     id: response.invoiceId,
-    typeCode: invoice.typeCode ?? "380",
-    number: invoice.invoiceNumber ?? "",
-    issueDate: invoice.issueDate ?? "",
-    dueDate: invoice.dueDate ?? "",
-    currency: invoice.currencyCode ?? "EUR",
-    note: invoice.note ?? "",
-    supplier: {
-      name: invoice.seller?.name ?? "",
-      vatId: invoice.seller?.vatIdentifier ?? "",
-      street: invoice.seller?.address?.streetName ?? "",
-      postalCode: invoice.seller?.address?.postalZone ?? "",
-      city: invoice.seller?.address?.cityName ?? "",
-      countryCode: invoice.seller?.address?.countryCode ?? "NL",
-    },
-    customer: {
-      name: invoice.buyer?.name ?? "",
-      vatId: invoice.buyer?.vatIdentifier ?? "",
-      street: invoice.buyer?.address?.streetName ?? "",
-      postalCode: invoice.buyer?.address?.postalZone ?? "",
-      city: invoice.buyer?.address?.cityName ?? "",
-      countryCode: invoice.buyer?.address?.countryCode ?? "NL",
-    },
-    lines: invoice.lines.map((line, index) => ({
-      id: line.lineId ?? `line-${index + 1}`,
-      description: line.description ?? "",
-      quantity: amount(line.quantity) || "1",
-      unitCode: line.unitCode ?? "C62",
-      unitPrice: amount(line.unitPrice) || "0.00",
-      vatRate: amount(line.vatPercentage) || "0",
-    })),
-    extraction: {
-      sourceFileName: fileName,
-      sourceByteSize: byteSize,
+    invoice: normalizeInvoice(response.canonicalInvoice),
+    source: {
+      fileName,
+      byteSize,
       engine: `${response.providerExecution.provider}/${response.providerExecution.model}`,
-      confidence,
       extractedAt: new Date().toISOString(),
     },
-    validated: false,
   };
 }

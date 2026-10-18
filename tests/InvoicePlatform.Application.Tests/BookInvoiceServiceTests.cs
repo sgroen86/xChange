@@ -1,5 +1,6 @@
 using InvoicePlatform.Application.Identity;
 using InvoicePlatform.Application.Invoices;
+using InvoicePlatform.Application.Relations;
 using InvoicePlatform.Domain.Canonical;
 using InvoicePlatform.Domain.Invoices;
 
@@ -11,11 +12,12 @@ public class BookInvoiceServiceTests
     private const string OrgB = "org-b";
 
     private readonly FakeInvoiceStore _store = new();
+    private readonly FakeRelationStore _relations = new();
     private readonly TestClock _clock = new(DateTimeOffset.Parse("2026-09-08T12:00:00Z"));
     private readonly BookInvoiceService _service;
 
     public BookInvoiceServiceTests()
-        => _service = new BookInvoiceService(_store, _store, _clock);
+        => _service = new BookInvoiceService(_store, _store, _clock, new RelationService(_relations, _clock));
 
     private static CanonicalInvoiceDraft ADraft(string number = "F-1") => new()
     {
@@ -36,6 +38,30 @@ public class BookInvoiceServiceTests
         Assert.Equal(_clock.UtcNow, stored.BookedAt);
         Assert.NotNull(stored.DocumentKey);
         Assert.Equal(3, _store.Documents[stored.DocumentKey!].Length);
+    }
+
+    [Fact]
+    public async Task Booking_stores_the_calculated_totals_so_the_record_matches_the_export()
+    {
+        var draft = new CanonicalInvoiceDraft
+        {
+            Lines = [new CanonicalInvoiceLine { Quantity = 2m, UnitPrice = 10.00m, NetAmount = 99m, VatCategoryCode = "S", VatPercentage = 21m }],
+            Totals = new CanonicalTotals { PayableAmount = 1m },
+        };
+
+        var stored = await _service.BookAsync(OrgA, "u", draft, new byte[] { 1 }, "a.pdf", "m");
+
+        Assert.Equal(20.00m, stored.Invoice.Lines[0].NetAmount);
+        Assert.Equal(24.20m, stored.Invoice.Totals!.PayableAmount);
+        Assert.Equal(4.20m, Assert.Single(stored.Invoice.VatBreakdown).TaxAmount);
+    }
+
+    [Fact]
+    public async Task A_booked_invoice_is_outgoing()
+    {
+        var stored = await _service.BookAsync(OrgA, "u", ADraft(), new byte[] { 1 }, "a.pdf", "m");
+
+        Assert.Equal(InvoiceDirection.Outgoing, stored.Direction);
     }
 
     [Fact]
@@ -86,40 +112,5 @@ public class BookInvoiceServiceTests
         Assert.Equal(first.InvoiceId, again.InvoiceId);
         Assert.Single(await _service.ListAsync(OrgA));
         Assert.Equal("gecorrigeerd", (await _service.GetAsync(OrgA, first.InvoiceId))!.Invoice.Note);
-    }
-
-    private sealed class TestClock(DateTimeOffset now) : IClock
-    {
-        public DateTimeOffset UtcNow { get; } = now;
-    }
-
-    private sealed class FakeInvoiceStore : IInvoiceRepository, IDocumentStore
-    {
-        private readonly Dictionary<(string Org, string Id), StoredInvoice> _invoices = [];
-
-        public Dictionary<string, byte[]> Documents { get; } = [];
-
-        public Task SaveAsync(StoredInvoice invoice, CancellationToken cancellationToken = default)
-        {
-            _invoices[(invoice.OrganizationId, invoice.InvoiceId)] = invoice;
-            return Task.CompletedTask;
-        }
-
-        public Task<StoredInvoice?> GetAsync(string organizationId, string invoiceId, CancellationToken cancellationToken = default)
-            => Task.FromResult(_invoices.GetValueOrDefault((organizationId, invoiceId)));
-
-        public Task<IReadOnlyList<StoredInvoice>> ListAsync(string organizationId, int limit = 100, CancellationToken cancellationToken = default)
-            => Task.FromResult<IReadOnlyList<StoredInvoice>>(
-                _invoices.Where(kv => kv.Key.Org == organizationId).Select(kv => kv.Value).ToList());
-
-        public Task<string> PutAsync(string organizationId, string invoiceId, ReadOnlyMemory<byte> content, string contentType, CancellationToken cancellationToken = default)
-        {
-            var key = $"{organizationId}/{invoiceId}.pdf";
-            Documents[key] = content.ToArray();
-            return Task.FromResult(key);
-        }
-
-        public Task<byte[]?> GetAsync(string documentKey, CancellationToken cancellationToken = default)
-            => Task.FromResult(Documents.GetValueOrDefault(documentKey));
     }
 }

@@ -2,53 +2,97 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useState, useSyncExternalStore } from "react";
 
 import { Icon } from "../../../../components/Icon";
 import { useToast } from "../../../../components/Toast";
+import { isApiConfigured } from "../../../../lib/api";
+import { getServerUserSnapshot, getUserSnapshot, subscribeToUser } from "../../../../lib/auth";
 import {
-  calculate,
+  editableFingerprint,
   emptyLine,
+  exemptionReasonOf,
+  localIssues,
+  normalizeInvoice,
+  setAtPath,
+  setExemptionReason,
   toCanonicalXml,
-  validate,
-  type CanonicalInvoiceDraft,
-  type CanonicalLine,
-  type CanonicalParty,
-  type ValidationIssue,
+  totalsOf,
+  withCalculatedTotals,
+  type CanonicalInvoice,
+  type ReviewDraft,
 } from "../../../../lib/canonical";
-import { formatAmount, formatScaled, SCALE_AMOUNT } from "../../../../lib/money";
-import { bookInvoice, documentBlobUrl, getInvoice } from "../../../../lib/invoices";
+import {
+  bookInvoice,
+  checkInvoice,
+  documentBlobUrl,
+  exportInvoice,
+  getInvoice,
+  type RuleViolation,
+} from "../../../../lib/invoices";
+import { formatMoney } from "../../../../lib/money";
 import { getPdf } from "../../../../lib/pdfStore";
+import { defaultRulesetOf, FALLBACK_SETTINGS, getSettings, type OrganizationSettings } from "../../../../lib/settings";
 import { loadDraft, loadServerResult, saveDraft } from "../../../../lib/store";
+import { CANONICAL_FORMAT, ExportPanel } from "./ExportPanel";
+import { EditorContext } from "./fields";
+import { InvoiceDetailsCard } from "./InvoiceDetailsCard";
+import { LinesCard } from "./LinesCard";
+import { PartyCard } from "./PartyCard";
+import { PaymentCard } from "./PaymentCard";
+import { TotalsCard } from "./TotalsCard";
 
-type TabKey = "invoice" | "xml" | "warnings";
+type TabKey = "invoice" | "xml" | "notices";
 
 type PdfState =
   | { status: "loading" }
   | { status: "ready"; url: string; name: string }
   | { status: "missing" };
 
+/** Wait this long after the last keystroke before asking the server to check. */
+const CHECK_DELAY_MS = 600;
+
+function download(blob: Blob, fileName: string): void {
+  const url = URL.createObjectURL(blob);
+  const anchor = document.createElement("a");
+  anchor.href = url;
+  anchor.download = fileName;
+  document.body.appendChild(anchor);
+  anchor.click();
+  document.body.removeChild(anchor);
+  URL.revokeObjectURL(url);
+}
+
 export default function ReviewClient() {
   const pathname = usePathname() ?? "";
   const showToast = useToast();
+  const user = useSyncExternalStore(subscribeToUser, getUserSnapshot, getServerUserSnapshot);
+  const readOnly = user?.role === "ReadOnly";
 
   const invoiceId = pathname.match(/\/invoices\/([^/]+)\/review/)?.[1] ?? "";
 
-  /* This component is mounted with ssr:false, so the browser-only stores can be
-     read straight into the initial state — no effect, no hydration mismatch. */
-  const [draft, setDraft] = useState<CanonicalInvoiceDraft | null>(() =>
-    invoiceId ? loadDraft(invoiceId) : null,
-  );
+  /* Mounted with ssr:false, so the browser-only stores can be read straight
+     into the initial state - no effect, no hydration mismatch. */
+  const [draft, setDraft] = useState<ReviewDraft | null>(() => (invoiceId ? loadDraft(invoiceId) : null));
   const [server] = useState(() => (invoiceId ? loadServerResult(invoiceId) : null));
   const [tab, setTab] = useState<TabKey>("invoice");
-  const [validatedAt, setValidatedAt] = useState<string | null>(null);
 
-  /* The PDF is a Blob in IndexedDB, so unlike the draft it cannot be read
-     synchronously. The object URL is created here and revoked on unmount. */
-  const [pdf, setPdf] = useState<PdfState>(() =>
-    invoiceId ? { status: "loading" } : { status: "missing" },
-  );
+  /** Fingerprint of the invoice as booked; null while it has never been booked. */
+  const [bookedFingerprint, setBookedFingerprint] = useState<string | null>(null);
+  const [booking, setBooking] = useState(false);
 
+  const [settings, setSettings] = useState<OrganizationSettings>(FALLBACK_SETTINGS);
+  const [chosenFormat, setChosenFormat] = useState<string | null>(null);
+  const format = chosenFormat ?? defaultRulesetOf(settings).id;
+
+  const [violations, setViolations] = useState<RuleViolation[]>([]);
+  const [checking, setChecking] = useState(false);
+  const [checkFailed, setCheckFailed] = useState(false);
+  const [downloading, setDownloading] = useState(false);
+
+  const [pdf, setPdf] = useState<PdfState>(() => (invoiceId ? { status: "loading" } : { status: "missing" }));
+
+  /* The PDF is a Blob in IndexedDB, or on the server once booked. */
   useEffect(() => {
     if (!invoiceId) return;
 
@@ -65,9 +109,6 @@ export default function ReviewClient() {
           return;
         }
 
-        // A booked invoice keeps its document on the server, so a missing local
-        // copy is not the end of the story - this is what makes an invoice
-        // opened from the list work in a fresh browser.
         const fromServer = await documentBlobUrl(invoiceId);
         if (cancelled) return;
 
@@ -88,93 +129,136 @@ export default function ReviewClient() {
     };
   }, [invoiceId]);
 
-  /* Nothing in this session's storage means the invoice was booked earlier, or
-     in another browser. Load it back rather than reporting it missing. setState
-     happens in the promise callback, not synchronously in the effect body. */
+  /* Whether this invoice is booked, and the booked version when this browser
+     has no draft of its own - which is what makes an invoice opened from the
+     list work in a fresh browser. */
   useEffect(() => {
-    if (draft !== null || !invoiceId) return;
+    if (!invoiceId || !isApiConfigured) return;
 
     let cancelled = false;
 
     getInvoice(invoiceId)
       .then((stored) => {
-        if (!cancelled) {
-          setDraft(stored.canonicalInvoice as unknown as CanonicalInvoiceDraft);
-        }
+        if (cancelled) return;
+        const invoice = normalizeInvoice(stored.canonicalInvoice);
+        setBookedFingerprint(editableFingerprint(invoice));
+        setDraft(
+          (current) =>
+            current ?? {
+              id: invoiceId,
+              invoice,
+              source: {
+                fileName: stored.sourceFileName ?? "document.pdf",
+                byteSize: 0,
+                engine: stored.providerModel ?? "onbekend",
+                extractedAt: stored.bookedAt ?? "",
+              },
+            },
+        );
       })
       .catch(() => {
-        // Genuinely absent: the existing "not found" card is the right answer.
+        // Not booked yet, or not found: the local draft (or the "not found" card) stands.
       });
 
     return () => {
       cancelled = true;
     };
-  }, [draft, invoiceId]);
+  }, [invoiceId]);
 
-  const totals = useMemo(() => (draft ? calculate(draft) : null), [draft]);
+  useEffect(() => {
+    let cancelled = false;
+    getSettings()
+      .then((loaded) => {
+        if (!cancelled) setSettings(loaded);
+      })
+      .catch(() => {
+        // The fallback lists PEPPOL BIS 3.0, which is the system default anyway.
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
 
-  /* The API's XML and warnings are authoritative: they come from the same
-     deterministic server code that will produce the final document. The local
-     versions are only used when the extraction was mocked, or after the user
-     has edited fields the server has not seen. */
-  const localIssues = useMemo(() => (draft ? validate(draft) : []), [draft]);
+  const invoice = draft?.invoice ?? null;
+  const local = useMemo(() => (invoice ? localIssues(invoice) : []), [invoice]);
+  const totals = useMemo(() => (invoice ? totalsOf(invoice) : null), [invoice]);
+  const isRuleset = format !== CANONICAL_FORMAT;
 
-  const issues: ValidationIssue[] = useMemo(() => {
-    if (!server) return localIssues;
-    return server.warnings.map((warning) => ({
-      severity: warning.severity === "error" ? "error" : "warning",
-      code: warning.code,
-      path: warning.path,
-      message: warning.message,
-    }));
-  }, [server, localIssues]);
+  /* Ask the server what is still missing, shortly after the user stops typing.
+     A newer edit aborts the request in flight. */
+  useEffect(() => {
+    if (!invoice || !isApiConfigured || !isRuleset || local.length > 0) return;
 
-  const xml = useMemo(
-    () => server?.canonicalXml ?? (draft ? toCanonicalXml(draft) : ""),
-    [server, draft],
+    const controller = new AbortController();
+    const timer = window.setTimeout(() => {
+      setChecking(true);
+      checkInvoice(format, invoice, controller.signal)
+        .then((found) => {
+          setViolations(found);
+          setCheckFailed(false);
+        })
+        .catch(() => {
+          if (!controller.signal.aborted) setCheckFailed(true);
+        })
+        .finally(() => {
+          if (!controller.signal.aborted) setChecking(false);
+        });
+    }, CHECK_DELAY_MS);
+
+    return () => {
+      window.clearTimeout(timer);
+      controller.abort();
+    };
+  }, [invoice, format, isRuleset, local.length]);
+
+  const invalid = useMemo(
+    () => new Set([...(isRuleset ? violations.map((v) => v.path) : []), ...local.map((i) => i.path)]),
+    [violations, local, isRuleset],
   );
 
-  const errorCount = issues.filter((issue) => issue.severity === "error").length;
-  const warningCount = issues.length - errorCount;
+  const dirty = invoice !== null && bookedFingerprint !== editableFingerprint(invoice);
+  const booked = bookedFingerprint !== null;
 
-  const update = (patch: Partial<CanonicalInvoiceDraft>) =>
-    setDraft((current) => (current ? { ...current, ...patch } : current));
+  const update = (change: (current: CanonicalInvoice) => CanonicalInvoice) =>
+    setDraft((current) => (current ? { ...current, invoice: change(current.invoice) } : current));
 
-  const updateParty = (side: "supplier" | "customer", patch: Partial<CanonicalParty>) =>
-    setDraft((current) =>
-      current ? { ...current, [side]: { ...current[side], ...patch } } : current,
-    );
-
-  const updateLine = (id: string, patch: Partial<CanonicalLine>) =>
-    setDraft((current) =>
-      current
+  const editor = useMemo(
+    () =>
+      invoice
         ? {
-            ...current,
-            lines: current.lines.map((line) => (line.id === id ? { ...line, ...patch } : line)),
+            invoice,
+            set: (path: string, value: string | null) => update((current) => setAtPath(current, path, value)),
+            invalid,
+            readOnly,
           }
-        : current,
-    );
+        : null,
+    // update only closes over setDraft, which is stable.
+    [invoice, invalid, readOnly],
+  );
 
-  const addLine = () =>
-    setDraft((current) =>
-      current ? { ...current, lines: [...current.lines, emptyLine(current.lines.length + 1)] } : current,
-    );
-
-  const removeLine = (id: string) =>
-    setDraft((current) =>
-      current ? { ...current, lines: current.lines.filter((line) => line.id !== id) } : current,
-    );
+  const goTo = (path: string) => {
+    setTab("invoice");
+    window.setTimeout(() => {
+      const field = document.getElementById(path);
+      field?.scrollIntoView({ behavior: "smooth", block: "center" });
+      field?.focus();
+    }, 0);
+  };
 
   const onSave = () => {
     if (!draft) return;
     saveDraft(draft);
-    showToast("Concept opgeslagen.", "success");
+    showToast("Concept opgeslagen in deze browser.", "success");
   };
-
-  const [booking, setBooking] = useState(false);
 
   const onBook = async () => {
     if (!draft || booking) return;
+
+    if (local.length > 0) {
+      showToast("Corrigeer eerst de getallen die niet gelezen kunnen worden.", "danger");
+      goTo(local[0].path);
+      return;
+    }
 
     if (pdf.status !== "ready") {
       showToast("De PDF is niet beschikbaar; upload hem opnieuw voordat je boekt.", "danger");
@@ -184,13 +268,14 @@ export default function ReviewClient() {
     setBooking(true);
     try {
       const blob = await (await fetch(pdf.url)).blob();
-      await bookInvoice({
+      const stored = await bookInvoice({
         invoiceId,
-        canonicalInvoice: draft,
+        canonicalInvoice: draft.invoice,
         pdf: blob,
-        sourceFileName: draft.extraction.sourceFileName,
-        providerModel: draft.extraction.engine,
+        sourceFileName: draft.source.fileName,
+        providerModel: draft.source.engine,
       });
+      setBookedFingerprint(editableFingerprint(normalizeInvoice(stored.canonicalInvoice)));
       saveDraft(draft);
       showToast("Factuur geboekt en opgeslagen.", "success");
     } catch (cause) {
@@ -200,44 +285,34 @@ export default function ReviewClient() {
     }
   };
 
-  const onValidate = () => {
+  const onDownload = async () => {
     if (!draft) return;
-    setValidatedAt(new Date().toISOString());
 
-    if (errorCount > 0) {
-      setTab("warnings");
-      showToast(`${errorCount} fout(en) gevonden. Corrigeer deze eerst.`, "danger");
+    if (!isRuleset) {
+      const xml = toCanonicalXml(withCalculatedTotals(draft.invoice));
+      download(new Blob([xml], { type: "application/xml;charset=utf-8" }), `${draft.invoice.invoiceNumber || "factuur"}.xml`);
+      showToast("Canonieke XML gedownload.", "success");
       return;
     }
-    if (warningCount > 0) {
-      setTab("warnings");
-      showToast(`Geldig, met ${warningCount} waarschuwing(en).`, "warning");
-      return;
+
+    setDownloading(true);
+    try {
+      const result = await exportInvoice(invoiceId, format);
+      if (result.kind === "incomplete") {
+        setViolations(result.violations);
+        showToast("Het bestand is nog niet compleet. Vul eerst aan wat ontbreekt.", "warning");
+        return;
+      }
+      download(result.blob, result.fileName);
+      showToast(`${result.fileName} gedownload.`, "success");
+    } catch (cause) {
+      showToast(cause instanceof Error ? cause.message : "Exporteren is mislukt.", "danger");
+    } finally {
+      setDownloading(false);
     }
-    showToast("Factuur is geldig.", "success");
   };
 
-  const onDownload = () => {
-    if (!draft) return;
-    if (errorCount > 0) {
-      showToast("XML niet gedownload: corrigeer eerst de fouten.", "danger");
-      setTab("warnings");
-      return;
-    }
-
-    const blob = new Blob([xml], { type: "application/xml;charset=utf-8" });
-    const url = URL.createObjectURL(blob);
-    const anchor = document.createElement("a");
-    anchor.href = url;
-    anchor.download = `${draft.number || "factuur"}.xml`;
-    document.body.appendChild(anchor);
-    anchor.click();
-    document.body.removeChild(anchor);
-    URL.revokeObjectURL(url);
-    showToast("XML gedownload.", "success");
-  };
-
-  if (!draft) {
+  if (!draft || !invoice || !totals || !editor) {
     return (
       <>
         <div className="page-header">
@@ -268,57 +343,48 @@ export default function ReviewClient() {
     );
   }
 
-  const currency = draft.currency || "EUR";
+  const notices = server?.warnings ?? [];
+  const statusBadge = !booked ? (
+    <span className="badge badge--warning">Niet geboekt</span>
+  ) : dirty ? (
+    <span className="badge badge--warning">Gewijzigd sinds boeken</span>
+  ) : (
+    <span className="badge badge--success">Geboekt</span>
+  );
 
   return (
-    <>
+    <EditorContext.Provider value={editor}>
       <div className="page-header">
         <div>
           <h1>
-            <Icon name="fileText" /> {draft.number || "Concept zonder nummer"}
+            <Icon name="fileText" /> {invoice.invoiceNumber || "Concept zonder nummer"}
           </h1>
           <p className="page-header__subtitle">
-            {draft.extraction.sourceFileName} · {draft.extraction.engine} ·{" "}
-            {errorCount > 0 ? (
-              <span className="text-danger">{errorCount} fout(en)</span>
-            ) : (
-              <span>Geen fouten</span>
-            )}
+            {draft.source.fileName} · {draft.source.engine} · Te betalen{" "}
+            {formatMoney(totals.payable, invoice.currencyCode)}
           </p>
         </div>
-        <div className="page-header__actions">
-          <button type="button" className="btn btn--secondary" onClick={onSave}>
-            <Icon name="save" /> Opslaan
-          </button>
-          <button
-            type="button"
-            className="btn btn--secondary"
-            onClick={() => void onBook()}
-            disabled={booking}
-          >
-            <Icon name="save" /> {booking ? "Bezig…" : "Boeken"}
-          </button>
-          <button type="button" className="btn btn--secondary" onClick={onValidate}>
-            <Icon name="check" /> Valideren
-          </button>
-          <button type="button" className="btn btn--primary" onClick={onDownload}>
-            <Icon name="download" /> XML downloaden
-          </button>
-        </div>
+        {!readOnly && (
+          <div className="page-header__actions">
+            <button type="button" className="btn btn--secondary" onClick={onSave}>
+              <Icon name="save" /> Opslaan
+            </button>
+            <button type="button" className="btn btn--primary" onClick={() => void onBook()} disabled={booking}>
+              <Icon name="check" /> {booking ? "Bezig…" : booked && !dirty ? "Opnieuw boeken" : "Boeken"}
+            </button>
+          </div>
+        )}
       </div>
 
       <div className="review-split">
-        {/* ---------- Left: PDF ---------- */}
         <div className="pdf-pane">
           <div className="card">
             <div className="card__header">
               <h3>Bron-PDF</h3>
-              <span className="badge badge--neutral">{draft.extraction.sourceFileName}</span>
+              <span className="badge badge--neutral">{draft.source.fileName}</span>
             </div>
             <div className="card__body card__body--flush">
-              {pdf.status === "ready" && (
-                <iframe className="pdf-frame" src={pdf.url} title="Bron-PDF" />
-              )}
+              {pdf.status === "ready" && <iframe className="pdf-frame" src={pdf.url} title="Bron-PDF" />}
               {pdf.status === "loading" && (
                 <div className="pdf-empty">
                   <span className="text-soft text-sm">Laden&hellip;</span>
@@ -341,278 +407,60 @@ export default function ReviewClient() {
           </div>
         </div>
 
-        {/* ---------- Right: canonical invoice ---------- */}
-        <div>
+        <div className="stack">
+          <ExportPanel
+            rulesets={settings.rulesets}
+            format={format}
+            onFormat={setChosenFormat}
+            localIssues={local}
+            violations={isRuleset ? violations : []}
+            checking={checking}
+            checkFailed={checkFailed}
+            exportable={booked && !dirty}
+            apiConfigured={isApiConfigured}
+            downloading={downloading}
+            onDownload={() => void onDownload()}
+            onGoTo={goTo}
+          />
+
           <div className="tabs">
-            <button
-              type="button"
-              className={`tab ${tab === "invoice" ? "tab--active" : ""}`.trim()}
-              onClick={() => setTab("invoice")}
-            >
+            <button type="button" className={`tab ${tab === "invoice" ? "tab--active" : ""}`.trim()} onClick={() => setTab("invoice")}>
               Factuur
             </button>
-            <button
-              type="button"
-              className={`tab ${tab === "xml" ? "tab--active" : ""}`.trim()}
-              onClick={() => setTab("xml")}
-            >
+            <button type="button" className={`tab ${tab === "xml" ? "tab--active" : ""}`.trim()} onClick={() => setTab("xml")}>
               Canonieke XML
             </button>
-            <button
-              type="button"
-              className={`tab ${tab === "warnings" ? "tab--active" : ""}`.trim()}
-              onClick={() => setTab("warnings")}
-            >
-              Waarschuwingen{issues.length > 0 ? ` (${issues.length})` : ""}
+            <button type="button" className={`tab ${tab === "notices" ? "tab--active" : ""}`.trim()} onClick={() => setTab("notices")}>
+              Meldingen{notices.length > 0 ? ` (${notices.length})` : ""}
             </button>
           </div>
 
           {tab === "invoice" && (
             <div className="stack form">
-              <div className="card">
-                <div className="card__header">
-                  <h3>Factuurgegevens</h3>
-                  <span className={`badge ${draft.validated ? "badge--success" : "badge--warning"}`}>
-                    {draft.validated ? "Gevalideerd" : "Concept"}
-                  </span>
-                </div>
-                <div className="card__body">
-                  <div className="form__row">
-                    <div className="form__group">
-                      <label htmlFor="number">Factuurnummer</label>
-                      <input
-                        id="number"
-                        type="text"
-                        value={draft.number}
-                        onChange={(event) => update({ number: event.target.value })}
-                      />
-                    </div>
-                    <div className="form__group">
-                      <label htmlFor="currency">Valuta</label>
-                      <select
-                        id="currency"
-                        value={draft.currency}
-                        onChange={(event) => update({ currency: event.target.value })}
-                      >
-                        <option value="EUR">EUR</option>
-                        <option value="USD">USD</option>
-                        <option value="GBP">GBP</option>
-                      </select>
-                    </div>
-                  </div>
-                  <div className="form__row">
-                    <div className="form__group">
-                      <label htmlFor="issueDate">Factuurdatum</label>
-                      <input
-                        id="issueDate"
-                        type="date"
-                        value={draft.issueDate}
-                        onChange={(event) => update({ issueDate: event.target.value })}
-                      />
-                    </div>
-                    <div className="form__group">
-                      <label htmlFor="dueDate">Vervaldatum</label>
-                      <input
-                        id="dueDate"
-                        type="date"
-                        value={draft.dueDate}
-                        onChange={(event) => update({ dueDate: event.target.value })}
-                      />
-                    </div>
-                  </div>
-                  <div className="form__group">
-                    <label htmlFor="note">Opmerking</label>
-                    <textarea
-                      id="note"
-                      value={draft.note}
-                      onChange={(event) => update({ note: event.target.value })}
-                    />
-                  </div>
-                </div>
-              </div>
-
-              {(["supplier", "customer"] as const).map((side) => (
-                <div className="card" key={side}>
-                  <div className="card__header">
-                    <h3>{side === "supplier" ? "Leverancier" : "Afnemer"}</h3>
-                  </div>
-                  <div className="card__body">
-                    <div className="form__row">
-                      <div className="form__group">
-                        <label htmlFor={`${side}-name`}>Naam</label>
-                        <input
-                          id={`${side}-name`}
-                          type="text"
-                          value={draft[side].name}
-                          onChange={(event) => updateParty(side, { name: event.target.value })}
-                        />
-                      </div>
-                      <div className="form__group">
-                        <label htmlFor={`${side}-vat`}>Btw-nummer</label>
-                        <input
-                          id={`${side}-vat`}
-                          type="text"
-                          value={draft[side].vatId}
-                          onChange={(event) => updateParty(side, { vatId: event.target.value })}
-                        />
-                      </div>
-                    </div>
-                    <div className="form__row">
-                      <div className="form__group">
-                        <label htmlFor={`${side}-street`}>Straat</label>
-                        <input
-                          id={`${side}-street`}
-                          type="text"
-                          value={draft[side].street}
-                          onChange={(event) => updateParty(side, { street: event.target.value })}
-                        />
-                      </div>
-                      <div className="form__group">
-                        <label htmlFor={`${side}-zip`}>Postcode</label>
-                        <input
-                          id={`${side}-zip`}
-                          type="text"
-                          value={draft[side].postalCode}
-                          onChange={(event) => updateParty(side, { postalCode: event.target.value })}
-                        />
-                      </div>
-                      <div className="form__group">
-                        <label htmlFor={`${side}-city`}>Plaats</label>
-                        <input
-                          id={`${side}-city`}
-                          type="text"
-                          value={draft[side].city}
-                          onChange={(event) => updateParty(side, { city: event.target.value })}
-                        />
-                      </div>
-                    </div>
-                  </div>
-                </div>
-              ))}
-
-              <div className="card">
-                <div className="card__header">
-                  <h3>Factuurregels</h3>
-                  <button type="button" className="btn btn--secondary btn--sm" onClick={addLine}>
-                    <Icon name="filePlus" /> Regel toevoegen
-                  </button>
-                </div>
-                <div className="card__body card__body--flush">
-                  <div className="table-wrap">
-                    <table className="table">
-                      <thead>
-                        <tr>
-                          <th>Omschrijving</th>
-                          <th>Aantal</th>
-                          <th>Prijs</th>
-                          <th>Btw %</th>
-                          <th className="cell-amount">Netto</th>
-                          <th />
-                        </tr>
-                      </thead>
-                      <tbody>
-                        {draft.lines.map((line) => (
-                          <tr key={line.id}>
-                            <td>
-                              <input
-                                className="cell-input"
-                                type="text"
-                                value={line.description}
-                                aria-label="Omschrijving"
-                                onChange={(event) =>
-                                  updateLine(line.id, { description: event.target.value })
-                                }
-                              />
-                            </td>
-                            <td>
-                              <input
-                                className="cell-input cell-input--amount"
-                                type="text"
-                                inputMode="decimal"
-                                value={line.quantity}
-                                aria-label="Aantal"
-                                onChange={(event) =>
-                                  updateLine(line.id, { quantity: event.target.value })
-                                }
-                              />
-                            </td>
-                            <td>
-                              <input
-                                className="cell-input cell-input--amount"
-                                type="text"
-                                inputMode="decimal"
-                                value={line.unitPrice}
-                                aria-label="Prijs"
-                                onChange={(event) =>
-                                  updateLine(line.id, { unitPrice: event.target.value })
-                                }
-                              />
-                            </td>
-                            <td>
-                              <input
-                                className="cell-input cell-input--amount"
-                                type="text"
-                                inputMode="decimal"
-                                value={line.vatRate}
-                                aria-label="Btw-percentage"
-                                onChange={(event) =>
-                                  updateLine(line.id, { vatRate: event.target.value })
-                                }
-                              />
-                            </td>
-                            <td className="cell-amount">
-                              {formatScaled(totals?.lineNetUnits[line.id] ?? 0, SCALE_AMOUNT)}
-                            </td>
-                            <td>
-                              <button
-                                type="button"
-                                className="btn btn--ghost btn--icon"
-                                onClick={() => removeLine(line.id)}
-                                aria-label="Regel verwijderen"
-                              >
-                                <Icon name="trash" />
-                              </button>
-                            </td>
-                          </tr>
-                        ))}
-                      </tbody>
-                    </table>
-                  </div>
-                </div>
-              </div>
-
-              <div className="card">
-                <div className="card__header">
-                  <h3>Totalen</h3>
-                </div>
-                <div className="card__body">
-                  <div className="totals">
-                    <div className="totals__row">
-                      <span>Totaal exclusief btw</span>
-                      <span className="totals__value">
-                        {formatAmount(totals?.taxExclusiveUnits ?? 0, currency)}
-                      </span>
-                    </div>
-                    {totals?.vatBreakdown.map((bucket) => (
-                      <div className="totals__row" key={bucket.rate}>
-                        <span>
-                          Btw {bucket.rate}% over{" "}
-                          {formatAmount(bucket.taxableUnits, currency)}
-                        </span>
-                        <span className="totals__value">
-                          {formatAmount(bucket.taxUnits, currency)}
-                        </span>
-                      </div>
-                    ))}
-                    <div className="totals__row totals__row--grand">
-                      <span>Totaal inclusief btw</span>
-                      <span className="totals__value">
-                        {formatAmount(totals?.taxInclusiveUnits ?? 0, currency)}
-                      </span>
-                    </div>
-                  </div>
-                </div>
-              </div>
+              <InvoiceDetailsCard creditNote={invoice.typeCode === "381"} status={statusBadge} />
+              <PartyCard side="seller" title="Verkoper (uw organisatie)" />
+              <PartyCard side="buyer" title="Afnemer" />
+              <LinesCard
+                lines={invoice.lines}
+                nets={totals.lineNet}
+                readOnly={readOnly}
+                onAdd={() => update((current) => ({ ...current, lines: [...current.lines, emptyLine()] }))}
+                onRemove={(index) =>
+                  update((current) => ({ ...current, lines: current.lines.filter((_, i) => i !== index) }))
+                }
+              />
+              <PaymentCard />
+              <TotalsCard
+                totals={totals}
+                currency={invoice.currencyCode}
+                documentAdjustments={invoice.allowancesAndCharges}
+                reasonFor={(category, rate) => exemptionReasonOf(invoice, category, rate)}
+                onReason={(category, rate, reason) =>
+                  update((current) => setExemptionReason(current, category, rate, reason))
+                }
+                invalid={invalid}
+                readOnly={readOnly}
+              />
             </div>
           )}
 
@@ -623,42 +471,43 @@ export default function ReviewClient() {
                 <span className="badge badge--neutral">Deterministisch gegenereerd</span>
               </div>
               <div className="card__body card__body--flush">
-                <pre className="xml-view">{xml}</pre>
+                <pre className="xml-view">{toCanonicalXml(withCalculatedTotals(invoice))}</pre>
               </div>
             </div>
           )}
 
-          {tab === "warnings" && (
+          {tab === "notices" && (
             <div className="card">
               <div className="card__header">
-                <h3>Validatie</h3>
-                <span className="badge badge--neutral">
-                  {errorCount} fout(en) · {warningCount} waarschuwing(en)
-                </span>
+                <h3>Meldingen bij het uitlezen</h3>
               </div>
               <div className="card__body card__body--flush">
-                {issues.length === 0 ? (
+                {notices.length === 0 ? (
                   <div className="card__body">
                     <div className="alert alert--success">
                       <Icon name="check" />
-                      <div>Geen problemen gevonden.</div>
+                      <div>Geen meldingen.</div>
                     </div>
                   </div>
                 ) : (
                   <div className="issue-list">
-                    {issues.map((issue) => (
-                      <div className="issue" key={`${issue.code}-${issue.path}`}>
+                    {notices.map((notice) => (
+                      <div className="issue" key={`${notice.code}-${notice.path}`}>
                         <span
                           className={`badge ${
-                            issue.severity === "error" ? "badge--danger" : "badge--warning"
+                            notice.severity === "error"
+                              ? "badge--danger"
+                              : notice.severity === "info"
+                                ? "badge--info"
+                                : "badge--warning"
                           }`}
                         >
-                          {issue.severity === "error" ? "Fout" : "Let op"}
+                          {notice.severity === "error" ? "Fout" : notice.severity === "info" ? "Ingevuld" : "Let op"}
                         </span>
                         <div className="issue__body">
-                          <div className="issue__message">{issue.message}</div>
+                          <div className="issue__message">{notice.message}</div>
                           <div className="issue__path">
-                            {issue.code} · {issue.path}
+                            {notice.code} · {notice.path}
                           </div>
                         </div>
                       </div>
@@ -668,14 +517,8 @@ export default function ReviewClient() {
               </div>
             </div>
           )}
-
-          {validatedAt && (
-            <p className="text-muted text-xs" style={{ marginTop: "var(--space-3)" }}>
-              Laatst gevalideerd: {new Date(validatedAt).toLocaleTimeString("nl-NL")}
-            </p>
-          )}
         </div>
       </div>
-    </>
+    </EditorContext.Provider>
   );
 }

@@ -39,6 +39,7 @@ internal sealed class DynamoDbInvoiceRepository(
                     ["invoiceId"] = new(invoice.InvoiceId),
                     ["organizationId"] = new(invoice.OrganizationId),
                     ["status"] = new(invoice.Status.ToString()),
+                    ["direction"] = new(invoice.Direction.ToString()),
                     ["invoice"] = new(JsonSerializer.Serialize(invoice.Invoice, Json)),
                     ["documentKey"] = Nullable(invoice.DocumentKey),
                     ["sourceFileName"] = Nullable(invoice.SourceFileName),
@@ -104,6 +105,11 @@ internal sealed class DynamoDbInvoiceRepository(
         Status = Enum.TryParse<InvoiceStatus>(item["status"].S, out var status)
             ? status
             : InvoiceStatus.Draft,
+        // Records written before the field existed are all outgoing.
+        Direction = item.TryGetValue("direction", out var direction)
+            && Enum.TryParse<InvoiceDirection>(direction.S, out var parsed)
+                ? parsed
+                : InvoiceDirection.Outgoing,
         Invoice = JsonSerializer.Deserialize<CanonicalInvoiceDraft>(item["invoice"].S, Json)
             ?? new CanonicalInvoiceDraft(),
         DocumentKey = item["documentKey"].S,

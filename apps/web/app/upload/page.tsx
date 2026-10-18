@@ -7,7 +7,7 @@ import { Icon } from "../../components/Icon";
 import { useToast } from "../../components/Toast";
 import { extractInvoice, isApiConfigured, toDraft } from "../../lib/api";
 import { ApiError } from "../../lib/api";
-import { mockDraftFromFile } from "../../lib/canonical";
+import { mockDraft } from "../../lib/canonical";
 import { checkPdf, formatBytes, MAX_PDF_BYTES } from "../../lib/pdf";
 import { putPdf } from "../../lib/pdfStore";
 import { newInvoiceId, saveDraft, saveServerResult } from "../../lib/store";
@@ -105,7 +105,7 @@ export default function UploadPage() {
         }
 
         await putPdf(invoiceId, file);
-        saveDraft(mockDraftFromFile(invoiceId, file.name, file.size));
+        saveDraft(mockDraft(invoiceId, file.name, file.size));
         showToast("Concept aangemaakt (mockdata). Controleer de gegevens.", "success");
       }
 

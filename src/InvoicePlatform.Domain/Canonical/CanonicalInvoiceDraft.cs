@@ -37,6 +37,9 @@ public sealed record CanonicalInvoiceDraft
 
     public string? BuyerReference { get; init; }
 
+    /// <summary>BT-25: the invoice a credit note corrects.</summary>
+    public string? PrecedingInvoiceReference { get; init; }
+
     public CanonicalPaymentDetails? Payment { get; init; }
 
     public IReadOnlyList<CanonicalInvoiceLine> Lines { get; init; } = [];
@@ -58,6 +61,10 @@ public sealed record CanonicalParty
 {
     public string? Name { get; init; }
     public string? LegalRegistrationId { get; init; }
+
+    /// <summary>BT-30-1 / BT-47-1: ISO 6523 ICD of the registration, e.g. "0106" KvK, "0190" OIN.</summary>
+    public string? LegalRegistrationScheme { get; init; }
+
     public string? VatIdentifier { get; init; }
     public string? TaxRegistrationId { get; init; }
     public string? ElectronicAddress { get; init; }

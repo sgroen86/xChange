@@ -1,4 +1,6 @@
 using InvoicePlatform.Application.Identity;
+using InvoicePlatform.Application.Relations;
+using InvoicePlatform.Domain.Calculation;
 using InvoicePlatform.Domain.Canonical;
 using InvoicePlatform.Domain.Invoices;
 
@@ -14,7 +16,8 @@ namespace InvoicePlatform.Application.Invoices;
 public sealed class BookInvoiceService(
     IInvoiceRepository invoices,
     IDocumentStore documents,
-    IClock clock)
+    IClock clock,
+    RelationService relations)
 {
     /// <param name="invoiceId">
     /// Supply an existing id to re-book a correction; omit it for a new invoice.
@@ -41,7 +44,10 @@ public sealed class BookInvoiceService(
             InvoiceId = id,
             OrganizationId = organizationId,
             Status = InvoiceStatus.Booked,
-            Invoice = draft,
+            // The record keeps the calculated figures, the same ones an export
+            // writes, so the list, the review screen and the file agree. The
+            // printed figures were compared at extraction (CALC-* warnings).
+            Invoice = InvoiceTotalsCalculator.Apply(draft),
             DocumentKey = documentKey,
             SourceFileName = sourceFileName,
             SourceByteSize = pdf.Length,
@@ -53,6 +59,12 @@ public sealed class BookInvoiceService(
         };
 
         await invoices.SaveAsync(stored, cancellationToken).ConfigureAwait(false);
+
+        // After the invoice is saved: the relation is only worth keeping for an
+        // invoice that was kept, and if this step fails the booking still
+        // stands - booking again is harmless.
+        await relations.RememberBuyerAsync(organizationId, stored.Invoice.Buyer, cancellationToken).ConfigureAwait(false);
+
         return stored;
     }
 

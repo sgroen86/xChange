@@ -66,6 +66,12 @@ jobs:
         working-directory: apps/web
         run: npm run lint
 
+      # Exact decimal arithmetic and the totals port, on the same examples as
+      # the server's calculator.
+      - name: Test
+        working-directory: apps/web
+        run: npm test
+
       - name: Build static export
         working-directory: apps/web
         env:

@@ -7,7 +7,7 @@
  */
 
 import type { ApiProviderExecution, ApiValidationWarning } from "./api";
-import type { CanonicalInvoiceDraft } from "./canonical";
+import { isReviewDraft, type ReviewDraft } from "./canonical";
 
 const DRAFT_KEY = "xchange.draft.";
 const SERVER_KEY = "xchange.server.";
@@ -41,7 +41,7 @@ export function loadServerResult(invoiceId: string): ServerExtraction | null {
   }
 }
 
-export function saveDraft(draft: CanonicalInvoiceDraft): void {
+export function saveDraft(draft: ReviewDraft): void {
   try {
     sessionStorage.setItem(DRAFT_KEY + draft.id, JSON.stringify(draft));
   } catch {
@@ -49,10 +49,15 @@ export function saveDraft(draft: CanonicalInvoiceDraft): void {
   }
 }
 
-export function loadDraft(invoiceId: string): CanonicalInvoiceDraft | null {
+/**
+ * The draft for an invoice, or null. A draft saved by an earlier version of
+ * the review screen has a different shape and is ignored rather than loaded.
+ */
+export function loadDraft(invoiceId: string): ReviewDraft | null {
   try {
     const raw = sessionStorage.getItem(DRAFT_KEY + invoiceId);
-    return raw ? (JSON.parse(raw) as CanonicalInvoiceDraft) : null;
+    const parsed: unknown = raw ? JSON.parse(raw) : null;
+    return isReviewDraft(parsed) ? parsed : null;
   } catch {
     return null;
   }

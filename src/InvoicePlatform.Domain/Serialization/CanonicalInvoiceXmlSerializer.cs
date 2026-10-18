@@ -48,6 +48,7 @@ public sealed class CanonicalInvoiceXmlSerializer
             WriteOptional(writer, "Note", draft.Note);
             WriteOptional(writer, "PurchaseOrderReference", draft.PurchaseOrderReference);
             WriteOptional(writer, "BuyerReference", draft.BuyerReference);
+            WriteOptional(writer, "PrecedingInvoiceReference", draft.PrecedingInvoiceReference);
 
             WriteParty(writer, "Seller", draft.Seller);
             WriteParty(writer, "Buyer", draft.Buyer);
@@ -73,21 +74,10 @@ public sealed class CanonicalInvoiceXmlSerializer
 
         writer.WriteStartElement(elementName);
         WriteOptional(writer, "Name", party.Name);
-        WriteOptional(writer, "LegalRegistrationId", party.LegalRegistrationId);
+        WriteWithScheme(writer, "LegalRegistrationId", party.LegalRegistrationId, party.LegalRegistrationScheme);
         WriteOptional(writer, "VatIdentifier", party.VatIdentifier);
         WriteOptional(writer, "TaxRegistrationId", party.TaxRegistrationId);
-
-        if (!string.IsNullOrWhiteSpace(party.ElectronicAddress))
-        {
-            writer.WriteStartElement("ElectronicAddress");
-            if (!string.IsNullOrWhiteSpace(party.ElectronicAddressScheme))
-            {
-                writer.WriteAttributeString("schemeId", party.ElectronicAddressScheme);
-            }
-
-            writer.WriteString(party.ElectronicAddress);
-            writer.WriteEndElement();
-        }
+        WriteWithScheme(writer, "ElectronicAddress", party.ElectronicAddress, party.ElectronicAddressScheme);
 
         if (party.ContactName is not null || party.ContactEmail is not null || party.ContactPhone is not null)
         {
@@ -110,6 +100,23 @@ public sealed class CanonicalInvoiceXmlSerializer
             writer.WriteEndElement();
         }
 
+        writer.WriteEndElement();
+    }
+
+    private static void WriteWithScheme(XmlWriter writer, string name, string? value, string? scheme)
+    {
+        if (string.IsNullOrWhiteSpace(value))
+        {
+            return;
+        }
+
+        writer.WriteStartElement(name);
+        if (!string.IsNullOrWhiteSpace(scheme))
+        {
+            writer.WriteAttributeString("schemeId", scheme);
+        }
+
+        writer.WriteString(value);
         writer.WriteEndElement();
     }
 

@@ -1,6 +1,7 @@
 using Amazon.DynamoDBv2;
 using Amazon.DynamoDBv2.Model;
 using InvoicePlatform.Application.Identity;
+using InvoicePlatform.Application.Organizations;
 using InvoicePlatform.Domain.Identity;
 using Microsoft.Extensions.Options;
 
@@ -23,6 +24,7 @@ namespace InvoicePlatform.Infrastructure.Identity;
 ///   ORG#&lt;org&gt;      / USER#&lt;id&gt;        the same account, found by id
 ///   SESSION#&lt;tok&gt;  / SESSION          expires by TTL
 ///   ATTEMPT#&lt;ip&gt;   / ATTEMPT          expires by TTL
+///   ORG#&lt;org&gt;      / SETTINGS         the organisation's settings
 ///
 /// The account is written twice on purpose: login looks up by email, and every
 /// authenticated request looks up by organization and id. Storing both avoids a
@@ -31,7 +33,7 @@ namespace InvoicePlatform.Infrastructure.Identity;
 internal sealed class DynamoDbIdentityStore(
     IAmazonDynamoDB dynamo,
     IOptions<IdentityOptions> options)
-    : IUserStore, ISessionStore, ILoginAttemptStore
+    : IUserStore, ISessionStore, ILoginAttemptStore, IOrganizationSettingsStore
 {
     private const string Pk = "pk";
     private const string Sk = "sk";
@@ -256,7 +258,54 @@ internal sealed class DynamoDbIdentityStore(
             },
             cancellationToken);
 
+    // ── Organisation settings ────────────────────────────────────────────────
+
+    /// <summary>
+    /// In the organisation's own partition, next to its users. The first-run
+    /// setup check only looks for USER# partitions, so this item cannot make
+    /// setup think an account exists. Explicit, because the login-attempt store
+    /// on this class has a GetAsync with the same parameter types.
+    /// </summary>
+    async Task<OrganizationSettings?> IOrganizationSettingsStore.GetAsync(string organizationId, CancellationToken cancellationToken)
+    {
+        var item = await GetItemAsync($"ORG#{organizationId}", "SETTINGS", cancellationToken).ConfigureAwait(false);
+        if (item is null)
+        {
+            return null;
+        }
+
+        return new OrganizationSettings
+        {
+            OrganizationId = organizationId,
+            DefaultRulesetId = OptionalString(item, "defaultRulesetId"),
+            EndpointId = OptionalString(item, "endpointId"),
+            EndpointScheme = OptionalString(item, "endpointScheme"),
+        };
+    }
+
+    public Task SaveAsync(OrganizationSettings settings, CancellationToken cancellationToken = default)
+        => dynamo.PutItemAsync(
+            new PutItemRequest
+            {
+                TableName = _table,
+                Item = new Dictionary<string, AttributeValue>
+                {
+                    [Pk] = new($"ORG#{settings.OrganizationId}"),
+                    [Sk] = new("SETTINGS"),
+                    ["defaultRulesetId"] = NullableString(settings.DefaultRulesetId),
+                    ["endpointId"] = NullableString(settings.EndpointId),
+                    ["endpointScheme"] = NullableString(settings.EndpointScheme),
+                },
+            },
+            cancellationToken);
+
     // ── Plumbing ─────────────────────────────────────────────────────────────
+
+    private static AttributeValue NullableString(string? value)
+        => value is null ? new AttributeValue { NULL = true } : new AttributeValue(value);
+
+    private static string? OptionalString(Dictionary<string, AttributeValue> item, string name)
+        => item.TryGetValue(name, out var value) ? value.S : null;
 
     private static Dictionary<string, AttributeValue> Key(string pk, string sk)
         => new() { [Pk] = new(pk), [Sk] = new(sk) };

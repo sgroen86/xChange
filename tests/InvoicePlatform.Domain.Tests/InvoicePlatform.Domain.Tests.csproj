@@ -19,6 +19,10 @@
   </ItemGroup>
 
   <ItemGroup>
+    <None Update="EInvoicing\Ubl\Expected\*.xml" CopyToOutputDirectory="PreserveNewest" />
+  </ItemGroup>
+
+  <ItemGroup>
     <ProjectReference Include="..\..\src\InvoicePlatform.Domain\InvoicePlatform.Domain.csproj" />
   </ItemGroup>
 

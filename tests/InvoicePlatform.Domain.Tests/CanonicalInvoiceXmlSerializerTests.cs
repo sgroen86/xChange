@@ -20,6 +20,19 @@ public class CanonicalInvoiceXmlSerializerTests
             ?.Value;
 
     [Fact]
+    public void Legal_registration_scheme_and_preceding_invoice_are_written()
+    {
+        var xml = _serializer.Serialize(new CanonicalInvoiceDraft
+        {
+            PrecedingInvoiceReference = "F-1",
+            Seller = new CanonicalParty { LegalRegistrationId = "12345678", LegalRegistrationScheme = "0106" },
+        });
+
+        Assert.Contains("<PrecedingInvoiceReference>F-1</PrecedingInvoiceReference>", xml, StringComparison.Ordinal);
+        Assert.Contains("<LegalRegistrationId schemeId=\"0106\">12345678</LegalRegistrationId>", xml, StringComparison.Ordinal);
+    }
+
+    [Fact]
     public void Xml_values_come_from_the_draft()
     {
         var draft = new CanonicalInvoiceDraft

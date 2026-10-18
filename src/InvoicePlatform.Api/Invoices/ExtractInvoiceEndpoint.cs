@@ -111,7 +111,9 @@ public static class ExtractInvoiceEndpoint
 
         try
         {
-            var result = await service.ExtractAsync(bytes, cancellationToken).ConfigureAwait(false);
+            // The organisation comes from the session, never from the request.
+            var user = request.HttpContext.GetAuthenticatedUser()!;
+            var result = await service.ExtractAsync(user.OrganizationId, bytes, cancellationToken).ConfigureAwait(false);
             return Results.Ok(ToResponse(result));
         }
         catch (InvoiceInterpretationException exception)
@@ -150,7 +152,12 @@ public static class ExtractInvoiceEndpoint
         Code = warning.Code,
         Path = warning.Path,
         Message = warning.Message,
-        Severity = warning.Severity == ValidationSeverity.Error ? "error" : "warning",
+        Severity = warning.Severity switch
+        {
+            ValidationSeverity.Error => "error",
+            ValidationSeverity.Info => "info",
+            _ => "warning",
+        },
         ExtractedValue = warning.ExtractedValue,
         CalculatedValue = warning.CalculatedValue,
     };

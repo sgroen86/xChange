@@ -1,6 +1,9 @@
 using Amazon.Lambda.AspNetCoreServer.Hosting;
 using InvoicePlatform.Api.Identity;
 using InvoicePlatform.Api.Invoices;
+using InvoicePlatform.Api.Organizations;
+using InvoicePlatform.Api.Relations;
+using InvoicePlatform.Contracts.Json;
 using InvoicePlatform.Infrastructure;
 using Microsoft.AspNetCore.HttpOverrides;
 
@@ -16,6 +19,10 @@ builder.Services.AddAWSLambdaHosting(LambdaEventSource.HttpApi);
 
 builder.Services.AddHealthChecks();
 builder.Services.AddProblemDetails();
+
+// Amounts leave as strings and arrive as strings (CLAUDE.md, hard rule 3).
+builder.Services.ConfigureHttpJsonOptions(options =>
+    options.SerializerOptions.Converters.Add(new DecimalStringJsonConverter()));
 
 // Hard ceiling on the multipart body, independent of the per-file check in the
 // endpoint: this one rejects an oversized upload before it is buffered.
@@ -84,6 +91,9 @@ var api = app.MapGroup("/api/v1");
 api.MapAuthEndpoints();
 api.MapInvoiceEndpoints();
 api.MapStoredInvoiceEndpoints();
+api.MapExportEndpoints();
+api.MapOrganizationEndpoints();
+api.MapRelationEndpoints();
 
 app.Run();
 

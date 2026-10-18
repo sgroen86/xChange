@@ -1,11 +1,16 @@
 using InvoicePlatform.Application.Interpretation;
 using InvoicePlatform.Application.Invoices;
+using InvoicePlatform.Application.Organizations;
+using InvoicePlatform.Application.Relations;
+using InvoicePlatform.Domain.EInvoicing;
+using InvoicePlatform.Domain.EInvoicing.Ubl;
 using InvoicePlatform.Domain.Serialization;
 using InvoicePlatform.Domain.Validation;
 using Amazon.DynamoDBv2;
 using Amazon.S3;
 using InvoicePlatform.Application.Identity;
 using InvoicePlatform.Infrastructure.Invoices;
+using InvoicePlatform.Infrastructure.Relations;
 using InvoicePlatform.Infrastructure.Anthropic;
 using InvoicePlatform.Infrastructure.Identity;
 using Microsoft.Extensions.Configuration;
@@ -36,9 +41,12 @@ public static class DependencyInjection
         // Deterministic, dependency-free domain services.
         services.AddSingleton<InvoiceCalculationValidator>();
         services.AddSingleton<CanonicalInvoiceXmlSerializer>();
+        services.AddSingleton<InvoiceRulesetRegistry>();
+        services.AddSingleton<UblInvoiceWriter>();
 
         services.AddSingleton<IAnthropicApiKeyProvider, AnthropicApiKeyProvider>();
         services.AddSingleton<IInvoiceInterpreter, AnthropicInvoiceInterpreter>();
+        services.AddScoped<InvoiceEnrichment>();
         services.AddScoped<ExtractInvoiceService>();
 
         return services;
@@ -65,15 +73,17 @@ public static class DependencyInjection
         services.AddSingleton<IUserStore>(sp => sp.GetRequiredService<DynamoDbIdentityStore>());
         services.AddSingleton<ISessionStore>(sp => sp.GetRequiredService<DynamoDbIdentityStore>());
         services.AddSingleton<ILoginAttemptStore>(sp => sp.GetRequiredService<DynamoDbIdentityStore>());
+        services.AddSingleton<IOrganizationSettingsStore>(sp => sp.GetRequiredService<DynamoDbIdentityStore>());
 
         services.AddSingleton<IPasswordHasher, BcryptPasswordHasher>();
         services.AddSingleton<IClock, SystemClock>();
         services.AddScoped<AuthService>();
+        services.AddScoped<OrganizationSettingsService>();
 
         return services;
     }
 
-    /// <summary>Invoice persistence: records in DynamoDB, documents in S3.</summary>
+    /// <summary>Invoice persistence: records and relations in DynamoDB, documents in S3.</summary>
     public static IServiceCollection AddInvoiceStorage(
         this IServiceCollection services,
         IConfiguration configuration)
@@ -85,7 +95,10 @@ public static class DependencyInjection
         services.AddSingleton<IAmazonS3>(_ => new AmazonS3Client());
         services.AddSingleton<IInvoiceRepository, DynamoDbInvoiceRepository>();
         services.AddSingleton<IDocumentStore, S3DocumentStore>();
+        services.AddSingleton<IRelationRepository, DynamoDbRelationRepository>();
+        services.AddScoped<RelationService>();
         services.AddScoped<BookInvoiceService>();
+        services.AddScoped<ExportInvoiceService>();
 
         return services;
     }

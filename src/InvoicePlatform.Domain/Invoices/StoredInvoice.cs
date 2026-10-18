@@ -13,6 +13,16 @@ public enum InvoiceStatus
 }
 
 /// <summary>
+/// Which way an invoice travels. Only outgoing invoices exist today: the
+/// organisation uploads its own sales invoices. The field is stored now so
+/// that received invoices, a later piece of work, fit the same store and list.
+/// </summary>
+public enum InvoiceDirection
+{
+    Outgoing,
+}
+
+/// <summary>
 /// An invoice as it is kept.
 ///
 /// <see cref="OrganizationId"/> is the tenant key required by CLAUDE.md, and it
@@ -29,6 +39,8 @@ public sealed record StoredInvoice
     public required string OrganizationId { get; init; }
 
     public required InvoiceStatus Status { get; init; }
+
+    public InvoiceDirection Direction { get; init; } = InvoiceDirection.Outgoing;
 
     public required CanonicalInvoiceDraft Invoice { get; init; }
 
