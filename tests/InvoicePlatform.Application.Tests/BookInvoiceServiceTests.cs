@@ -95,39 +95,4 @@ public class BookInvoiceServiceTests
         Assert.Single(await _service.ListAsync(OrgA));
         Assert.Equal("gecorrigeerd", (await _service.GetAsync(OrgA, first.InvoiceId))!.Invoice.Note);
     }
-
-    private sealed class TestClock(DateTimeOffset now) : IClock
-    {
-        public DateTimeOffset UtcNow { get; } = now;
-    }
-
-    private sealed class FakeInvoiceStore : IInvoiceRepository, IDocumentStore
-    {
-        private readonly Dictionary<(string Org, string Id), StoredInvoice> _invoices = [];
-
-        public Dictionary<string, byte[]> Documents { get; } = [];
-
-        public Task SaveAsync(StoredInvoice invoice, CancellationToken cancellationToken = default)
-        {
-            _invoices[(invoice.OrganizationId, invoice.InvoiceId)] = invoice;
-            return Task.CompletedTask;
-        }
-
-        public Task<StoredInvoice?> GetAsync(string organizationId, string invoiceId, CancellationToken cancellationToken = default)
-            => Task.FromResult(_invoices.GetValueOrDefault((organizationId, invoiceId)));
-
-        public Task<IReadOnlyList<StoredInvoice>> ListAsync(string organizationId, int limit = 100, CancellationToken cancellationToken = default)
-            => Task.FromResult<IReadOnlyList<StoredInvoice>>(
-                _invoices.Where(kv => kv.Key.Org == organizationId).Select(kv => kv.Value).ToList());
-
-        public Task<string> PutAsync(string organizationId, string invoiceId, ReadOnlyMemory<byte> content, string contentType, CancellationToken cancellationToken = default)
-        {
-            var key = $"{organizationId}/{invoiceId}.pdf";
-            Documents[key] = content.ToArray();
-            return Task.FromResult(key);
-        }
-
-        public Task<byte[]?> GetAsync(string documentKey, CancellationToken cancellationToken = default)
-            => Task.FromResult(Documents.GetValueOrDefault(documentKey));
-    }
 }
