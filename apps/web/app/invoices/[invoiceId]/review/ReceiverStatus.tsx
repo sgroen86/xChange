@@ -1,5 +1,6 @@
 "use client";
 
+import { useText } from "../../../../lib/i18n";
 import type { ReceiverLookup } from "../../../../lib/invoices";
 import type { RulesetInfo } from "../../../../lib/settings";
 
@@ -20,8 +21,10 @@ interface Props {
  * numbers while the invoice is reviewed. Informative only; it never blocks.
  */
 export function ReceiverStatus({ lookup, looking, rulesets, current, filled, readOnly, onAdopt }: Props) {
+  const text = useText().review.receiver;
+
   if (looking && !lookup) {
-    return <p className="text-soft text-sm">PEPPOL controleren&hellip;</p>;
+    return <p className="text-soft text-sm">{text.checking}</p>;
   }
 
   if (!lookup) return null;
@@ -35,16 +38,16 @@ export function ReceiverStatus({ lookup, looking, rulesets, current, filled, rea
       return (
         <div className="alert alert--success">
           <div>
-            <strong>Op PEPPOL</strong> als <code>{address}</code>
-            {filled && current?.toLowerCase() === address.toLowerCase() && " (elektronisch adres hiermee ingevuld)"}.{" "}
+            <strong>{text.onPeppol}</strong> {text.as} <code>{address}</code>
+            {filled && current?.toLowerCase() === address.toLowerCase() && text.filled}.{" "}
             {formats.length > 0
-              ? `Ontvangt: ${formats.join(", ")}.`
-              : "Ontvangt geen van de formaten die xChange maakt."}
+              ? text.receives(formats.join(", "))
+              : text.receivesNone}
             {current !== null && current.toLowerCase() !== address.toLowerCase() && !readOnly && (
               <>
                 {" "}
                 <button type="button" className="btn btn--secondary btn--sm" onClick={onAdopt}>
-                  Dit adres overnemen
+                  {text.adopt}
                 </button>
               </>
             )}
@@ -55,19 +58,12 @@ export function ReceiverStatus({ lookup, looking, rulesets, current, filled, rea
     case "notFound":
       return (
         <div className="alert alert--warning">
-          <div>
-            Niet gevonden op PEPPOL (gezocht op {lookup.tried.join(", ")}). De afnemer kan dan geen
-            e-factuur via PEPPOL ontvangen; controleer het btw- of KvK-nummer.
-          </div>
+          <div>{text.notFound(lookup.tried.join(", "))}</div>
         </div>
       );
     case "unavailable":
-      return <p className="text-soft text-sm">PEPPOL is nu niet bereikbaar; de controle wordt bij een wijziging opnieuw gedaan.</p>;
+      return <p className="text-soft text-sm">{text.unavailable}</p>;
     default:
-      return (
-        <p className="text-soft text-sm">
-          Vul een btw-, KvK- of PEPPOL-nummer in om te zien of de afnemer e-facturen kan ontvangen.
-        </p>
-      );
+      return <p className="text-soft text-sm">{text.nothingToLookUp}</p>;
   }
 }

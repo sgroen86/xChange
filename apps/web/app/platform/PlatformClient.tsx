@@ -5,6 +5,7 @@ import { useEffect, useState, useSyncExternalStore } from "react";
 import { Icon } from "../../components/Icon";
 import { ModelSetting } from "./ModelSetting";
 import { useToast } from "../../components/Toast";
+import { text, useText } from "../../lib/i18n";
 import { getServerUserSnapshot, getUserSnapshot, listCountries, subscribeToUser, type CountryOption } from "../../lib/auth";
 import {
   createOrganization,
@@ -28,6 +29,8 @@ type Panel =
  */
 export default function PlatformClient() {
   const showToast = useToast();
+  const t = useText();
+  const pl = t.platform;
   const user = useSyncExternalStore(subscribeToUser, getUserSnapshot, getServerUserSnapshot);
 
   const [organizations, setOrganizations] = useState<PlatformOrganization[] | null>(null);
@@ -47,7 +50,7 @@ export default function PlatformClient() {
       .then(setOrganizations)
       .catch((cause: unknown) => {
         setOrganizations([]);
-        showToast(cause instanceof Error ? cause.message : "Laden is mislukt.", "danger");
+        showToast(cause instanceof Error ? cause.message : t.common.loadFailed, "danger");
       });
 
   useEffect(() => {
@@ -61,7 +64,7 @@ export default function PlatformClient() {
       .catch((cause: unknown) => {
         if (cancelled) return;
         setOrganizations([]);
-        showToast(cause instanceof Error ? cause.message : "Laden is mislukt.", "danger");
+        showToast(cause instanceof Error ? cause.message : text().common.loadFailed, "danger");
       });
     return () => {
       cancelled = true;
@@ -99,12 +102,12 @@ export default function PlatformClient() {
         setLink({ organization: result.organization.name, url: invitationLink(result.invitationCode!) });
       } else {
         await updateOrganization(panel.organization.organizationId, { name, countryCode });
-        showToast("Organisatie opgeslagen.", "success");
+        showToast(pl.saved, "success");
       }
       setPanel({ kind: "none" });
       await reload();
     } catch (cause) {
-      showToast(cause instanceof Error ? cause.message : "Opslaan mislukt.", "danger");
+      showToast(cause instanceof Error ? cause.message : pl.saveFailed, "danger");
     } finally {
       setSaving(false);
     }
@@ -114,9 +117,9 @@ export default function PlatformClient() {
     if (!link) return;
     try {
       await navigator.clipboard.writeText(link.url);
-      showToast("Link gekopieerd.", "success");
+      showToast(pl.linkCopied, "success");
     } catch {
-      showToast("Kopiëren lukte niet; selecteer de link en kopieer hem zelf.", "warning");
+      showToast(pl.copyFailed, "warning");
     }
   };
 
@@ -126,7 +129,7 @@ export default function PlatformClient() {
     return (
       <div className="alert alert--warning">
         <Icon name="info" />
-        <div>Deze pagina is alleen voor de platformbeheerder.</div>
+        <div>{pl.adminOnly}</div>
       </div>
     );
   }
@@ -136,15 +139,15 @@ export default function PlatformClient() {
       <div className="page-header">
         <div>
           <h1>
-            <Icon name="users" /> Platform
+            <Icon name="users" /> {pl.title}
           </h1>
           <p className="page-header__subtitle">
-            {organizations === null ? "Laden…" : `${organizations.length} organisatie(s)`}
+            {organizations === null ? t.common.loading : pl.count(organizations.length)}
           </p>
         </div>
         <div className="page-header__actions">
           <button type="button" className="btn btn--primary" onClick={() => open({ kind: "create" })}>
-            <Icon name="filePlus" /> Organisatie aanmaken
+            <Icon name="filePlus" /> {pl.create}
           </button>
         </div>
       </div>
@@ -153,15 +156,12 @@ export default function PlatformClient() {
         <div className="alert alert--success" style={{ marginBottom: "var(--space-4)" }}>
           <Icon name="check" />
           <div style={{ minWidth: 0, flex: 1 }}>
-            <div className="alert__title">Uitnodigingslink voor {link.organization}</div>
-            <p className="text-sm">
-              Stuur deze link zelf naar de gebruiker. Hij is 7 dagen geldig en werkt één keer. Hij
-              wordt niet opnieuw getoond; maak zo nodig een nieuwe.
-            </p>
+            <div className="alert__title">{pl.linkTitle(link.organization)}</div>
+            <p className="text-sm">{pl.linkHelp}</p>
             <div className="form" style={{ display: "flex", gap: "var(--space-3)" }}>
-              <input type="text" readOnly value={link.url} aria-label="Uitnodigingslink" onFocus={(e) => e.target.select()} />
+              <input type="text" readOnly value={link.url} aria-label={pl.linkLabel} onFocus={(e) => e.target.select()} />
               <button type="button" className="btn btn--secondary" onClick={() => void copy()}>
-                <Icon name="save" /> Kopiëren
+                <Icon name="save" /> {pl.copy}
               </button>
             </div>
           </div>
@@ -173,23 +173,23 @@ export default function PlatformClient() {
           <div className="card__header">
             <h3>
               {panel.kind === "create"
-                ? "Organisatie aanmaken"
+                ? pl.create
                 : panel.kind === "edit"
-                  ? `${panel.organization.name} wijzigen`
-                  : `Nieuwe uitnodiging voor ${panel.organization.name}`}
+                  ? pl.editTitle(panel.organization.name)
+                  : pl.inviteTitle(panel.organization.name)}
             </h3>
           </div>
           <div className="card__body">
             {(panel.kind === "create" || panel.kind === "edit") && (
               <div className="form__row">
                 <div className="form__group">
-                  <label htmlFor="org-name">Naam organisatie</label>
+                  <label htmlFor="org-name">{pl.organizationName}</label>
                   <input id="org-name" type="text" value={name} onChange={(e) => setName(e.target.value)} required />
                 </div>
                 <div className="form__group">
-                  <label htmlFor="org-country">Land</label>
+                  <label htmlFor="org-country">{pl.country}</label>
                   <select id="org-country" value={countryCode} onChange={(e) => setCountryCode(e.target.value)} required>
-                    <option value="">Kies een land</option>
+                    <option value="">{pl.chooseCountry}</option>
                     {countries.map((country) => (
                       <option key={country.code} value={country.code}>
                         {country.name}
@@ -203,26 +203,26 @@ export default function PlatformClient() {
             {(panel.kind === "create" || panel.kind === "invite") && (
               <div className="form__row">
                 <div className="form__group">
-                  <label htmlFor="user-name">Naam eerste gebruiker</label>
+                  <label htmlFor="user-name">{pl.firstUserName}</label>
                   <input id="user-name" type="text" value={userName} onChange={(e) => setUserName(e.target.value)} required />
                 </div>
                 <div className="form__group">
-                  <label htmlFor="user-email">E-mailadres</label>
+                  <label htmlFor="user-email">{pl.email}</label>
                   <input id="user-email" type="email" value={userEmail} onChange={(e) => setUserEmail(e.target.value)} required />
                 </div>
               </div>
             )}
 
             {panel.kind === "invite" && (
-              <p className="text-soft text-sm">Een eventuele eerdere link voor deze organisatie werkt daarna niet meer.</p>
+              <p className="text-soft text-sm">{pl.inviteHelp}</p>
             )}
 
             <div className="form__actions">
               <button type="submit" className="btn btn--primary" disabled={saving}>
-                <Icon name="save" /> {saving ? "Bezig…" : panel.kind === "edit" ? "Opslaan" : "Aanmaken en link tonen"}
+                <Icon name="save" /> {saving ? t.common.busy : panel.kind === "edit" ? t.common.save : pl.createAndShowLink}
               </button>
               <button type="button" className="btn btn--secondary" onClick={() => setPanel({ kind: "none" })}>
-                Annuleren
+                {t.common.cancel}
               </button>
             </div>
           </div>
@@ -236,11 +236,11 @@ export default function PlatformClient() {
               <table className="table">
                 <thead>
                   <tr>
-                    <th>Organisatie</th>
-                    <th>Land</th>
-                    <th>Aangemaakt</th>
-                    <th>Gebruikers</th>
-                    <th>Uitnodiging</th>
+                    <th>{pl.columns.organization}</th>
+                    <th>{pl.columns.country}</th>
+                    <th>{pl.columns.created}</th>
+                    <th>{pl.columns.users}</th>
+                    <th>{pl.columns.invitation}</th>
                     <th />
                   </tr>
                 </thead>
@@ -253,17 +253,17 @@ export default function PlatformClient() {
                       <td>{organization.userCount ?? "—"}</td>
                       <td>
                         {organization.invitationPending ? (
-                          <span className="badge badge--warning">Open · {organization.pendingInvitationEmail}</span>
+                          <span className="badge badge--warning">{pl.pending(organization.pendingInvitationEmail)}</span>
                         ) : (
                           "—"
                         )}
                       </td>
                       <td style={{ whiteSpace: "nowrap" }}>
                         <button type="button" className="btn btn--ghost btn--sm" onClick={() => open({ kind: "edit", organization })}>
-                          <Icon name="edit" /> Wijzigen
+                          <Icon name="edit" /> {pl.edit}
                         </button>
                         <button type="button" className="btn btn--ghost btn--sm" onClick={() => open({ kind: "invite", organization })}>
-                          <Icon name="user" /> Nieuwe link
+                          <Icon name="user" /> {pl.newLink}
                         </button>
                       </td>
                     </tr>

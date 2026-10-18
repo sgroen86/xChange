@@ -8,6 +8,7 @@ import { Icon } from "../../components/Icon";
 import { useToast } from "../../components/Toast";
 import { isApiConfigured } from "../../lib/api";
 import { getServerUserSnapshot, getUserSnapshot, subscribeToUser } from "../../lib/auth";
+import { useLang, useText } from "../../lib/i18n";
 import {
   approveImport,
   dismissImport,
@@ -22,12 +23,13 @@ import { formatBytes } from "../../lib/pdf";
 /** How often the list refreshes while something is still being read. */
 const POLL_MS = 4000;
 
-const STATUS: Record<ImportItem["status"], { label: string; badge: string }> = {
-  awaitingApproval: { label: "Wacht op goedkeuring", badge: "badge--warning" },
-  queued: { label: "In de wachtrij", badge: "badge--neutral" },
-  processing: { label: "Wordt gelezen", badge: "badge--info" },
-  ready: { label: "Klaar om te beoordelen", badge: "badge--success" },
-  failed: { label: "Mislukt", badge: "badge--danger" },
+/** Badge per status; the label is t.imports.status[status]. */
+const STATUS_BADGE: Record<ImportItem["status"], string> = {
+  awaitingApproval: "badge--warning",
+  queued: "badge--neutral",
+  processing: "badge--info",
+  ready: "badge--success",
+  failed: "badge--danger",
 };
 
 /**
@@ -38,7 +40,9 @@ const STATUS: Record<ImportItem["status"], { label: string; badge: string }> = {
 export default function ImportsClient() {
   const router = useRouter();
   const showToast = useToast();
-  const user = useSyncExternalStore(subscribeToUser, getUserSnapshot, getServerUserSnapshot);
+  const t = useText();
+  const locale = useLang() === "en" ? "en-GB" : "nl-NL";
+  const user =useSyncExternalStore(subscribeToUser, getUserSnapshot, getServerUserSnapshot);
   const canEdit = user?.role === "Admin" || user?.role === "User";
 
   const [items, setItems] = useState<ImportItem[] | null>(null);
@@ -49,9 +53,9 @@ export default function ImportsClient() {
       setItems(await listImports());
     } catch (cause) {
       setItems((current) => current ?? []);
-      showToast(cause instanceof Error ? cause.message : "Laden is mislukt.", "danger");
+      showToast(cause instanceof Error ? cause.message : t.common.loadFailed, "danger");
     }
-  }, [showToast]);
+  }, [showToast, t]);
 
   useEffect(() => {
     const first = window.setTimeout(() => void refresh(), 0);
@@ -72,7 +76,7 @@ export default function ImportsClient() {
       await action();
       if (done) showToast(done, "success");
     } catch (cause) {
-      showToast(cause instanceof Error ? cause.message : "Dat is mislukt.", "danger");
+      showToast(cause instanceof Error ? cause.message : t.common.somethingFailed, "danger");
     } finally {
       setBusy(null);
     }
@@ -84,7 +88,7 @@ export default function ImportsClient() {
     act(ids.length === 1 ? ids[0] : "all", async () => {
       for (const id of ids) await approveImport(id);
       await refresh();
-    }, ids.length === 1 ? "Wordt nu gelezen." : `${ids.length} facturen worden nu gelezen.`);
+    }, ids.length === 1 ? t.imports.approvedOne : t.imports.approvedMany(ids.length));
 
   const open = (item: ImportItem) =>
     act(item.importId, async () => {
@@ -97,20 +101,20 @@ export default function ImportsClient() {
       <div className="page-header">
         <div>
           <h1>
-            <Icon name="clock" /> Te beoordelen
+            <Icon name="clock" /> {t.imports.title}
           </h1>
           <p className="page-header__subtitle">
-            {items === null ? "Laden…" : `${items.length} factu${items.length === 1 ? "ur" : "ren"} in de lijst`}
+            {items === null ? t.common.loading : t.imports.count(items.length)}
           </p>
         </div>
         <div className="page-header__actions">
           {canEdit && waiting.length > 1 && (
             <button type="button" className="btn btn--secondary" disabled={busy !== null} onClick={() => void approve(waiting.map((i) => i.importId))}>
-              <Icon name="check" /> Alles verwerken ({waiting.length})
+              <Icon name="check" /> {t.imports.approveAll(waiting.length)}
             </button>
           )}
           <Link className="btn btn--primary" href="/upload">
-            <Icon name="fileUp" /> Facturen uploaden
+            <Icon name="fileUp" /> {t.imports.uploadInvoices}
           </Link>
         </div>
       </div>
@@ -118,27 +122,21 @@ export default function ImportsClient() {
       {!isApiConfigured && (
         <div className="alert alert--info">
           <Icon name="info" />
-          <div>Er is geen API geconfigureerd: importeren in de achtergrond is niet beschikbaar.</div>
+          <div>{t.imports.noApi}</div>
         </div>
       )}
 
       {waiting.length > 0 && (
         <div className="alert alert--warning">
           <Icon name="info" />
-          <div>
-            Per e-mail ontvangen PDF&apos;s worden pas gelezen als u ze goedkeurt. Bekijk ze eerst;
-            verwijder wat geen factuur van u is.
-          </div>
+          <div>{t.imports.emailNotice}</div>
         </div>
       )}
 
       {items !== null && items.length === 0 && isApiConfigured && (
         <div className="card">
           <div className="card__body">
-            <p className="text-soft text-sm">
-              Niets te beoordelen. Upload meerdere PDF&apos;s tegelijk; ze worden in de achtergrond
-              gelezen en verschijnen hier.
-            </p>
+            <p className="text-soft text-sm">{t.imports.empty}</p>
           </div>
         </div>
       )}
@@ -150,10 +148,10 @@ export default function ImportsClient() {
               <table className="table">
                 <thead>
                   <tr>
-                    <th>Bestand</th>
-                    <th>Factuur</th>
-                    <th>Status</th>
-                    <th>Ontvangen</th>
+                    <th>{t.imports.columns.file}</th>
+                    <th>{t.imports.columns.invoice}</th>
+                    <th>{t.imports.columns.status}</th>
+                    <th>{t.imports.columns.received}</th>
                     <th />
                   </tr>
                 </thead>
@@ -164,7 +162,7 @@ export default function ImportsClient() {
                         {item.fileName}
                         <div className="text-xs text-muted">
                           {formatBytes(item.byteSize)}
-                          {item.source === "email" && item.sender ? ` · van ${item.sender}` : ""}
+                          {item.source === "email" && item.sender ? t.imports.from(item.sender) : ""}
                         </div>
                         {item.subject && <div className="text-xs text-muted">{item.subject}</div>}
                       </td>
@@ -173,10 +171,10 @@ export default function ImportsClient() {
                         {item.buyerName && <div className="text-xs text-muted">{item.buyerName}</div>}
                       </td>
                       <td>
-                        <span className={`badge ${STATUS[item.status].badge}`}>{STATUS[item.status].label}</span>
+                        <span className={`badge ${STATUS_BADGE[item.status]}`}>{t.imports.status[item.status]}</span>
                         {item.error && <div className="text-xs text-muted">{item.error}</div>}
                       </td>
-                      <td>{new Date(item.createdAt).toLocaleString("nl-NL", { dateStyle: "short", timeStyle: "short" })}</td>
+                      <td>{new Date(item.createdAt).toLocaleString(locale, { dateStyle: "short", timeStyle: "short" })}</td>
                       <td style={{ whiteSpace: "nowrap" }}>
                         {item.status === "awaitingApproval" && (
                           <>
@@ -186,7 +184,7 @@ export default function ImportsClient() {
                               disabled={busy === item.importId}
                               onClick={() => void act(item.importId, () => viewImportDocument(item.importId))}
                             >
-                              <Icon name="eye" /> Bekijken
+                              <Icon name="eye" /> {t.imports.view}
                             </button>
                             {canEdit && (
                               <button
@@ -195,7 +193,7 @@ export default function ImportsClient() {
                                 disabled={busy !== null}
                                 onClick={() => void approve([item.importId])}
                               >
-                                <Icon name="check" /> Verwerken
+                                <Icon name="check" /> {t.imports.approve}
                               </button>
                             )}
                           </>
@@ -207,7 +205,7 @@ export default function ImportsClient() {
                             disabled={busy === item.importId}
                             onClick={() => void open(item)}
                           >
-                            <Icon name="eye" /> Beoordelen
+                            <Icon name="eye" /> {t.imports.review}
                           </button>
                         )}
                         {item.status === "failed" && canEdit && (
@@ -219,23 +217,23 @@ export default function ImportsClient() {
                               void act(item.importId, async () => {
                                 await retryImport(item.importId);
                                 await refresh();
-                              }, "Opnieuw in de wachtrij gezet.")
+                              }, t.imports.requeued)
                             }
                           >
-                            Opnieuw
+                            {t.common.retry}
                           </button>
                         )}
                         {canEdit && (
                           <button
                             type="button"
                             className="btn btn--ghost btn--icon"
-                            aria-label="Uit de lijst verwijderen"
+                            aria-label={t.imports.dismiss}
                             disabled={busy === item.importId}
                             onClick={() =>
                               void act(item.importId, async () => {
                                 await dismissImport(item.importId);
                                 setItems((current) => current?.filter((i) => i.importId !== item.importId) ?? null);
-                              }, "Uit de lijst verwijderd.")
+                              }, t.imports.dismissed)
                             }
                           >
                             <Icon name="trash" />

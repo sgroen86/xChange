@@ -7,6 +7,7 @@ import { useEffect, useRef, useState } from "react";
 import { Icon } from "../../../components/Icon";
 import { useToast } from "../../../components/Toast";
 import { ApiError } from "../../../lib/api";
+import { text, useText } from "../../../lib/i18n";
 import { confirmSignup } from "../../../lib/auth";
 
 /**
@@ -16,6 +17,7 @@ import { confirmSignup } from "../../../lib/auth";
 export default function ConfirmClient() {
   const router = useRouter();
   const showToast = useToast();
+  const t = useText();
   const code = useSearchParams().get("code") ?? "";
   const [error, setError] = useState<string | null>(null);
   // A link confirms once; React's development double-run must not use it twice.
@@ -27,11 +29,11 @@ export default function ConfirmClient() {
 
     confirmSignup(code)
       .then((session) => {
-        showToast(`Welkom bij xChange, ${session.user.name}.`, "success");
+        showToast(text().auth.confirm.welcome(session.user.name), "success");
         router.replace("/upload");
       })
       .catch((cause: unknown) => {
-        setError(cause instanceof ApiError ? cause.message : "Er ging iets mis. Probeer het opnieuw.");
+        setError(cause instanceof ApiError ? cause.message : text().auth.genericError);
       });
   }, [code, router, showToast]);
 
@@ -40,7 +42,7 @@ export default function ConfirmClient() {
       <div className="page-header">
         <div>
           <h1>
-            <Icon name="user" /> Account activeren
+            <Icon name="user" /> {t.auth.confirm.title}
           </h1>
         </div>
       </div>
@@ -54,15 +56,15 @@ export default function ConfirmClient() {
               </div>
               <div className="form__actions">
                 <Link className="btn btn--secondary" href="/signup">
-                  Opnieuw aanmelden
+                  {t.auth.confirm.signupAgain}
                 </Link>
                 <Link className="btn btn--ghost" href="/login">
-                  Inloggen
+                  {t.auth.login}
                 </Link>
               </div>
             </>
           ) : (
-            <p className="text-soft text-sm">Je account wordt aangemaakt&hellip;</p>
+            <p className="text-soft text-sm">{t.auth.confirm.creating}</p>
           )}
         </div>
       </div>

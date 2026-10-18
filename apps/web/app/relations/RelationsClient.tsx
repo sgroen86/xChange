@@ -5,9 +5,10 @@ import { useEffect, useState, useSyncExternalStore } from "react";
 import { Icon } from "../../components/Icon";
 import { useToast } from "../../components/Toast";
 import { getServerUserSnapshot, getUserSnapshot, subscribeToUser } from "../../lib/auth";
+import { text, useText, type Dictionary } from "../../lib/i18n";
 import { listRelations, updateRelation, type Relation, type RelationUpdate } from "../../lib/relations";
 import { FALLBACK_SETTINGS, getSettings, type RulesetInfo } from "../../lib/settings";
-import { ENDPOINT_SCHEMES, REGISTRATION_SCHEMES } from "../invoices/[invoiceId]/review/fields";
+import { endpointSchemes, registrationSchemes } from "../invoices/[invoiceId]/review/fields";
 
 type State =
   | { status: "loading" }
@@ -16,15 +17,18 @@ type State =
 
 type FieldSpec = { key: keyof RelationUpdate; label: string; options?: { value: string; label: string }[]; emptyLabel?: string };
 
-const FIELDS: FieldSpec[] = [
-  { key: "name", label: "Naam" },
-  { key: "vatIdentifier", label: "Btw-nummer" },
-  { key: "legalRegistrationId", label: "KvK-nummer" },
-  { key: "legalRegistrationScheme", label: "Schema registratienummer", options: REGISTRATION_SCHEMES },
-  { key: "electronicAddress", label: "Elektronisch adres (PEPPOL-id)" },
-  { key: "electronicAddressScheme", label: "Schema elektronisch adres", options: ENDPOINT_SCHEMES },
-  { key: "countryCode", label: "Landcode" },
-];
+function relationFields(t: Dictionary): FieldSpec[] {
+  const labels = t.relations.fields;
+  return [
+    { key: "name", label: labels.name },
+    { key: "vatIdentifier", label: labels.vatIdentifier },
+    { key: "legalRegistrationId", label: labels.legalRegistrationId },
+    { key: "legalRegistrationScheme", label: labels.legalRegistrationScheme, options: registrationSchemes(t) },
+    { key: "electronicAddress", label: labels.electronicAddress },
+    { key: "electronicAddressScheme", label: labels.electronicAddressScheme, options: endpointSchemes(t) },
+    { key: "countryCode", label: labels.countryCode },
+  ];
+}
 
 function toUpdate(relation: Relation): RelationUpdate {
   return {
@@ -46,6 +50,7 @@ function toUpdate(relation: Relation): RelationUpdate {
  */
 export default function RelationsClient() {
   const showToast = useToast();
+  const t = useText();
   const user = useSyncExternalStore(subscribeToUser, getUserSnapshot, getServerUserSnapshot);
   const canEdit = user?.role === "Admin" || user?.role === "User";
 
@@ -70,10 +75,11 @@ export default function RelationsClient() {
 
   const formatField: FieldSpec = {
     key: "defaultRulesetId",
-    label: "Exportformaat",
+    label: t.relations.fields.defaultRulesetId,
     options: rulesets.map((r) => ({ value: r.id, label: r.displayName })),
-    emptyLabel: "Standaard van de organisatie",
+    emptyLabel: t.relations.organizationDefault,
   };
+  const fields = relationFields(t);
   const formatName = (id: string | null) => (id ? (rulesets.find((r) => r.id === id)?.displayName ?? id) : "—");
 
   useEffect(() => {
@@ -83,7 +89,7 @@ export default function RelationsClient() {
         if (!cancelled) setState({ status: "ready", relations });
       })
       .catch((cause: unknown) => {
-        if (!cancelled) setState({ status: "error", message: cause instanceof Error ? cause.message : "Laden is mislukt." });
+        if (!cancelled) setState({ status: "error", message: cause instanceof Error ? cause.message : text().common.loadFailed });
       });
     return () => {
       cancelled = true;
@@ -103,9 +109,9 @@ export default function RelationsClient() {
           : current,
       );
       setEditing(null);
-      showToast("Relatie opgeslagen.", "success");
+      showToast(t.relations.saved, "success");
     } catch (cause) {
-      showToast(cause instanceof Error ? cause.message : "Opslaan mislukt.", "danger");
+      showToast(cause instanceof Error ? cause.message : t.relations.saveFailed, "danger");
     } finally {
       setSaving(false);
     }
@@ -119,10 +125,10 @@ export default function RelationsClient() {
       <div className="page-header">
         <div>
           <h1>
-            <Icon name="users" /> Relaties
+            <Icon name="users" /> {t.relations.title}
           </h1>
           <p className="page-header__subtitle">
-            {state.status === "ready" ? `${state.relations.length} relatie(s)` : "Laden…"}
+            {state.status === "ready" ? t.relations.count(state.relations.length) : t.common.loading}
           </p>
         </div>
       </div>
@@ -137,32 +143,29 @@ export default function RelationsClient() {
       {editing && (
         <form className="form card" onSubmit={save} style={{ marginBottom: "var(--space-4)" }}>
           <div className="card__header">
-            <h3>Relatie wijzigen</h3>
+            <h3>{t.relations.editTitle}</h3>
           </div>
           <div className="card__body">
             <div className="form__row">
-              {FIELDS.slice(0, 3).map((field) => (
+              {fields.slice(0, 3).map((field) => (
                 <Field key={field.key} field={field} value={editing.values[field.key]} onChange={setValue} />
               ))}
             </div>
             <div className="form__row">
-              {FIELDS.slice(3).map((field) => (
+              {fields.slice(3).map((field) => (
                 <Field key={field.key} field={field} value={editing.values[field.key]} onChange={setValue} />
               ))}
             </div>
             <div className="form__row">
               <Field field={formatField} value={editing.values.defaultRulesetId} onChange={setValue} />
             </div>
-            <div className="form-help">
-              Facturen aan deze afnemer openen op dit formaat, bijvoorbeeld PEPPOL BIS 3.0 voor een
-              klant in het VK.
-            </div>
+            <div className="form-help">{t.relations.formatHelp}</div>
             <div className="form__actions">
               <button type="submit" className="btn btn--primary" disabled={saving}>
-                <Icon name="save" /> {saving ? "Bezig…" : "Opslaan"}
+                <Icon name="save" /> {saving ? t.common.busy : t.common.save}
               </button>
               <button type="button" className="btn btn--secondary" onClick={() => setEditing(null)}>
-                Annuleren
+                {t.common.cancel}
               </button>
             </div>
           </div>
@@ -172,10 +175,7 @@ export default function RelationsClient() {
       {state.status === "ready" && state.relations.length === 0 && (
         <div className="card">
           <div className="card__body">
-            <p className="text-soft text-sm">
-              Relaties worden vanzelf aangemaakt wanneer u een factuur boekt waarop de afnemer een
-              btw- of KvK-nummer heeft.
-            </p>
+            <p className="text-soft text-sm">{t.relations.empty}</p>
           </div>
         </div>
       )}
@@ -187,12 +187,12 @@ export default function RelationsClient() {
               <table className="table">
                 <thead>
                   <tr>
-                    <th>Naam</th>
-                    <th>Btw-nummer</th>
-                    <th>KvK-nummer</th>
-                    <th>Elektronisch adres</th>
-                    <th>Land</th>
-                    <th>Formaat</th>
+                    <th>{t.relations.columns.name}</th>
+                    <th>{t.relations.columns.vatIdentifier}</th>
+                    <th>{t.relations.columns.legalRegistrationId}</th>
+                    <th>{t.relations.columns.electronicAddress}</th>
+                    <th>{t.relations.columns.country}</th>
+                    <th>{t.relations.columns.format}</th>
                     <th />
                   </tr>
                 </thead>
@@ -216,7 +216,7 @@ export default function RelationsClient() {
                             className="btn btn--ghost btn--sm"
                             onClick={() => setEditing({ id: relation.relationId, values: toUpdate(relation) })}
                           >
-                            <Icon name="edit" /> Wijzigen
+                            <Icon name="edit" /> {t.relations.edit}
                           </button>
                         )}
                       </td>

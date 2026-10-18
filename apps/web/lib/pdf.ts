@@ -1,5 +1,7 @@
 /** PDF validation for the upload page. Structural checks only — no parsing. */
 
+import { text } from "./i18n";
+
 /**
  * Must not exceed what the API accepts.
  *
@@ -29,30 +31,29 @@ export function formatBytes(bytes: number): string {
  * and MIME type are both spoofable, so the magic number is the real check.
  */
 export async function checkPdf(file: File): Promise<PdfCheckResult> {
+  const t = text().shell.pdf;
   const errors: string[] = [];
 
   const hasPdfExtension = /\.pdf$/i.test(file.name);
   const hasPdfType = file.type === "application/pdf" || file.type === "";
 
   if (!hasPdfExtension) {
-    errors.push("Het bestand heeft geen .pdf-extensie.");
+    errors.push(t.noExtension);
   }
   if (!hasPdfType) {
-    errors.push(`Onverwacht bestandstype: ${file.type}. Alleen PDF wordt ondersteund.`);
+    errors.push(t.unexpectedType(file.type));
   }
   if (file.size === 0) {
-    errors.push("Het bestand is leeg (0 bytes).");
+    errors.push(t.empty);
   }
   if (file.size > MAX_PDF_BYTES) {
-    errors.push(
-      `Het bestand is ${formatBytes(file.size)}. De limiet is ${formatBytes(MAX_PDF_BYTES)}.`,
-    );
+    errors.push(t.tooLarge(formatBytes(file.size), formatBytes(MAX_PDF_BYTES)));
   }
 
   if (file.size > 0) {
     const header = await readHeader(file);
     if (header !== "%PDF-") {
-      errors.push("Het bestand begint niet met een geldige PDF-header (%PDF-).");
+      errors.push(t.noHeader);
     }
   }
 

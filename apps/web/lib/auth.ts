@@ -8,6 +8,7 @@
  */
 
 import { API_BASE_URL, ApiError, isApiConfigured } from "./api";
+import { text } from "./i18n";
 import { currentLanguage } from "./i18n/language";
 
 const TOKEN_KEY = "xchange.session.token";
@@ -113,16 +114,21 @@ export function clearSession(): void {
   }
 }
 
+/** Just the language, for the public calls made before there is a session. */
+function languageHeader(): Record<string, string> {
+  return { "Accept-Language": currentLanguage() };
+}
+
 /** Headers for a call: the language, and the session when signed in. */
 export function authHeaders(): Record<string, string> {
   const token = getToken();
-  const language = { "Accept-Language": currentLanguage() };
+  const language = languageHeader();
   return token ? { ...language, Authorization: `Bearer ${token}` } : language;
 }
 
 async function post<T>(path: string, body: unknown): Promise<T> {
   if (!isApiConfigured) {
-    throw new ApiError("Er is geen API geconfigureerd.", 0);
+    throw new ApiError(text().common.noApi, 0);
   }
 
   let response: Response;
@@ -133,7 +139,7 @@ async function post<T>(path: string, body: unknown): Promise<T> {
       body: JSON.stringify(body),
     });
   } catch {
-    throw new ApiError("De API is niet bereikbaar.", 0);
+    throw new ApiError(text().common.apiUnreachable, 0);
   }
 
   if (response.status === 204) {
@@ -146,7 +152,7 @@ async function post<T>(path: string, body: unknown): Promise<T> {
     const detail =
       (payload as { detail?: string; title?: string } | null)?.detail ??
       (payload as { title?: string } | null)?.title ??
-      `De API gaf status ${response.status}.`;
+      text().common.apiStatus(response.status);
     throw new ApiError(detail, response.status);
   }
 
@@ -158,7 +164,7 @@ export async function isSetupRequired(): Promise<boolean> {
   if (!isApiConfigured) return false;
 
   try {
-    const response = await fetch(`${API_BASE_URL}/api/v1/auth/status`);
+    const response = await fetch(`${API_BASE_URL}/api/v1/auth/status`, { headers: languageHeader() });
     if (!response.ok) return false;
     const body = (await response.json()) as { setupRequired: boolean };
     return body.setupRequired;
@@ -194,25 +200,27 @@ export async function setupFirstUser(
 /** The countries an organisation can be in. Public: the setup screen needs it before any login. */
 export async function listCountries(): Promise<CountryOption[]> {
   if (!isApiConfigured) return [];
-  const response = await fetch(`${API_BASE_URL}/api/v1/countries`).catch(() => null);
+  const response = await fetch(`${API_BASE_URL}/api/v1/countries`, { headers: languageHeader() }).catch(() => null);
   return response?.ok ? ((await response.json()) as CountryOption[]) : [];
 }
 
 /** What an invitation link shows before the account exists. */
 export async function getInvitation(code: string): Promise<InvitationDetails> {
-  if (!isApiConfigured) throw new ApiError("Er is geen API geconfigureerd.", 0);
+  if (!isApiConfigured) throw new ApiError(text().common.noApi, 0);
 
   let response: Response;
   try {
-    response = await fetch(`${API_BASE_URL}/api/v1/invitations/${encodeURIComponent(code)}`);
+    response = await fetch(`${API_BASE_URL}/api/v1/invitations/${encodeURIComponent(code)}`, {
+      headers: languageHeader(),
+    });
   } catch {
-    throw new ApiError("De API is niet bereikbaar.", 0);
+    throw new ApiError(text().common.apiUnreachable, 0);
   }
 
   const payload = await response.json().catch(() => null);
   if (!response.ok) {
     throw new ApiError(
-      (payload as { detail?: string } | null)?.detail ?? "Deze uitnodiging is ongeldig of verlopen.",
+      (payload as { detail?: string } | null)?.detail ?? text().auth.invite.invalid,
       response.status,
     );
   }
@@ -229,7 +237,7 @@ export async function acceptInvitation(code: string, name: string, password: str
 /** Whether anyone may sign up on their own (the platform administrator opens it at launch). */
 export async function signupStatus(): Promise<{ open: boolean; trialConversions: number }> {
   if (!isApiConfigured) return { open: false, trialConversions: 0 };
-  const response = await fetch(`${API_BASE_URL}/api/v1/signup/status`).catch(() => null);
+  const response = await fetch(`${API_BASE_URL}/api/v1/signup/status`, { headers: languageHeader() }).catch(() => null);
   return response?.ok ? ((await response.json()) as { open: boolean; trialConversions: number }) : { open: false, trialConversions: 0 };
 }
 

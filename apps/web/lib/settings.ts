@@ -5,6 +5,7 @@
 
 import { API_BASE_URL, ApiError, isApiConfigured } from "./api";
 import { authHeaders } from "./auth";
+import { text } from "./i18n";
 
 export interface TaxCategoryInfo {
   code: string;
@@ -70,13 +71,13 @@ async function call(method: "GET" | "PUT", body?: unknown): Promise<Organization
       body: body === undefined ? undefined : JSON.stringify(body),
     });
   } catch {
-    throw new ApiError("De API is niet bereikbaar.", 0);
+    throw new ApiError(text().common.apiUnreachable, 0);
   }
 
   const payload = await response.json().catch(() => null);
   if (!response.ok) {
     const detail = (payload as { detail?: string } | null)?.detail;
-    throw new ApiError(detail ?? `De API gaf status ${response.status}.`, response.status);
+    throw new ApiError(detail ?? text().common.apiStatus(response.status), response.status);
   }
   return payload as OrganizationSettings;
 }

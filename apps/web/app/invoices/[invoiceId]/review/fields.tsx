@@ -8,6 +8,7 @@
 import { createContext, useContext } from "react";
 
 import { getAtPath, type CanonicalInvoice } from "../../../../lib/canonical";
+import { type Dictionary } from "../../../../lib/i18n";
 
 export interface Option {
   value: string;
@@ -146,47 +147,33 @@ export function CellSelect({ path, label, options }: { path: string; label: stri
 }
 
 /* --- Code lists offered on the screen ---------------------------------- */
+/* Functions of the dictionary, so their labels follow the language. */
 
-export const TYPE_CODES: Option[] = [
-  { value: "380", label: "Factuur (380)" },
-  { value: "381", label: "Creditnota (381)" },
+export const typeCodes = (t: Dictionary): Option[] => [
+  { value: "380", label: `${t.review.codes.invoice} (380)` },
+  { value: "381", label: `${t.review.codes.creditNote} (381)` },
 ];
 
 export const CURRENCIES: Option[] = ["EUR", "USD", "GBP", "SGD"].map((code) => ({ value: code, label: code }));
 
+/**
+ * "code · name" in the order given. The order is spelled out because object
+ * keys that look like integers ("9944", "30") would otherwise be sorted.
+ */
+function coded<Code extends string>(order: readonly Code[], names: Record<Code, string>): Option[] {
+  return order.map((value) => ({ value, label: `${value} · ${names[value]}` }));
+}
+
 /** Electronic address schemes (EAS) that matter for Dutch, Belgian, British and Singapore trading partners. */
-export const ENDPOINT_SCHEMES: Option[] = [
-  { value: "0106", label: "0106 · KvK-nummer" },
-  { value: "0190", label: "0190 · OIN (overheid)" },
-  { value: "9944", label: "9944 · Nederlands btw-nummer" },
-  { value: "0208", label: "0208 · Belgisch ondernemingsnummer" },
-  { value: "9925", label: "9925 · Belgisch btw-nummer" },
-  { value: "9932", label: "9932 · Brits btw-nummer" },
-  { value: "0088", label: "0088 · GLN" },
-  { value: "0195", label: "0195 · Singapore UEN" },
-];
+export const endpointSchemes = (t: Dictionary): Option[] =>
+  coded(["0106", "0190", "9944", "0208", "9925", "9932", "0088", "0195"] as const, t.review.codes.endpoint);
 
-export const REGISTRATION_SCHEMES: Option[] = [
-  { value: "0106", label: "0106 · KvK" },
-  { value: "0190", label: "0190 · OIN" },
-  { value: "0208", label: "0208 · Belgisch ondernemingsnummer" },
-  { value: "0195", label: "0195 · Singapore UEN" },
-];
+export const registrationSchemes = (t: Dictionary): Option[] =>
+  coded(["0106", "0190", "0208", "0195"] as const, t.review.codes.registration);
 
-export const UNIT_CODES: Option[] = [
-  { value: "C62", label: "stuk" },
-  { value: "HUR", label: "uur" },
-  { value: "DAY", label: "dag" },
-  { value: "MON", label: "maand" },
-  { value: "KGM", label: "kilogram" },
-  { value: "MTR", label: "meter" },
-  { value: "LTR", label: "liter" },
-];
+
+export const unitCodes = (t: Dictionary): Option[] =>
+  (["C62", "HUR", "DAY", "MON", "KGM", "MTR", "LTR"] as const).map((value) => ({ value, label: t.review.codes.units[value] }));
 
 /** Direct debit (49, 59) is left out: it needs a mandate reference xChange does not record. */
-export const PAYMENT_MEANS: Option[] = [
-  { value: "30", label: "30 · Overschrijving" },
-  { value: "58", label: "58 · SEPA-overschrijving" },
-  { value: "48", label: "48 · Betaalkaart" },
-  { value: "57", label: "57 · Doorlopende opdracht" },
-];
+export const paymentMeans = (t: Dictionary): Option[] => coded(["30", "58", "48", "57"] as const, t.review.codes.paymentMeans);

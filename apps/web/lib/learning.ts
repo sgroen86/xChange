@@ -5,6 +5,7 @@
 
 import { API_BASE_URL, ApiError, isApiConfigured } from "./api";
 import { authHeaders } from "./auth";
+import { text, type Dictionary } from "./i18n";
 
 export interface LearnedCorrection {
   id: string;
@@ -22,16 +23,16 @@ export interface LearnedCorrection {
 }
 
 async function call(path: string, init?: RequestInit): Promise<Response> {
-  if (!isApiConfigured) throw new ApiError("Er is geen API geconfigureerd.", 0);
+  if (!isApiConfigured) throw new ApiError(text().common.noApi, 0);
 
   let response: Response;
   try {
     response = await fetch(`${API_BASE_URL}${path}`, { ...init, headers: { ...authHeaders() } });
   } catch {
-    throw new ApiError("De API is niet bereikbaar.", 0);
+    throw new ApiError(text().common.apiUnreachable, 0);
   }
 
-  if (!response.ok) throw new ApiError(`De API gaf status ${response.status}.`, response.status);
+  if (!response.ok) throw new ApiError(text().common.apiStatus(response.status), response.status);
   return response;
 }
 
@@ -44,37 +45,16 @@ export async function forgetLearned(id: string): Promise<void> {
   await call(`/api/v1/learning/${encodeURIComponent(id)}`, { method: "DELETE" });
 }
 
-const LABELS: Record<string, string> = {
-  "seller.name": "Naam verkoper",
-  "seller.vatIdentifier": "Btw-nummer verkoper",
-  "seller.legalRegistrationId": "KvK-nummer verkoper",
-  "seller.legalRegistrationScheme": "Schema registratienummer verkoper",
-  "seller.address.streetName": "Straat verkoper",
-  "seller.address.postalZone": "Postcode verkoper",
-  "seller.address.cityName": "Plaats verkoper",
-  "seller.address.countryCode": "Land verkoper",
-  "payment.paymentMeansCode": "Betaalwijze",
-  "payment.iban": "IBAN",
-  "payment.bic": "BIC",
-  "payment.accountName": "Rekeninghouder",
-  buyerReference: "Referentie afnemer",
-  purchaseOrderReference: "Inkoopordernummer",
-  dueDate: "Vervaldatum",
-  typeCode: "Soort factuur",
-  currencyCode: "Valuta",
-  "lines.unitCode": "Eenheid op een regel",
-  "lines.tax": "Btw-categorie en tarief per regel",
-};
-
-/** A Dutch label for a learned field. */
-export function fieldLabel(field: string): string {
-  if (field.startsWith("exemptionReason:")) return `Vrijstellingsreden ${field.slice("exemptionReason:".length)}`;
-  return LABELS[field] ?? field;
+/** A label for a learned field, in the given (default: current) language. */
+export function fieldLabel(field: string, t: Dictionary = text()): string {
+  const learned = t.settings.learned;
+  if (field.startsWith("exemptionReason:")) return learned.exemptionReason(field.slice("exemptionReason:".length));
+  return (learned.fields as Record<string, string>)[field] ?? field;
 }
 
-/** "S|21" -> "S 21%"; other values unchanged; nothing -> "(leeg)". */
-export function valueLabel(field: string, value: string | null): string {
-  if (!value) return "(leeg)";
+/** "S|21" -> "S 21%"; other values unchanged; nothing -> "(leeg)" / "(empty)". */
+export function valueLabel(field: string, value: string | null, t: Dictionary = text()): string {
+  if (!value) return t.settings.learned.emptyValue;
   if (field !== "lines.tax") return value;
   const [category, rate] = value.split("|");
   return rate ? `${category} ${rate}%` : category;

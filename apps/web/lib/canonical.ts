@@ -9,6 +9,7 @@
  * screen's inputs, so a violation can take the user to its field.
  */
 
+import { text as texts } from "./i18n";
 import { calculateTotals, type CalculatedTotals } from "./totals";
 
 export type Amount = string | null;
@@ -453,19 +454,20 @@ const DECIMAL = /^-?\d+(\.\d+)?$/;
  */
 export function localIssues(invoice: CanonicalInvoice): LocalIssue[] {
   const issues: LocalIssue[] = [];
+  const messages = texts().review.issues;
   const check = (value: Amount, path: string, message: string) => {
     if (value !== null && !DECIMAL.test(value.trim())) issues.push({ path, message });
   };
 
   invoice.lines.forEach((line, index) => {
     const n = index + 1;
-    check(line.quantity, `lines[${index}].quantity`, `Regel ${n}: aantal is geen getal. Gebruik een punt als decimaalteken.`);
-    check(line.unitPrice, `lines[${index}].unitPrice`, `Regel ${n}: prijs is geen getal. Gebruik een punt als decimaalteken.`);
-    check(line.vatPercentage, `lines[${index}].vatPercentage`, `Regel ${n}: btw-percentage is geen getal.`);
-    check(line.baseQuantity, `lines[${index}].baseQuantity`, `Regel ${n}: basishoeveelheid is geen getal.`);
+    check(line.quantity, `lines[${index}].quantity`, messages.quantity(n));
+    check(line.unitPrice, `lines[${index}].unitPrice`, messages.unitPrice(n));
+    check(line.vatPercentage, `lines[${index}].vatPercentage`, messages.vatPercentage(n));
+    check(line.baseQuantity, `lines[${index}].baseQuantity`, messages.baseQuantity(n));
   });
-  check(invoice.taxCurrencyRate, "taxCurrencyRate", "De wisselkoers is geen getal. Gebruik een punt als decimaalteken.");
-  check(invoice.totals?.prepaidAmount ?? null, "totals.prepaidAmount", "Vooruitbetaald bedrag is geen getal.");
+  check(invoice.taxCurrencyRate, "taxCurrencyRate", messages.taxCurrencyRate);
+  check(invoice.totals?.prepaidAmount ?? null, "totals.prepaidAmount", messages.prepaidAmount);
 
   return issues;
 }

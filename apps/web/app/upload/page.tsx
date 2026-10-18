@@ -8,21 +8,23 @@ import { useToast } from "../../components/Toast";
 import { extractInvoice, isApiConfigured, toDraft } from "../../lib/api";
 import { ApiError } from "../../lib/api";
 import { mockDraft } from "../../lib/canonical";
+import { useText } from "../../lib/i18n";
 import { checkPdf, formatBytes, MAX_PDF_BYTES } from "../../lib/pdf";
 import { submitImport } from "../../lib/imports";
 import { putPdf } from "../../lib/pdfStore";
 import { newInvoiceId, saveDraft, saveServerResult } from "../../lib/store";
 
-/** Mock pipeline stages, named after the real flow in CLAUDE.md. */
+/** Mock pipeline stages, named after the real flow in CLAUDE.md. Labels: t.upload.stages[key]. */
 const STAGES = [
-  { key: "extraction", label: "Documentextractie", ms: 900 },
-  { key: "interpretation", label: "Factuurinterpretatie", ms: 1100 },
-  { key: "draft", label: "Concept opstellen", ms: 700 },
-];
+  { key: "extraction", ms: 900 },
+  { key: "interpretation", ms: 1100 },
+  { key: "draft", ms: 700 },
+] as const;
 
 export default function UploadPage() {
   const router = useRouter();
   const showToast = useToast();
+  const t = useText();
   const inputRef = useRef<HTMLInputElement>(null);
 
   const [file, setFile] = useState<File | null>(null);
@@ -45,12 +47,12 @@ export default function UploadPage() {
       const result = await checkPdf(candidate);
       if (!result.ok) {
         setErrors(result.errors);
-        showToast("PDF afgekeurd — controleer de meldingen.", "danger");
+        showToast(t.upload.pdfRejected, "danger");
         return;
       }
-      showToast(`${candidate.name} is klaar om te converteren.`, "success");
+      showToast(t.upload.readyToConvert(candidate.name), "success");
     },
-    [showToast],
+    [showToast, t],
   );
 
   /** One file: read now, as before. Several: queued for the background. */
@@ -92,7 +94,7 @@ export default function UploadPage() {
         try {
           await submitImport(candidate);
         } catch (cause) {
-          refused.push(`${candidate.name}: ${cause instanceof Error ? cause.message : "niet geaccepteerd"}`);
+          refused.push(`${candidate.name}: ${cause instanceof Error ? cause.message : t.upload.notAccepted}`);
         }
       }
       setBatchDone((done) => done + 1);
@@ -101,9 +103,9 @@ export default function UploadPage() {
     setImporting(false);
     if (refused.length > 0) {
       setErrors(refused);
-      showToast(`${batch.length - refused.length} van ${batch.length} geïmporteerd.`, "warning");
+      showToast(t.upload.batchPartial(batch.length - refused.length, batch.length), "warning");
     } else {
-      showToast(`${batch.length} facturen worden in de achtergrond gelezen.`, "success");
+      showToast(t.upload.batchQueued(batch.length), "success");
       router.push("/imports");
     }
   };
@@ -142,8 +144,8 @@ export default function UploadPage() {
         const errorCount = response.warnings.filter((w) => w.severity === "error").length;
         showToast(
           errorCount > 0
-            ? `Factuur gelezen met ${errorCount} fout(en). Controleer de gegevens.`
-            : "Factuur gelezen. Controleer de gegevens.",
+            ? t.upload.readWithErrors(errorCount)
+            : t.upload.read,
           errorCount > 0 ? "warning" : "success",
         );
       } else {
@@ -156,7 +158,7 @@ export default function UploadPage() {
 
         await putPdf(invoiceId, file);
         saveDraft(mockDraft(invoiceId, file.name, file.size));
-        showToast("Concept aangemaakt (mockdata). Controleer de gegevens.", "success");
+        showToast(t.upload.mockDraft, "success");
       }
 
       router.push(`/invoices/${invoiceId}/review`);
@@ -164,7 +166,7 @@ export default function UploadPage() {
       setStageIndex(-1);
       setProgress(0);
       const message =
-        cause instanceof ApiError ? cause.message : "De conversie is onverwacht mislukt.";
+        cause instanceof ApiError ? cause.message : t.upload.unexpectedFailure;
       setErrors([message]);
       showToast(message, "danger");
     }
@@ -177,12 +179,9 @@ export default function UploadPage() {
       <div className="page-header">
         <div>
           <h1>
-            <Icon name="fileUp" /> Factuur uploaden
+            <Icon name="fileUp" /> {t.upload.title}
           </h1>
-          <p className="page-header__subtitle">
-            Upload een PDF-factuur. De gegevens worden uitgelezen en daarna ter controle
-            voorgelegd.
-          </p>
+          <p className="page-header__subtitle">{t.upload.subtitle}</p>
         </div>
       </div>
 
@@ -190,7 +189,7 @@ export default function UploadPage() {
         <div className="stack">
           <div className="card">
             <div className="card__header">
-              <h3>PDF selecteren</h3>
+              <h3>{t.upload.selectPdf}</h3>
             </div>
             <div className="card__body">
               <div
@@ -214,10 +213,11 @@ export default function UploadPage() {
                   <Icon name="upload" />
                 </div>
                 <div className="dropzone__text">
-                  Sleep een of meer PDF&apos;s hierheen of <strong>blader</strong>
+                  {t.upload.dropPrefix}
+                  <strong>{t.upload.browse}</strong>
                 </div>
                 <div className="dropzone__text text-muted text-xs">
-                  Alleen PDF, maximaal {formatBytes(MAX_PDF_BYTES)}
+                  {t.upload.limit(formatBytes(MAX_PDF_BYTES))}
                 </div>
               </div>
 
@@ -235,9 +235,10 @@ export default function UploadPage() {
                   <div className="alert alert--info">
                     <Icon name="info" />
                     <div>
-                      {batch.length} PDF&apos;s geselecteerd. Ze worden in de achtergrond gelezen en
-                      verschijnen onder <strong>Te beoordelen</strong>.
-                      {importing && ` (${batchDone} van ${batch.length} verzonden)`}
+                      {t.upload.batchSelectedBefore(batch.length)}
+                      <strong>{t.imports.title}</strong>
+                      {t.upload.batchSelectedAfter}
+                      {importing && t.upload.batchProgress(batchDone, batch.length)}
                     </div>
                   </div>
                   <ul className="alert__list">
@@ -249,7 +250,7 @@ export default function UploadPage() {
                   </ul>
                   <div className="form__actions">
                     <button type="button" className="btn btn--primary" onClick={() => void importBatch()} disabled={importing}>
-                      <Icon name="zap" /> {importing ? "Bezig…" : `${batch.length} facturen importeren`}
+                      <Icon name="zap" /> {importing ? t.common.busy : t.upload.importBatch(batch.length)}
                     </button>
                     <button
                       type="button"
@@ -260,7 +261,7 @@ export default function UploadPage() {
                       }}
                       disabled={importing}
                     >
-                      Wissen
+                      {t.upload.clear}
                     </button>
                   </div>
                 </div>
@@ -285,7 +286,7 @@ export default function UploadPage() {
                         className="btn btn--ghost btn--icon"
                         onClick={clearFile}
                         disabled={processing}
-                        aria-label="Bestand verwijderen"
+                        aria-label={t.upload.removeFile}
                       >
                         <Icon name="trash" />
                       </button>
@@ -298,7 +299,7 @@ export default function UploadPage() {
                 <div className="alert alert--danger" style={{ marginTop: "var(--space-4)" }}>
                   <Icon name="x" />
                   <div>
-                    <div className="alert__title">PDF-validatie mislukt</div>
+                    <div className="alert__title">{t.upload.validationFailed}</div>
                     <ul className="alert__list">
                       {errors.map((error) => (
                         <li key={error}>{error}</li>
@@ -316,7 +317,7 @@ export default function UploadPage() {
                   disabled={!canConvert}
                 >
                   <Icon name="zap" />
-                  {processing ? "Bezig met converteren…" : "Factuur converteren"}
+                  {processing ? t.upload.converting : t.upload.convert}
                 </button>
                 <button
                   type="button"
@@ -324,7 +325,7 @@ export default function UploadPage() {
                   onClick={clearFile}
                   disabled={!file || processing}
                 >
-                  Wissen
+                  {t.upload.clear}
                 </button>
               </div>
             </div>
@@ -334,14 +335,12 @@ export default function UploadPage() {
         <div className="stack">
           <div className="card">
             <div className="card__header">
-              <h3>Verwerking</h3>
-              {processing && <span className="badge badge--info">Bezig</span>}
+              <h3>{t.upload.processingTitle}</h3>
+              {processing && <span className="badge badge--info">{t.upload.processingBadge}</span>}
             </div>
             <div className="card__body">
               {!processing && progress === 0 ? (
-                <p className="text-soft text-sm">
-                  Nog niets te verwerken. Selecteer een PDF en start de conversie.
-                </p>
+                <p className="text-soft text-sm">{t.upload.nothingYet}</p>
               ) : (
                 <>
                   <div className="progress">
@@ -363,7 +362,7 @@ export default function UploadPage() {
                           <span className="progress-stage__marker">
                             <Icon name={state === "done" ? "check" : "clock"} />
                           </span>
-                          <span>{stage.label}</span>
+                          <span>{t.upload.stages[stage.key]}</span>
                         </div>
                       );
                     })}

@@ -2,6 +2,8 @@
  * Navigation data, in the same declarative shape Bookkeeping uses
  * (js/components/sidebar.js): a flat array mixing `{ section }` separators with
  * items carrying `id`, `label`, `icon`, optional `badge` and optional `hidden`.
+ * Labels are keys into the shell dictionary (lib/i18n/shell.ts), so the
+ * sidebar and the header follow the language switch.
  *
  * The Bookkeeping sections are kept here so the structure stays recognisable,
  * but flagged `hidden` — Bookkeeping's own mechanism for parking an item —
@@ -9,13 +11,15 @@
  * Give them an `href` and drop `hidden` once the apps are linked up.
  */
 
+import type { NavLabelKey, NavSectionKey } from "../lib/i18n/shell";
+
 export interface NavSection {
-  section: string;
+  section: NavSectionKey;
 }
 
 export interface NavItem {
   id: string;
-  label: string;
+  label: NavLabelKey;
   icon: string;
   href?: string;
   badge?: number | "auto";
@@ -33,34 +37,25 @@ export function isSection(entry: NavEntry): entry is NavSection {
 }
 
 export const navStructure: NavEntry[] = [
-  { section: "xChange" },
-  { id: "upload", label: "Factuur uploaden", icon: "fileUp", href: "/upload" },
-  { id: "imports", label: "Te beoordelen", icon: "clock", href: "/imports" },
-  { id: "invoices", label: "Facturen", icon: "fileText", href: "/invoices" },
-  { id: "relations", label: "Relaties", icon: "users", href: "/relations" },
-  { id: "review", label: "Beoordelen", icon: "fileText", requiresInvoice: true },
+  { section: "xchange" },
+  { id: "upload", label: "upload", icon: "fileUp", href: "/upload" },
+  { id: "imports", label: "imports", icon: "clock", href: "/imports" },
+  { id: "invoices", label: "invoices", icon: "fileText", href: "/invoices" },
+  { id: "relations", label: "relations", icon: "users", href: "/relations" },
+  { id: "review", label: "review", icon: "fileText", requiresInvoice: true },
 
-  { section: "Boekhouden" },
-  { id: "intake", label: "Inkomende Facturen", icon: "fileUp", hidden: true },
-  { id: "facturen-overzicht", label: "Facturenoverzicht", icon: "fileText", hidden: true },
-  { id: "invoeren", label: "Facturen Invoeren", icon: "filePlus", hidden: true },
+  { section: "bookkeeping" },
+  { id: "intake", label: "intake", icon: "fileUp", hidden: true },
+  { id: "facturen-overzicht", label: "invoiceOverview", icon: "fileText", hidden: true },
+  { id: "invoeren", label: "enterInvoices", icon: "filePlus", hidden: true },
 
-  { section: "Aangiftes" },
-  { id: "btw", label: "BTW Aangifte", icon: "euro", hidden: true },
+  { section: "returns" },
+  { id: "btw", label: "vatReturn", icon: "euro", hidden: true },
 
-  { section: "Beheer" },
-  { id: "gebruikers", label: "Gebruikers", icon: "users", hidden: true },
-  { id: "instellingen", label: "Instellingen", icon: "settings", href: "/settings" },
-  { id: "platform", label: "Platform", icon: "users", href: "/platform", requiresPlatformAdmin: true },
+  { section: "admin" },
+  { id: "gebruikers", label: "users", icon: "users", hidden: true },
+  { id: "instellingen", label: "settings", icon: "settings", href: "/settings" },
+  { id: "platform", label: "platform", icon: "users", href: "/platform", requiresPlatformAdmin: true },
 ];
 
-/** Page titles shown in the header, keyed by nav id. */
-export const pageTitles: Record<string, { title: string; breadcrumb: string }> = {
-  upload: { title: "Factuur uploaden", breadcrumb: "xChange / Uploaden" },
-  invoices: { title: "Facturen", breadcrumb: "xChange / Facturen" },
-  review: { title: "Factuur beoordelen", breadcrumb: "xChange / Beoordelen" },
-  relations: { title: "Relaties", breadcrumb: "xChange / Relaties" },
-  instellingen: { title: "Instellingen", breadcrumb: "Beheer / Instellingen" },
-  platform: { title: "Platform", breadcrumb: "Beheer / Platform" },
-  invite: { title: "Uitnodiging", breadcrumb: "xChange / Account aanmaken" },
-};
+/* Page titles shown in the header live in the shell dictionary, under `pages`, keyed by nav id. */

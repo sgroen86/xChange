@@ -1,7 +1,76 @@
 /** Texts for the upload area. Dutch first; `en` must have exactly the same keys (typeof nl). */
 
-const nl = {};
+const nl = {
+  stages: {
+    extraction: "Documentextractie",
+    interpretation: "Factuurinterpretatie",
+    draft: "Concept opstellen",
+  },
+  pdfRejected: "PDF afgekeurd — controleer de meldingen.",
+  readyToConvert: (name: string) => `${name} is klaar om te converteren.`,
+  notAccepted: "niet geaccepteerd",
+  batchPartial: (done: number, total: number) => `${done} van ${total} geïmporteerd.`,
+  batchQueued: (count: number) => `${count} facturen worden in de achtergrond gelezen.`,
+  readWithErrors: (count: number) => `Factuur gelezen met ${count} fout(en). Controleer de gegevens.`,
+  read: "Factuur gelezen. Controleer de gegevens.",
+  mockDraft: "Concept aangemaakt (mockdata). Controleer de gegevens.",
+  unexpectedFailure: "De conversie is onverwacht mislukt.",
+  title: "Factuur uploaden",
+  subtitle: "Upload een PDF-factuur. De gegevens worden uitgelezen en daarna ter controle voorgelegd.",
+  selectPdf: "PDF selecteren",
+  dropPrefix: "Sleep een of meer PDF's hierheen of ",
+  browse: "blader",
+  limit: (size: string) => `Alleen PDF, maximaal ${size}`,
+  batchSelectedBefore: (count: number) =>
+    `${count} PDF's geselecteerd. Ze worden in de achtergrond gelezen en verschijnen onder `,
+  batchSelectedAfter: ".",
+  batchProgress: (done: number, total: number) => ` (${done} van ${total} verzonden)`,
+  importBatch: (count: number) => `${count} facturen importeren`,
+  clear: "Wissen",
+  removeFile: "Bestand verwijderen",
+  validationFailed: "PDF-validatie mislukt",
+  converting: "Bezig met converteren…",
+  convert: "Factuur converteren",
+  processingTitle: "Verwerking",
+  processingBadge: "Bezig",
+  nothingYet: "Nog niets te verwerken. Selecteer een PDF en start de conversie.",
+};
 
-const en: typeof nl = {};
+const en: typeof nl = {
+  stages: {
+    extraction: "Document extraction",
+    interpretation: "Invoice interpretation",
+    draft: "Preparing the draft",
+  },
+  pdfRejected: "PDF rejected — check the messages.",
+  readyToConvert: (name: string) => `${name} is ready to convert.`,
+  notAccepted: "not accepted",
+  batchPartial: (done: number, total: number) => `${done} of ${total} imported.`,
+  batchQueued: (count: number) => `${count} invoices are being read in the background.`,
+  readWithErrors: (count: number) =>
+    `Invoice read with ${count} ${count === 1 ? "error" : "errors"}. Check the details.`,
+  read: "Invoice read. Check the details.",
+  mockDraft: "Draft created (mock data). Check the details.",
+  unexpectedFailure: "The conversion failed unexpectedly.",
+  title: "Upload invoice",
+  subtitle: "Upload a PDF invoice. Its details are read and then shown to you to check.",
+  selectPdf: "Select PDF",
+  dropPrefix: "Drag one or more PDFs here or ",
+  browse: "browse",
+  limit: (size: string) => `PDF only, up to ${size}`,
+  batchSelectedBefore: (count: number) =>
+    `${count} PDFs selected. They are read in the background and appear under `,
+  batchSelectedAfter: ".",
+  batchProgress: (done: number, total: number) => ` (${done} of ${total} sent)`,
+  importBatch: (count: number) => `Import ${count} invoices`,
+  clear: "Clear",
+  removeFile: "Remove file",
+  validationFailed: "PDF validation failed",
+  converting: "Converting…",
+  convert: "Convert invoice",
+  processingTitle: "Processing",
+  processingBadge: "In progress",
+  nothingYet: "Nothing to process yet. Select a PDF and start the conversion.",
+};
 
 export const upload = { nl, en };

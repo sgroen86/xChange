@@ -6,6 +6,7 @@
 
 import { API_BASE_URL, ApiError, isApiConfigured } from "./api";
 import { authHeaders } from "./auth";
+import { text } from "./i18n";
 
 export interface PlatformOrganization {
   organizationId: string;
@@ -29,7 +30,7 @@ export interface PlatformResult {
 }
 
 async function call<T>(path: string, init?: RequestInit): Promise<T> {
-  if (!isApiConfigured) throw new ApiError("Er is geen API geconfigureerd.", 0);
+  if (!isApiConfigured) throw new ApiError(text().common.noApi, 0);
 
   let response: Response;
   try {
@@ -38,13 +39,13 @@ async function call<T>(path: string, init?: RequestInit): Promise<T> {
       headers: { "Content-Type": "application/json", ...authHeaders() },
     });
   } catch {
-    throw new ApiError("De API is niet bereikbaar.", 0);
+    throw new ApiError(text().common.apiUnreachable, 0);
   }
 
   const payload = await response.json().catch(() => null);
   if (!response.ok) {
     const detail = (payload as { detail?: string } | null)?.detail;
-    throw new ApiError(detail ?? `De API gaf status ${response.status}.`, response.status);
+    throw new ApiError(detail ?? text().common.apiStatus(response.status), response.status);
   }
   return payload as T;
 }

@@ -6,8 +6,9 @@ import { Icon } from "../../components/Icon";
 import { useToast } from "../../components/Toast";
 import { isApiConfigured } from "../../lib/api";
 import { getServerUserSnapshot, getUserSnapshot, listCountries, subscribeToUser, type CountryOption } from "../../lib/auth";
+import { text, useText } from "../../lib/i18n";
 import { FALLBACK_SETTINGS, getSettings, updateSettings, type OrganizationSettings } from "../../lib/settings";
-import { ENDPOINT_SCHEMES } from "../invoices/[invoiceId]/review/fields";
+import { endpointSchemes } from "../invoices/[invoiceId]/review/fields";
 import { InboxAddress } from "./InboxAddress";
 import { LearnedCorrections } from "./LearnedCorrections";
 import { UsageCard } from "./UsageCard";
@@ -19,6 +20,7 @@ import { UsageCard } from "./UsageCard";
  */
 export default function SettingsClient() {
   const showToast = useToast();
+  const t = useText();
   const user = useSyncExternalStore(subscribeToUser, getUserSnapshot, getServerUserSnapshot);
   const canEdit = user?.role === "Admin";
 
@@ -40,7 +42,7 @@ export default function SettingsClient() {
   }, []);
 
   const countryName = (code: string | null | undefined) =>
-    code ? (countries.find((c) => c.code === code)?.name ?? code) : "Nog niet vastgelegd";
+    code ? (countries.find((c) => c.code === code)?.name ?? code) : t.settings.countryNotSet;
 
   useEffect(() => {
     let cancelled = false;
@@ -55,7 +57,7 @@ export default function SettingsClient() {
       .catch((cause: unknown) => {
         if (cancelled) return;
         setSettings(FALLBACK_SETTINGS);
-        showToast(cause instanceof Error ? cause.message : "Laden is mislukt.", "danger");
+        showToast(cause instanceof Error ? cause.message : text().common.loadFailed, "danger");
       });
     return () => {
       cancelled = true;
@@ -74,9 +76,9 @@ export default function SettingsClient() {
         endpointScheme: endpointScheme || null,
       });
       setSettings(saved);
-      showToast("Instellingen opgeslagen.", "success");
+      showToast(t.settings.saved, "success");
     } catch (cause) {
-      showToast(cause instanceof Error ? cause.message : "Opslaan mislukt.", "danger");
+      showToast(cause instanceof Error ? cause.message : t.settings.saveFailed, "danger");
     } finally {
       setSaving(false);
     }
@@ -87,10 +89,10 @@ export default function SettingsClient() {
       <div className="page-header">
         <div>
           <h1>
-            <Icon name="settings" /> Instellingen
+            <Icon name="settings" /> {t.settings.title}
           </h1>
           <p className="page-header__subtitle">
-            {settings === null ? "Laden…" : "Gelden voor iedereen in uw organisatie."}
+            {settings === null ? t.common.loading : t.settings.subtitle}
           </p>
         </div>
       </div>
@@ -98,7 +100,7 @@ export default function SettingsClient() {
       {!isApiConfigured && (
         <div className="alert alert--info">
           <Icon name="info" />
-          <div>Er is geen API geconfigureerd. Instellingen kunnen niet worden opgeslagen.</div>
+          <div>{t.settings.noApi}</div>
         </div>
       )}
 
@@ -107,20 +109,20 @@ export default function SettingsClient() {
           <div className="card__body">
             <div className="form__row">
               <div className="form__group">
-                <label htmlFor="organizationName">Organisatie</label>
+                <label htmlFor="organizationName">{t.settings.organization}</label>
                 <input id="organizationName" type="text" value={settings.organizationName ?? "—"} readOnly />
               </div>
               <div className="form__group">
-                <label htmlFor="countryCode">Land</label>
+                <label htmlFor="countryCode">{t.settings.country}</label>
                 <input id="countryCode" type="text" value={countryName(settings.countryCode)} readOnly />
               </div>
             </div>
             <div className="form-help" style={{ marginBottom: "var(--space-4)" }}>
-              Naam en land wijzigt de platformbeheerder.
+              {t.settings.nameAndCountryHelp}
             </div>
 
             <div className="form__group">
-              <label htmlFor="defaultRuleset">Standaard exportformaat</label>
+              <label htmlFor="defaultRuleset">{t.settings.defaultFormat}</label>
               <select
                 id="defaultRuleset"
                 value={defaultRulesetId}
@@ -128,25 +130,23 @@ export default function SettingsClient() {
                 onChange={(event) => setDefaultRulesetId(event.target.value)}
               >
                 <option value="">
-                  {settings.countryCode ? `Standaard voor ${countryName(settings.countryCode)}` : "Systeemstandaard"}
+                  {settings.countryCode ? t.settings.defaultFor(countryName(settings.countryCode)) : t.settings.systemDefault}
                   {/* Without an own choice, the effective default is the country's. */}
                   {!settings.defaultRulesetId &&
                     ` (${(settings.rulesets.find((r) => r.id === settings.effectiveDefaultRulesetId) ?? settings.rulesets[0])?.displayName})`}
                 </option>
                 {settings.rulesets.map((ruleset) => (
                   <option key={ruleset.id} value={ruleset.id}>
-                    {ruleset.displayName} (regels {ruleset.rulesRelease})
+                    {t.settings.rulesetOption(ruleset.displayName, ruleset.rulesRelease)}
                   </option>
                 ))}
               </select>
-              <div className="form-help">
-                Het formaatmenu op een factuur opent hierop. Per download kunt u een ander kiezen.
-              </div>
+              <div className="form-help">{t.settings.formatHelp}</div>
             </div>
 
             <div className="form__row">
               <div className="form__group">
-                <label htmlFor="endpointId">Eigen elektronisch adres (PEPPOL-id)</label>
+                <label htmlFor="endpointId">{t.settings.endpointId}</label>
                 <input
                   id="endpointId"
                   type="text"
@@ -156,7 +156,7 @@ export default function SettingsClient() {
                 />
               </div>
               <div className="form__group">
-                <label htmlFor="endpointScheme">Schema</label>
+                <label htmlFor="endpointScheme">{t.settings.endpointScheme}</label>
                 <select
                   id="endpointScheme"
                   value={endpointScheme}
@@ -164,7 +164,7 @@ export default function SettingsClient() {
                   onChange={(event) => setEndpointScheme(event.target.value)}
                 >
                   <option value="">—</option>
-                  {ENDPOINT_SCHEMES.map((scheme) => (
+                  {endpointSchemes(t).map((scheme) => (
                     <option key={scheme.value} value={scheme.value}>
                       {scheme.label}
                     </option>
@@ -172,19 +172,16 @@ export default function SettingsClient() {
                 </select>
               </div>
             </div>
-            <div className="form-help">
-              Wordt ingevuld als elektronisch adres van de verkoper op elke factuur waar dat nog
-              ontbreekt.
-            </div>
+            <div className="form-help">{t.settings.endpointHelp}</div>
 
             {canEdit ? (
               <div className="form__actions">
                 <button type="submit" className="btn btn--primary" disabled={saving || !isApiConfigured}>
-                  <Icon name="save" /> {saving ? "Bezig…" : "Opslaan"}
+                  <Icon name="save" /> {saving ? t.common.busy : t.common.save}
                 </button>
               </div>
             ) : (
-              <p className="text-soft text-sm">Alleen een beheerder kan dit wijzigen.</p>
+              <p className="text-soft text-sm">{t.settings.adminOnly}</p>
             )}
           </div>
         </form>

@@ -20,14 +20,16 @@ import {
 } from "../lib/auth";
 import { Icon } from "./Icon";
 import { LanguageSwitch } from "./LanguageSwitch";
-import { isSection, navStructure, pageTitles, type NavItem } from "./nav";
+import { useText, type Dictionary } from "../lib/i18n";
+import type { PageKey } from "../lib/i18n/shell";
+import { isSection, navStructure, type NavItem } from "./nav";
 
 function currentInvoiceId(pathname: string): string | null {
   const match = pathname.match(/\/invoices\/([^/]+)\/review/);
   return match ? match[1] : null;
 }
 
-function activeNavId(pathname: string): string {
+function activeNavId(pathname: string): PageKey {
   if (/\/invoices\/[^/]+\/review/.test(pathname)) return "review";
   if (pathname.includes("/invoices")) return "invoices";
   if (pathname.includes("/settings")) return "instellingen";
@@ -40,6 +42,7 @@ function activeNavId(pathname: string): string {
 export function AppShell({ children }: { children: React.ReactNode }) {
   const pathname = usePathname() ?? "";
   const router = useRouter();
+  const t = useText();
   const [collapsed, setCollapsed] = useState(false);
   const [mobileOpen, setMobileOpen] = useState(false);
 
@@ -68,7 +71,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
 
   const invoiceId = currentInvoiceId(pathname);
   const activeId = activeNavId(pathname);
-  const page = pageTitles[activeId] ?? pageTitles.upload;
+  const page = t.shell.pages[activeId];
 
   const appClass = [
     "app",
@@ -109,7 +112,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
         <span className="sidebar__icon">
           <Icon name={item.icon} />
         </span>
-        <span className="sidebar__item-text">{item.label}</span>
+        <span className="sidebar__item-text">{t.shell.nav[item.label]}</span>
         {item.badge !== undefined && <span className="sidebar__badge">{item.badge}</span>}
       </Link>
     );
@@ -124,7 +127,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
           </div>
           <div className="sidebar__brand-text">
             <span className="sidebar__brand-name">xChange</span>
-            <span className="sidebar__brand-sub">Factuurconversie</span>
+            <span className="sidebar__brand-sub">{t.shell.brandSub}</span>
           </div>
         </div>
 
@@ -132,7 +135,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
           {visibleEntries.map((entry) =>
             isSection(entry) ? (
               <div className="sidebar__section-label" key={`section-${entry.section}`}>
-                {entry.section}
+                {t.shell.sections[entry.section]}
               </div>
             ) : (
               renderItem(entry)
@@ -145,7 +148,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
             <div className="sidebar__avatar">{initials(user?.name)}</div>
             <div className="sidebar__user-text">
               <span className="sidebar__user-name">{user?.name ?? "Green IT Solutions"}</span>
-              <span className="sidebar__user-role">{user ? roleLabel(user.role) : "Prototype"}</span>
+              <span className="sidebar__user-role">{user ? roleLabel(user.role, t) : t.shell.prototype}</span>
             </div>
           </div>
           <div className="sidebar__footer-row">
@@ -153,7 +156,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
               type="button"
               className="sidebar__toggle"
               onClick={() => setCollapsed((value) => !value)}
-              aria-label="Zijbalk in- of uitklappen"
+              aria-label={t.shell.toggleSidebar}
             >
               <Icon name="panelLeft" />
             </button>
@@ -162,15 +165,15 @@ export function AppShell({ children }: { children: React.ReactNode }) {
                 type="button"
                 className="sidebar__toggle"
                 onClick={() => void signOut()}
-                aria-label="Uitloggen"
-                title="Uitloggen"
+                aria-label={t.shell.logout}
+                title={t.shell.logout}
               >
                 <Icon name="x" />
               </button>
             )}
           </div>
           <div className="sidebar__powered">
-            Aangedreven door
+            {t.shell.poweredBy}
             <strong>Green IT Solutions</strong>
           </div>
         </div>
@@ -188,7 +191,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
               type="button"
               className="header__menu-toggle"
               onClick={() => setMobileOpen(true)}
-              aria-label="Menu openen"
+              aria-label={t.shell.openMenu}
             >
               <Icon name="menu" />
             </button>
@@ -198,7 +201,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
             </div>
           </div>
           <div className="header__right">
-            <span className="header__date">Prototype — mockverwerking</span>
+            <span className="header__date">{t.shell.prototypeNote}</span>
             <LanguageSwitch />
           </div>
         </header>
@@ -219,8 +222,8 @@ function initials(name?: string): string {
   return letters.toUpperCase();
 }
 
-function roleLabel(role: string): string {
-  if (role === "Admin") return "Beheerder";
-  if (role === "ReadOnly") return "Alleen lezen";
-  return "Gebruiker";
+function roleLabel(role: string, t: Dictionary): string {
+  if (role === "Admin") return t.shell.roles.admin;
+  if (role === "ReadOnly") return t.shell.roles.readOnly;
+  return t.shell.roles.user;
 }

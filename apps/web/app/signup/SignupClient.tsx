@@ -5,6 +5,7 @@ import { useEffect, useState } from "react";
 
 import { Icon } from "../../components/Icon";
 import { ApiError } from "../../lib/api";
+import { useText } from "../../lib/i18n";
 import { listCountries, signupStatus, startSignup, type CountryOption } from "../../lib/auth";
 
 type State = { status: "loading" } | { status: "closed" } | { status: "open"; trial: number } | { status: "sent"; email: string };
@@ -14,6 +15,7 @@ type State = { status: "loading" } | { status: "closed" } | { status: "open"; tr
  * link in that mail is opened. Closed until the platform administrator opens it.
  */
 export default function SignupClient() {
+  const t = useText();
   const [state, setState] = useState<State>({ status: "loading" });
   const [countries, setCountries] = useState<CountryOption[]>([]);
   const [form, setForm] = useState({ name: "", email: "", password: "", organizationName: "", countryCode: "NL" });
@@ -44,7 +46,7 @@ export default function SignupClient() {
       await startSignup(form);
       setState({ status: "sent", email: form.email.trim() });
     } catch (cause) {
-      setError(cause instanceof ApiError ? cause.message : "Er ging iets mis. Probeer het opnieuw.");
+      setError(cause instanceof ApiError ? cause.message : t.auth.genericError);
     } finally {
       setBusy(false);
     }
@@ -55,26 +57,26 @@ export default function SignupClient() {
       <div className="page-header">
         <div>
           <h1>
-            <Icon name="user" /> Aanmelden
+            <Icon name="user" /> {t.auth.signup.title}
           </h1>
           <p className="page-header__subtitle">
-            {state.status === "open" ? `Probeer xChange gratis: ${state.trial} conversies, geen betaalgegevens nodig.` : "xChange"}
+            {state.status === "open" ? t.auth.signup.trial(state.trial) : "xChange"}
           </p>
         </div>
       </div>
 
-      {state.status === "loading" && <p className="text-soft text-sm">Laden&hellip;</p>}
+      {state.status === "loading" && <p className="text-soft text-sm">{t.common.loading}</p>}
 
       {state.status === "closed" && (
         <div className="card">
           <div className="card__body">
             <div className="alert alert--info">
               <Icon name="info" />
-              <div>Aanmelden is nog niet open. Heb je al een account?</div>
+              <div>{t.auth.signup.closed}</div>
             </div>
             <div className="form__actions">
               <Link className="btn btn--secondary" href="/login">
-                Naar inloggen
+                {t.auth.toLogin}
               </Link>
             </div>
           </div>
@@ -87,8 +89,7 @@ export default function SignupClient() {
             <div className="alert alert--success">
               <Icon name="check" />
               <div>
-                We hebben een e-mail gestuurd naar <strong>{state.email}</strong>. Open de link daarin om je
-                account te activeren; hij is 24 uur geldig. Geen mail gezien? Kijk ook in je spammap.
+                {t.auth.signup.sentTo} <strong>{state.email}</strong>. {t.auth.signup.sentNext}
               </div>
             </div>
           </div>
@@ -100,15 +101,15 @@ export default function SignupClient() {
           <div className="card__body">
             <form className="form" onSubmit={submit}>
               <div className="form-group">
-                <label className="form-label" htmlFor="name">Je naam</label>
+                <label className="form-label" htmlFor="name">{t.auth.fields.yourName}</label>
                 <input id="name" className="form-input" autoComplete="name" value={form.name} onChange={set("name")} required />
               </div>
               <div className="form-group">
-                <label className="form-label" htmlFor="email">E-mailadres</label>
+                <label className="form-label" htmlFor="email">{t.auth.fields.email}</label>
                 <input id="email" className="form-input" type="email" autoComplete="email" value={form.email} onChange={set("email")} required />
               </div>
               <div className="form-group">
-                <label className="form-label" htmlFor="password">Wachtwoord</label>
+                <label className="form-label" htmlFor="password">{t.auth.fields.password}</label>
                 <input
                   id="password"
                   className="form-input"
@@ -120,15 +121,15 @@ export default function SignupClient() {
                   minLength={12}
                 />
                 <div className="form-help">
-                  <Icon name="info" /> Minimaal 12 tekens.
+                  <Icon name="info" /> {t.auth.fields.passwordHelp}
                 </div>
               </div>
               <div className="form-group">
-                <label className="form-label" htmlFor="organizationName">Bedrijfsnaam</label>
+                <label className="form-label" htmlFor="organizationName">{t.auth.fields.companyName}</label>
                 <input id="organizationName" className="form-input" autoComplete="organization" value={form.organizationName} onChange={set("organizationName")} required />
               </div>
               <div className="form-group">
-                <label className="form-label" htmlFor="countryCode">Land</label>
+                <label className="form-label" htmlFor="countryCode">{t.auth.fields.country}</label>
                 <select id="countryCode" className="form-input" value={form.countryCode} onChange={set("countryCode")}>
                   {countries.map((country) => (
                     <option key={country.code} value={country.code}>
@@ -146,10 +147,10 @@ export default function SignupClient() {
               )}
 
               <button type="submit" className="btn btn--primary" disabled={busy}>
-                <Icon name="check" /> {busy ? "Bezig…" : "Account aanmaken"}
+                <Icon name="check" /> {busy ? t.common.busy : t.auth.createAccount}
               </button>
               <p className="text-soft text-sm" style={{ marginTop: "var(--space-4)" }}>
-                Al een account? <Link href="/login">Inloggen</Link>
+                {t.auth.signup.haveAccount} <Link href="/login">{t.auth.login}</Link>
               </p>
             </form>
           </div>

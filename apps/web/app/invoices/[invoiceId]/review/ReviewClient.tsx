@@ -8,6 +8,7 @@ import { Icon } from "../../../../components/Icon";
 import { useToast } from "../../../../components/Toast";
 import { isApiConfigured } from "../../../../lib/api";
 import { getServerUserSnapshot, getUserSnapshot, subscribeToUser } from "../../../../lib/auth";
+import { useLang, useText } from "../../../../lib/i18n";
 import {
   editableFingerprint,
   emptyLine,
@@ -77,6 +78,9 @@ function download(blob: Blob, fileName: string): void {
 export default function ReviewClient() {
   const pathname = usePathname() ?? "";
   const showToast = useToast();
+  const lang = useLang();
+  const t = useText();
+  const text = t.review;
   const user = useSyncExternalStore(subscribeToUser, getUserSnapshot, getServerUserSnapshot);
   const readOnly = user?.role === "ReadOnly";
 
@@ -133,7 +137,7 @@ export default function ReviewClient() {
   const format = formatChoice.id;
   /** Tax categories, tax name and tax currency follow the chosen format; the canonical XML uses the default's. */
   const taxRuleset = settings.rulesets.find((r) => r.id === format) ?? defaultRulesetOf(settings);
-  const taxName = taxRuleset.taxName === "btw" ? "Btw" : taxRuleset.taxName;
+  const taxName = taxRuleset.taxName === "btw" ? text.vat : taxRuleset.taxName;
   const taxCategories = useMemo(
     () => taxRuleset.taxCategories.map((c) => ({ value: c.code, label: `${c.code} · ${c.label}` })),
     [taxRuleset],
@@ -299,7 +303,9 @@ export default function ReviewClient() {
   }, [lookupKey, readOnly]);
 
   const invoice = draft?.invoice ?? null;
-  const local = useMemo(() => (invoice ? localIssues(invoice) : []), [invoice]);
+  // localIssues reads its messages in the current language, so a switch recomputes them.
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  const local = useMemo(() => (invoice ? localIssues(invoice) : []), [invoice, lang]);
   const totals = useMemo(() => (invoice ? totalsOf(invoice) : null), [invoice]);
   const isRuleset = format !== CANONICAL_FORMAT;
 
@@ -369,18 +375,18 @@ export default function ReviewClient() {
     saveDraft(draft);
 
     if (!isApiConfigured) {
-      showToast("Concept opgeslagen in deze browser.", "success");
+      showToast(text.toast.savedInBrowser, "success");
       return;
     }
 
     if (booked) {
       // Saving a booked invoice as a concept would undo the booking; the server refuses it.
-      showToast("Deze factuur is al geboekt. Klik op Opnieuw boeken om je wijzigingen te bewaren.", "danger");
+      showToast(text.toast.alreadyBooked, "danger");
       return;
     }
 
     if (pdf.status !== "ready") {
-      showToast("Concept opgeslagen in deze browser. De PDF is niet beschikbaar, dus niet op de server.", "danger");
+      showToast(text.toast.savedInBrowserOnly, "danger");
       return;
     }
 
@@ -398,9 +404,9 @@ export default function ReviewClient() {
         // Saved under Facturen: it no longer needs to wait in the list.
         void dismissImport(invoiceId).catch(() => undefined);
       }
-      showToast("Concept opgeslagen. Je vindt het terug onder Facturen.", "success");
+      showToast(text.toast.saved, "success");
     } catch (cause) {
-      showToast(cause instanceof Error ? cause.message : "Opslaan is mislukt.", "danger");
+      showToast(cause instanceof Error ? cause.message : t.common.saveFailed, "danger");
     } finally {
       setSaving(false);
     }
@@ -410,13 +416,13 @@ export default function ReviewClient() {
     if (!draft || booking) return;
 
     if (local.length > 0) {
-      showToast("Corrigeer eerst de getallen die niet gelezen kunnen worden.", "danger");
+      showToast(text.toast.fixNumbersFirst, "danger");
       goTo(local[0].path);
       return;
     }
 
     if (pdf.status !== "ready") {
-      showToast("De PDF is niet beschikbaar; upload hem opnieuw voordat je boekt.", "danger");
+      showToast(text.toast.pdfMissing, "danger");
       return;
     }
 
@@ -437,9 +443,9 @@ export default function ReviewClient() {
       }
       setBookedFingerprint(editableFingerprint(normalizeInvoice(stored.canonicalInvoice)));
       saveDraft(draft);
-      showToast("Factuur geboekt en opgeslagen.", "success");
+      showToast(text.toast.booked, "success");
     } catch (cause) {
-      showToast(cause instanceof Error ? cause.message : "Boeken is mislukt.", "danger");
+      showToast(cause instanceof Error ? cause.message : text.toast.bookFailed, "danger");
     } finally {
       setBooking(false);
     }
@@ -450,8 +456,8 @@ export default function ReviewClient() {
 
     if (!isRuleset) {
       const xml = toCanonicalXml(withCalculatedTotals(draft.invoice));
-      download(new Blob([xml], { type: "application/xml;charset=utf-8" }), `${draft.invoice.invoiceNumber || "factuur"}.xml`);
-      showToast("Canonieke XML gedownload.", "success");
+      download(new Blob([xml], { type: "application/xml;charset=utf-8" }), `${draft.invoice.invoiceNumber || text.fileNameFallback}.xml`);
+      showToast(text.toast.canonicalDownloaded, "success");
       return;
     }
 
@@ -461,19 +467,19 @@ export default function ReviewClient() {
       if (result.kind === "incomplete") {
         setViolations(result.violations);
         setOfficialWarnings([]);
-        showToast("Het bestand voldoet niet aan de officiële regels. Zie de meldingen.", "warning");
+        showToast(text.toast.notCompliant, "warning");
         return;
       }
       download(result.blob, result.fileName);
       setOfficialWarnings(result.warnings);
       showToast(
         result.warnings.length > 0
-          ? `${result.fileName} gedownload, met ${result.warnings.length} waarschuwing(en).`
-          : `${result.fileName} gedownload.`,
+          ? text.toast.downloadedWithWarnings(result.fileName, result.warnings.length)
+          : text.toast.downloaded(result.fileName),
         result.warnings.length > 0 ? "warning" : "success",
       );
     } catch (cause) {
-      showToast(cause instanceof Error ? cause.message : "Exporteren is mislukt.", "danger");
+      showToast(cause instanceof Error ? cause.message : text.toast.exportFailed, "danger");
     } finally {
       setDownloading(false);
     }
@@ -485,9 +491,9 @@ export default function ReviewClient() {
         <div className="page-header">
           <div>
             <h1>
-              <Icon name="fileText" /> Factuur beoordelen
+              <Icon name="fileText" /> {text.title}
             </h1>
-            <p className="page-header__subtitle">Concept niet gevonden</p>
+            <p className="page-header__subtitle">{text.notFound.subtitle}</p>
           </div>
         </div>
         <div className="card">
@@ -495,13 +501,12 @@ export default function ReviewClient() {
             <div className="alert alert--warning">
               <Icon name="info" />
               <div>
-                Er is geen concept voor <code>{invoiceId}</code> in deze sessie. Upload de PDF
-                opnieuw om een nieuw concept te maken.
+                {text.notFound.before} <code>{invoiceId}</code> {text.notFound.after}
               </div>
             </div>
             <div className="form__actions">
               <Link className="btn btn--primary" href="/upload">
-                <Icon name="fileUp" /> Naar uploaden
+                <Icon name="fileUp" /> {text.notFound.toUpload}
               </Link>
             </div>
           </div>
@@ -512,11 +517,11 @@ export default function ReviewClient() {
 
   const notices = server?.warnings ?? [];
   const statusBadge = !booked ? (
-    <span className="badge badge--warning">Niet geboekt</span>
+    <span className="badge badge--warning">{text.status.notBooked}</span>
   ) : dirty ? (
-    <span className="badge badge--warning">Gewijzigd sinds boeken</span>
+    <span className="badge badge--warning">{text.status.changed}</span>
   ) : (
-    <span className="badge badge--success">Geboekt</span>
+    <span className="badge badge--success">{text.status.booked}</span>
   );
 
   return (
@@ -524,20 +529,20 @@ export default function ReviewClient() {
       <div className="page-header">
         <div>
           <h1>
-            <Icon name="fileText" /> {invoice.invoiceNumber || "Concept zonder nummer"}
+            <Icon name="fileText" /> {invoice.invoiceNumber || text.untitled}
           </h1>
           <p className="page-header__subtitle">
-            {draft.source.fileName} · {draft.source.engine} · Te betalen{" "}
+            {draft.source.fileName} · {draft.source.engine} · {text.payable}{" "}
             {formatMoney(totals.payable, invoice.currencyCode)}
           </p>
         </div>
         {!readOnly && (
           <div className="page-header__actions">
             <button type="button" className="btn btn--secondary" onClick={() => void onSave()} disabled={saving}>
-              <Icon name="save" /> {saving ? "Bezig…" : "Opslaan"}
+              <Icon name="save" /> {saving ? t.common.busy : t.common.save}
             </button>
             <button type="button" className="btn btn--primary" onClick={() => void onBook()} disabled={booking}>
-              <Icon name="check" /> {booking ? "Bezig…" : booked && !dirty ? "Opnieuw boeken" : "Boeken"}
+              <Icon name="check" /> {booking ? t.common.busy : booked && !dirty ? text.bookAgain : text.book}
             </button>
           </div>
         )}
@@ -547,26 +552,26 @@ export default function ReviewClient() {
         <div className="pdf-pane">
           <div className="card">
             <div className="card__header">
-              <h3>Bron-PDF</h3>
+              <h3>{text.pdf.title}</h3>
               <span className="badge badge--neutral">{draft.source.fileName}</span>
             </div>
             <div className="card__body card__body--flush">
-              {pdf.status === "ready" && <iframe className="pdf-frame" src={pdf.url} title="Bron-PDF" />}
+              {pdf.status === "ready" && <iframe className="pdf-frame" src={pdf.url} title={text.pdf.title} />}
               {pdf.status === "loading" && (
                 <div className="pdf-empty">
-                  <span className="text-soft text-sm">Laden&hellip;</span>
+                  <span className="text-soft text-sm">{t.common.loading}</span>
                 </div>
               )}
               {pdf.status === "missing" && (
                 <div className="pdf-empty">
                   <Icon name="eye" />
                   <div>
-                    De PDF is niet gevonden in de opslag van deze browser.
+                    {text.pdf.missing}
                     <br />
-                    Upload het bestand opnieuw om het hier te bekijken.
+                    {text.pdf.missingHint}
                   </div>
                   <Link className="btn btn--secondary btn--sm" href="/upload">
-                    Opnieuw uploaden
+                    {text.pdf.reupload}
                   </Link>
                 </div>
               )}
@@ -581,19 +586,21 @@ export default function ReviewClient() {
             onFormat={setChosenFormat}
             defaultNote={
               formatChoice.source === "customer"
-                ? `Standaardformaat van afnemer ${customer?.name ?? "(onbekend)"}`
+                ? text.formatNote.customer(customer?.name ?? text.formatNote.unknownCustomer)
                 : formatChoice.source === "receiver"
-                  ? "Gekozen omdat de afnemer dit via PEPPOL ontvangt."
+                  ? text.formatNote.receiver
                   : null
             }
             trial={trial}
             receiverWarning={
               isRuleset && receiver?.status === "found" && !receiver.acceptedRulesetIds.includes(format)
                 ? receiver.acceptedRulesetIds.length > 0
-                  ? `Deze afnemer ontvangt dit formaat niet via PEPPOL. Wel: ${receiver.acceptedRulesetIds
-                      .map((id) => settings.rulesets.find((r) => r.id === id)?.displayName ?? id)
-                      .join(", ")}.`
-                  : "Deze afnemer staat op PEPPOL, maar ontvangt geen van de formaten die xChange maakt."
+                  ? text.receiverWarning.otherFormats(
+                      receiver.acceptedRulesetIds
+                        .map((id) => settings.rulesets.find((r) => r.id === id)?.displayName ?? id)
+                        .join(", "),
+                    )
+                  : text.receiverWarning.noFormats
                 : null
             }
             localIssues={local}
@@ -610,13 +617,13 @@ export default function ReviewClient() {
 
           <div className="tabs">
             <button type="button" className={`tab ${tab === "invoice" ? "tab--active" : ""}`.trim()} onClick={() => setTab("invoice")}>
-              Factuur
+              {text.tabs.invoice}
             </button>
             <button type="button" className={`tab ${tab === "xml" ? "tab--active" : ""}`.trim()} onClick={() => setTab("xml")}>
-              Canonieke XML
+              {text.canonicalXml}
             </button>
             <button type="button" className={`tab ${tab === "notices" ? "tab--active" : ""}`.trim()} onClick={() => setTab("notices")}>
-              Meldingen{notices.length > 0 ? ` (${notices.length})` : ""}
+              {text.tabs.notices}{notices.length > 0 ? ` (${notices.length})` : ""}
             </button>
           </div>
 
@@ -631,8 +638,8 @@ export default function ReviewClient() {
                     : null
                 }
               />
-              <PartyCard side="seller" title="Verkoper (uw organisatie)" />
-              <PartyCard side="buyer" title="Afnemer">
+              <PartyCard side="seller" title={text.party.seller} />
+              <PartyCard side="buyer" title={text.party.buyer}>
                 <ReceiverStatus
                   lookup={receiver}
                   looking={lookingUp}
@@ -686,8 +693,8 @@ export default function ReviewClient() {
           {tab === "xml" && (
             <div className="card">
               <div className="card__header">
-                <h3>Canonieke XML</h3>
-                <span className="badge badge--neutral">Deterministisch gegenereerd</span>
+                <h3>{text.canonicalXml}</h3>
+                <span className="badge badge--neutral">{text.xml.badge}</span>
               </div>
               <div className="card__body card__body--flush">
                 <pre className="xml-view">{toCanonicalXml(withCalculatedTotals(invoice))}</pre>
@@ -698,14 +705,14 @@ export default function ReviewClient() {
           {tab === "notices" && (
             <div className="card">
               <div className="card__header">
-                <h3>Meldingen bij het uitlezen</h3>
+                <h3>{text.notices.title}</h3>
               </div>
               <div className="card__body card__body--flush">
                 {notices.length === 0 ? (
                   <div className="card__body">
                     <div className="alert alert--success">
                       <Icon name="check" />
-                      <div>Geen meldingen.</div>
+                      <div>{text.notices.none}</div>
                     </div>
                   </div>
                 ) : (
@@ -721,7 +728,11 @@ export default function ReviewClient() {
                                 : "badge--warning"
                           }`}
                         >
-                          {notice.severity === "error" ? "Fout" : notice.severity === "info" ? "Ingevuld" : "Let op"}
+                          {notice.severity === "error"
+                            ? text.notices.error
+                            : notice.severity === "info"
+                              ? text.notices.info
+                              : text.notices.warning}
                         </span>
                         <div className="issue__body">
                           <div className="issue__message">{notice.message}</div>

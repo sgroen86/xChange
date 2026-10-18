@@ -2,6 +2,7 @@
 
 import { Icon } from "../../../../components/Icon";
 import type { LocalIssue } from "../../../../lib/canonical";
+import { useText } from "../../../../lib/i18n";
 import type { RuleViolation } from "../../../../lib/invoices";
 import type { RulesetInfo } from "../../../../lib/settings";
 
@@ -40,21 +41,23 @@ interface Props {
 export function ExportPanel(props: Props) {
   const { rulesets, format, onFormat, localIssues, violations, checking, checkFailed } = props;
   const ruleset = rulesets.find((r) => r.id === format) ?? null;
+  const t = useText();
+  const text = t.review.export;
 
   const blockedReason = props.trial
-    ? "In de proefperiode kun je alles controleren. Het bestand downloaden kan met een abonnement."
+    ? text.blockedTrial
     : ruleset
     ? !props.apiConfigured
-      ? "Zonder API is er geen export mogelijk."
+      ? text.blockedNoApi
       : !props.exportable
-        ? "Boek de factuur eerst: het bestand wordt gemaakt uit de geboekte versie."
+        ? text.blockedNotBooked
         : localIssues.length + violations.length > 0
-          ? "Vul eerst aan wat hieronder staat."
+          ? text.blockedIncomplete
           : null
     : null;
 
   const issues = [
-    ...localIssues.map((issue) => ({ key: `local-${issue.path}`, path: issue.path, code: "Getal", message: issue.message })),
+    ...localIssues.map((issue) => ({ key: `local-${issue.path}`, path: issue.path, code: text.numberCode, message: issue.message })),
     ...violations.map((v) => ({
       key: `${v.ruleId}-${v.path}`,
       path: v.path,
@@ -67,19 +70,19 @@ export function ExportPanel(props: Props) {
     // .form gives the format menu and its row the same styling as the invoice fields.
     <div className="card form">
       <div className="card__header">
-        <h3>Exporteren</h3>
+        <h3>{text.title}</h3>
       </div>
       <div className="card__body">
         <div className="form__row">
           <div className="form__group">
-            <label htmlFor="export-format">Formaat</label>
+            <label htmlFor="export-format">{text.format}</label>
             <select id="export-format" value={format} onChange={(event) => onFormat(event.target.value)}>
               {rulesets.map((r) => (
                 <option key={r.id} value={r.id}>
                   {r.displayName}
                 </option>
               ))}
-              <option value={CANONICAL_FORMAT}>Canonieke XML</option>
+              <option value={CANONICAL_FORMAT}>{t.review.canonicalXml}</option>
             </select>
             {props.defaultNote && <div className="form-help">{props.defaultNote}</div>}
           </div>
@@ -90,7 +93,7 @@ export function ExportPanel(props: Props) {
               onClick={props.onDownload}
               disabled={blockedReason !== null || props.downloading}
             >
-              <Icon name="download" /> {ruleset && !props.exportable ? "Eerst boeken" : props.downloading ? "Bezig…" : "Downloaden"}
+              <Icon name="download" /> {ruleset && !props.exportable ? text.bookFirst : props.downloading ? t.common.busy : text.download}
             </button>
           </div>
         </div>
@@ -108,13 +111,13 @@ export function ExportPanel(props: Props) {
           {issues.length > 0 ? (
             <>
               <div className="card__header">
-                <h3>Aanvullen voor {ruleset.displayName}</h3>
+                <h3>{text.completeFor(ruleset.displayName)}</h3>
                 <span className="badge badge--warning">{issues.length}</span>
               </div>
               <div className="issue-list">
                 {issues.map((issue) => (
                   <button type="button" className="issue issue--action" key={issue.key} onClick={() => props.onGoTo(issue.path)}>
-                    <span className="badge badge--danger">Ontbreekt</span>
+                    <span className="badge badge--danger">{text.missing}</span>
                     <span className="issue__body">
                       <span className="issue__message">{issue.message}</span>
                       <span className="issue__path">{issue.code}</span>
@@ -128,12 +131,12 @@ export function ExportPanel(props: Props) {
               {checkFailed ? (
                 <div className="alert alert--warning">
                   <Icon name="info" />
-                  <div>De controle kon niet worden uitgevoerd. Probeer het opnieuw.</div>
+                  <div>{text.checkFailed}</div>
                 </div>
               ) : (
                 <div className="alert alert--success">
                   <Icon name="check" />
-                  <div>{checking ? "Controleren…" : `Compleet voor ${ruleset.displayName}.`}</div>
+                  <div>{checking ? text.checking : text.complete(ruleset.displayName)}</div>
                 </div>
               )}
             </div>
@@ -141,13 +144,13 @@ export function ExportPanel(props: Props) {
           {props.officialWarnings.length > 0 && (
             <>
               <div className="card__header">
-                <h3>Waarschuwingen bij de laatste download</h3>
+                <h3>{text.lastWarnings}</h3>
                 <span className="badge badge--warning">{props.officialWarnings.length}</span>
               </div>
               <div className="issue-list">
                 {props.officialWarnings.map((warning) => (
                   <div className="issue" key={`${warning.ruleId}-${warning.path}`}>
-                    <span className="badge badge--warning">Let op</span>
+                    <span className="badge badge--warning">{text.warning}</span>
                     <div className="issue__body">
                       <div className="issue__message">{warning.message}</div>
                       <div className="issue__path">
@@ -160,11 +163,7 @@ export function ExportPanel(props: Props) {
             </>
           )}
           <div className="card__body">
-            <p className="text-muted text-xs">
-              Tijdens het typen: verplichte velden en kernregels. Bij downloaden: de volledige
-              officiële regels (release {ruleset.rulesRelease}); een bestand met een fout wordt niet
-              vrijgegeven.
-            </p>
+            <p className="text-muted text-xs">{text.footnote(ruleset.rulesRelease)}</p>
           </div>
         </div>
       )}

@@ -6,6 +6,7 @@
 
 import { API_BASE_URL, ApiError, isApiConfigured, type ApiValidationWarning } from "./api";
 import { authHeaders } from "./auth";
+import { text } from "./i18n";
 import { normalizeInvoice, type ReviewDraft } from "./canonical";
 import { putPdf } from "./pdfStore";
 import { saveDraft, saveServerResult } from "./store";
@@ -32,18 +33,18 @@ export interface ImportItem {
 }
 
 async function call(path: string, init?: RequestInit): Promise<Response> {
-  if (!isApiConfigured) throw new ApiError("Er is geen API geconfigureerd.", 0);
+  if (!isApiConfigured) throw new ApiError(text().common.noApi, 0);
 
   let response: Response;
   try {
     response = await fetch(`${API_BASE_URL}${path}`, { ...init, headers: { ...(init?.headers ?? {}), ...authHeaders() } });
   } catch {
-    throw new ApiError("De API is niet bereikbaar.", 0);
+    throw new ApiError(text().common.apiUnreachable, 0);
   }
 
   if (!response.ok) {
     const problem = (await response.json().catch(() => null)) as { detail?: string } | null;
-    throw new ApiError(problem?.detail ?? `De API gaf status ${response.status}.`, response.status);
+    throw new ApiError(problem?.detail ?? text().common.apiStatus(response.status), response.status);
   }
   return response;
 }
@@ -91,13 +92,14 @@ export async function dismissImport(importId: string): Promise<void> {
 export async function openImport(importId: string): Promise<void> {
   const item = (await (await call(`/api/v1/imports/${encodeURIComponent(importId)}`)).json()) as ImportItem;
   if (item.status !== "ready" || !item.canonicalInvoice) {
-    throw new ApiError("Deze factuur is nog niet gelezen.", 409);
+    throw new ApiError(text().imports.notReadYet, 409);
   }
 
   const pdf = await (await call(`/api/v1/imports/${encodeURIComponent(importId)}/document`)).blob();
   await putPdf(importId, new File([pdf], item.fileName, { type: "application/pdf" }));
 
-  const [provider, ...model] = (item.providerModel ?? "onbekend").split("/");
+  const unknown = "onbekend";
+  const [provider, ...model] = (item.providerModel ?? unknown).split("/");
   const draft: ReviewDraft = {
     id: importId,
     extractionId: item.extractionId ?? undefined,
@@ -106,7 +108,7 @@ export async function openImport(importId: string): Promise<void> {
     source: {
       fileName: item.fileName,
       byteSize: item.byteSize,
-      engine: item.providerModel ?? "onbekend",
+      engine: item.providerModel ?? unknown,
       extractedAt: item.createdAt,
     },
   };

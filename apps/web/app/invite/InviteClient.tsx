@@ -7,6 +7,7 @@ import { useEffect, useState } from "react";
 import { Icon } from "../../components/Icon";
 import { useToast } from "../../components/Toast";
 import { ApiError } from "../../lib/api";
+import { text, useText } from "../../lib/i18n";
 import { acceptInvitation, getInvitation, listCountries, type InvitationDetails } from "../../lib/auth";
 
 type State =
@@ -22,6 +23,7 @@ type State =
 export default function InviteClient() {
   const router = useRouter();
   const showToast = useToast();
+  const t = useText();
   const code = useSearchParams().get("code") ?? "";
 
   const [state, setState] = useState<State>({ status: "loading" });
@@ -47,7 +49,7 @@ export default function InviteClient() {
         if (!cancelled) {
           setState({
             status: "invalid",
-            message: cause instanceof ApiError ? cause.message : "Deze uitnodiging is ongeldig of verlopen.",
+            message: cause instanceof ApiError ? cause.message : text().auth.invite.invalid,
           });
         }
       });
@@ -65,10 +67,10 @@ export default function InviteClient() {
     setError(null);
     try {
       const session = await acceptInvitation(code, name, password);
-      showToast(`Welkom, ${session.user.name}.`, "success");
+      showToast(t.auth.welcome(session.user.name), "success");
       router.replace("/upload");
     } catch (cause) {
-      const message = cause instanceof ApiError ? cause.message : "Er ging iets mis. Probeer het opnieuw.";
+      const message = cause instanceof ApiError ? cause.message : t.auth.genericError;
       setError(message);
     } finally {
       setBusy(false);
@@ -80,14 +82,14 @@ export default function InviteClient() {
       <div className="page-header">
         <div>
           <h1>
-            <Icon name="user" /> Account aanmaken
+            <Icon name="user" /> {t.auth.createAccount}
           </h1>
           <p className="page-header__subtitle">
             {state.status === "ready"
-              ? `U bent uitgenodigd voor ${state.invitation.organizationName} (${state.countryName}).`
+              ? t.auth.invite.invited(state.invitation.organizationName, state.countryName)
               : state.status === "loading"
-                ? "Laden…"
-                : "Uitnodiging"}
+                ? t.common.loading
+                : t.auth.invite.title}
           </p>
         </div>
       </div>
@@ -97,11 +99,13 @@ export default function InviteClient() {
           <div className="card__body">
             <div className="alert alert--warning">
               <Icon name="info" />
-              <div>{state.message} Vraag de beheerder om een nieuwe link.</div>
+              <div>
+                {state.message} {t.auth.invite.askAdmin}
+              </div>
             </div>
             <div className="form__actions">
               <Link className="btn btn--secondary" href="/login">
-                Naar inloggen
+                {t.auth.toLogin}
               </Link>
             </div>
           </div>
@@ -114,13 +118,13 @@ export default function InviteClient() {
             <form className="form" onSubmit={submit}>
               <div className="form-group">
                 <label className="form-label" htmlFor="email">
-                  E-mailadres
+                  {t.auth.fields.email}
                 </label>
                 <input id="email" className="form-input" type="email" value={state.invitation.email} readOnly />
               </div>
               <div className="form-group">
                 <label className="form-label" htmlFor="name">
-                  Naam
+                  {t.auth.fields.name}
                 </label>
                 <input
                   id="name"
@@ -134,7 +138,7 @@ export default function InviteClient() {
               </div>
               <div className="form-group">
                 <label className="form-label" htmlFor="password">
-                  Wachtwoord
+                  {t.auth.fields.password}
                 </label>
                 <input
                   id="password"
@@ -146,7 +150,7 @@ export default function InviteClient() {
                   required
                 />
                 <div className="form-help">
-                  <Icon name="info" /> Minimaal 12 tekens.
+                  <Icon name="info" /> {t.auth.fields.passwordHelp}
                 </div>
               </div>
 
@@ -158,7 +162,7 @@ export default function InviteClient() {
               )}
 
               <button type="submit" className="btn btn--primary" disabled={busy}>
-                <Icon name="check" /> {busy ? "Bezig…" : "Account aanmaken"}
+                <Icon name="check" /> {busy ? t.common.busy : t.auth.createAccount}
               </button>
             </form>
           </div>

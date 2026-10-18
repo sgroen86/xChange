@@ -7,6 +7,7 @@ import { useEffect, useState } from "react";
 import { Icon } from "../../components/Icon";
 import { useToast } from "../../components/Toast";
 import { ApiError, isApiConfigured } from "../../lib/api";
+import { useText } from "../../lib/i18n";
 import { isSetupRequired, listCountries, login, setupFirstUser, signupStatus, type CountryOption } from "../../lib/auth";
 
 /**
@@ -17,6 +18,7 @@ import { isSetupRequired, listCountries, login, setupFirstUser, signupStatus, ty
 export default function LoginClient() {
   const router = useRouter();
   const showToast = useToast();
+  const t = useText();
 
   const [mode, setMode] = useState<"loading" | "login" | "setup">("loading");
   const [email, setEmail] = useState("");
@@ -64,16 +66,16 @@ export default function LoginClient() {
     try {
       if (mode === "setup") {
         const session = await setupFirstUser(email, password, name, organizationName, countryCode);
-        showToast(`Welkom, ${session.user.name}.`, "success");
+        showToast(t.auth.welcome(session.user.name), "success");
       } else {
         const session = await login(email, password);
-        showToast(`Welkom terug, ${session.user.name}.`, "success");
+        showToast(t.auth.loginPage.welcomeBack(session.user.name), "success");
       }
 
       router.replace("/upload");
     } catch (cause) {
       const message =
-        cause instanceof ApiError ? cause.message : "Er ging iets mis. Probeer het opnieuw.";
+        cause instanceof ApiError ? cause.message : t.auth.genericError;
       setError(message);
       showToast(message, "danger");
     } finally {
@@ -88,7 +90,7 @@ export default function LoginClient() {
           <div className="alert alert--info">
             <Icon name="info" />
             <div>
-              Er is geen API geconfigureerd, dus inloggen is niet nodig. De app draait op mockdata.
+              {t.auth.loginPage.noApi}
             </div>
           </div>
         </div>
@@ -100,7 +102,7 @@ export default function LoginClient() {
     return (
       <div className="card" style={{ maxWidth: 480 }}>
         <div className="card__body">
-          <p className="text-soft text-sm">Laden&hellip;</p>
+          <p className="text-soft text-sm">{t.common.loading}</p>
         </div>
       </div>
     );
@@ -113,12 +115,10 @@ export default function LoginClient() {
       <div className="page-header">
         <div>
           <h1>
-            <Icon name="user" /> {isSetup ? "Account aanmaken" : "Inloggen"}
+            <Icon name="user" /> {isSetup ? t.auth.createAccount : t.auth.login}
           </h1>
           <p className="page-header__subtitle">
-            {isSetup
-              ? "Er bestaat nog geen account. Maak het eerste beheerdersaccount aan."
-              : "Log in om facturen te verwerken."}
+            {isSetup ? t.auth.loginPage.setupSubtitle : t.auth.loginPage.subtitle}
           </p>
         </div>
       </div>
@@ -130,7 +130,7 @@ export default function LoginClient() {
               <>
                 <div className="form-group">
                   <label className="form-label" htmlFor="name">
-                    Naam
+                    {t.auth.fields.name}
                   </label>
                   <input
                     id="name"
@@ -144,7 +144,7 @@ export default function LoginClient() {
                 </div>
                 <div className="form-group">
                   <label className="form-label" htmlFor="organization">
-                    Organisatie
+                    {t.auth.fields.organization}
                   </label>
                   <input
                     id="organization"
@@ -157,7 +157,7 @@ export default function LoginClient() {
                 </div>
                 <div className="form-group">
                   <label className="form-label" htmlFor="country">
-                    Land
+                    {t.auth.fields.country}
                   </label>
                   <select
                     id="country"
@@ -166,7 +166,7 @@ export default function LoginClient() {
                     onChange={(event) => setCountryCode(event.target.value)}
                     required
                   >
-                    <option value="">Kies een land</option>
+                    <option value="">{t.auth.fields.chooseCountry}</option>
                     {countries.map((country) => (
                       <option key={country.code} value={country.code}>
                         {country.name}
@@ -179,7 +179,7 @@ export default function LoginClient() {
 
             <div className="form-group">
               <label className="form-label" htmlFor="email">
-                E-mailadres
+                {t.auth.fields.email}
               </label>
               <input
                 id="email"
@@ -194,7 +194,7 @@ export default function LoginClient() {
 
             <div className="form-group">
               <label className="form-label" htmlFor="password">
-                Wachtwoord
+                {t.auth.fields.password}
               </label>
               <input
                 id="password"
@@ -207,7 +207,7 @@ export default function LoginClient() {
               />
               {isSetup && (
                 <div className="form-help">
-                  <Icon name="info" /> Minimaal 12 tekens.
+                  <Icon name="info" /> {t.auth.fields.passwordHelp}
                 </div>
               )}
             </div>
@@ -221,11 +221,11 @@ export default function LoginClient() {
 
             <button type="submit" className="btn btn--primary" disabled={busy}>
               <Icon name="check" />
-              {busy ? "Bezig…" : isSetup ? "Account aanmaken" : "Inloggen"}
+              {busy ? t.common.busy : isSetup ? t.auth.createAccount : t.auth.login}
             </button>
             {!isSetup && signupOpen && (
               <p className="text-soft text-sm" style={{ marginTop: "var(--space-4)" }}>
-                Nog geen account? <Link href="/signup">Gratis aanmelden</Link>
+                {t.auth.loginPage.noAccount} <Link href="/signup">{t.auth.loginPage.signupFree}</Link>
               </p>
             )}
           </form>

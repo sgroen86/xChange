@@ -8,6 +8,7 @@
 import { API_BASE_URL, ApiError, isApiConfigured } from "./api";
 import { authHeaders, clearSession } from "./auth";
 import type { CanonicalInvoice } from "./canonical";
+import { text } from "./i18n";
 
 export interface StoredInvoice {
   invoiceId: string;
@@ -30,7 +31,7 @@ export interface RuleViolation {
 
 async function send(path: string, init?: RequestInit): Promise<Response> {
   if (!isApiConfigured) {
-    throw new ApiError("Er is geen API geconfigureerd.", 0);
+    throw new ApiError(text().common.noApi, 0);
   }
 
   let response: Response;
@@ -40,12 +41,12 @@ async function send(path: string, init?: RequestInit): Promise<Response> {
       headers: { ...(init?.headers ?? {}), ...authHeaders() },
     });
   } catch {
-    throw new ApiError("De API is niet bereikbaar.", 0);
+    throw new ApiError(text().common.apiUnreachable, 0);
   }
 
   if (response.status === 401) {
     clearSession();
-    throw new ApiError("Uw sessie is verlopen. Log opnieuw in.", 401);
+    throw new ApiError(text().review.sessionExpired, 401);
   }
 
   return response;
@@ -53,7 +54,7 @@ async function send(path: string, init?: RequestInit): Promise<Response> {
 
 async function failure(response: Response): Promise<ApiError> {
   const problem = (await response.json().catch(() => null)) as { detail?: string } | null;
-  return new ApiError(problem?.detail ?? `De API gaf status ${response.status}.`, response.status);
+  return new ApiError(problem?.detail ?? text().common.apiStatus(response.status), response.status);
 }
 
 async function request<T>(path: string, init?: RequestInit): Promise<T> {

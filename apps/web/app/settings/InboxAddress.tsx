@@ -6,10 +6,11 @@ import { Icon } from "../../components/Icon";
 import { useToast } from "../../components/Toast";
 import { API_BASE_URL, isApiConfigured } from "../../lib/api";
 import { authHeaders } from "../../lib/auth";
+import { text, useText } from "../../lib/i18n";
 
 async function inbox(method: "GET" | "POST"): Promise<string | null> {
   const response = await fetch(`${API_BASE_URL}/api/v1/organization/inbox`, { method, headers: authHeaders() });
-  if (!response.ok) throw new Error(`De API gaf status ${response.status}.`);
+  if (!response.ok) throw new Error(text().common.apiStatus(response.status));
   return ((await response.json()) as { address: string | null }).address;
 }
 
@@ -20,6 +21,7 @@ async function inbox(method: "GET" | "POST"): Promise<string | null> {
  */
 export function InboxAddress({ canEdit }: { canEdit: boolean }) {
   const showToast = useToast();
+  const t = useText();
   const [address, setAddress] = useState<string | null | undefined>(undefined);
   const [busy, setBusy] = useState(false);
 
@@ -40,13 +42,13 @@ export function InboxAddress({ canEdit }: { canEdit: boolean }) {
   if (!isApiConfigured) return null;
 
   const create = async () => {
-    if (address && !window.confirm("Een nieuw adres maken? Het huidige adres werkt daarna niet meer.")) return;
+    if (address && !window.confirm(t.settings.inbox.replaceConfirm)) return;
     setBusy(true);
     try {
       setAddress(await inbox("POST"));
-      showToast("Nieuw adres aangemaakt.", "success");
+      showToast(t.settings.inbox.created, "success");
     } catch (cause) {
-      showToast(cause instanceof Error ? cause.message : "Aanmaken is mislukt.", "danger");
+      showToast(cause instanceof Error ? cause.message : t.settings.inbox.createFailed, "danger");
     } finally {
       setBusy(false);
     }
@@ -56,43 +58,44 @@ export function InboxAddress({ canEdit }: { canEdit: boolean }) {
     if (!address) return;
     try {
       await navigator.clipboard.writeText(address);
-      showToast("Adres gekopieerd.", "success");
+      showToast(t.settings.inbox.copied, "success");
     } catch {
-      showToast("Kopiëren lukte niet; selecteer het adres en kopieer het zelf.", "warning");
+      showToast(t.settings.inbox.copyFailed, "warning");
     }
   };
 
   return (
     <div className="card form" style={{ marginTop: "var(--space-4)" }}>
       <div className="card__header">
-        <h3>E-mailadres voor facturen</h3>
+        <h3>{t.settings.inbox.title}</h3>
       </div>
       <div className="card__body">
         <p className="text-soft text-sm">
-          PDF&apos;s die naar dit adres worden gemaild, worden in de achtergrond gelezen en
-          verschijnen onder <strong>Te beoordelen</strong>, met afzender en onderwerp.
+          {t.settings.inbox.introBefore}
+          <strong>{t.settings.inbox.introPlace}</strong>
+          {t.settings.inbox.introAfter}
         </p>
         {address === undefined ? (
-          <p className="text-soft text-sm">Laden&hellip;</p>
+          <p className="text-soft text-sm">{t.common.loading}</p>
         ) : address ? (
           <div className="form__row">
             <div className="form__group">
-              <label htmlFor="inboxAddress">Adres</label>
+              <label htmlFor="inboxAddress">{t.settings.inbox.address}</label>
               <input id="inboxAddress" type="text" value={address} readOnly onFocus={(e) => e.target.select()} />
             </div>
             <div className="form__group" style={{ justifyContent: "flex-end" }}>
               <button type="button" className="btn btn--secondary" onClick={() => void copy()}>
-                Kopiëren
+                {t.settings.inbox.copy}
               </button>
             </div>
           </div>
         ) : (
-          <p className="text-soft text-sm">Er is nog geen adres.</p>
+          <p className="text-soft text-sm">{t.settings.inbox.none}</p>
         )}
         {canEdit && (
           <div className="form__actions">
             <button type="button" className="btn btn--secondary" onClick={() => void create()} disabled={busy}>
-              <Icon name="sparkles" /> {address ? "Nieuw adres maken" : "Adres aanmaken"}
+              <Icon name="sparkles" /> {address ? t.settings.inbox.replace : t.settings.inbox.create}
             </button>
           </div>
         )}

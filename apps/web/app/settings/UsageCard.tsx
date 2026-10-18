@@ -5,6 +5,7 @@ import { useEffect, useState } from "react";
 import { Icon } from "../../components/Icon";
 import { API_BASE_URL, isApiConfigured } from "../../lib/api";
 import { authHeaders } from "../../lib/auth";
+import { useText } from "../../lib/i18n";
 
 interface Usage {
   used: number;
@@ -14,6 +15,7 @@ interface Usage {
 
 /** The organisation's conversions. Only shown when it has a limit (a trial); otherwise there is nothing to say. */
 export function UsageCard() {
+  const t = useText();
   const [usage, setUsage] = useState<Usage | null>(null);
 
   useEffect(() => {
@@ -38,15 +40,13 @@ export function UsageCard() {
   return (
     <div className="card" style={{ marginTop: "var(--space-4)" }}>
       <div className="card__header">
-        <h3>Proefperiode</h3>
+        <h3>{t.settings.usage.title}</h3>
         <span className={`badge ${usage.remaining === 0 ? "badge--danger" : "badge--info"}`}>
-          {usage.remaining} over
+          {t.settings.usage.remaining(usage.remaining)}
         </span>
       </div>
       <div className="card__body">
-        <p className="text-sm">
-          {used} van {usage.limit} gratis conversies gebruikt.
-        </p>
+        <p className="text-sm">{t.settings.usage.used(used, usage.limit)}</p>
         <div
           role="progressbar"
           aria-valuemin={0}
@@ -59,7 +59,7 @@ export function UsageCard() {
         {usage.remaining === 0 && (
           <div className="alert alert--warning" style={{ marginTop: "var(--space-4)" }}>
             <Icon name="info" />
-            <div>Je gratis conversies zijn op. Abonnementen en tegoed komen binnenkort beschikbaar.</div>
+            <div>{t.settings.usage.exhausted}</div>
           </div>
         )}
       </div>

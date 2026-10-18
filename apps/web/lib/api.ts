@@ -11,6 +11,7 @@
 
 import { authHeaders, clearSession } from "./auth";
 import { normalizeInvoice, type ReviewDraft } from "./canonical";
+import { text } from "./i18n";
 
 export const API_BASE_URL = (process.env.NEXT_PUBLIC_XCHANGE_API_URL ?? "").replace(/\/$/, "");
 
@@ -59,7 +60,7 @@ export async function extractInvoice(
   signal?: AbortSignal,
 ): Promise<ExtractInvoiceApiResponse> {
   if (!isApiConfigured) {
-    throw new ApiError("Er is geen API geconfigureerd.", 0);
+    throw new ApiError(text().common.noApi, 0);
   }
 
   const body = new FormData();
@@ -78,17 +79,14 @@ export async function extractInvoice(
   } catch {
     // A CORS rejection and a dead network are indistinguishable to the page by
     // design, so name both rather than guessing which one it was.
-    throw new ApiError(
-      "De API is niet bereikbaar. Controleer de verbinding of de CORS-instelling.",
-      0,
-    );
+    throw new ApiError(text().shell.api.unreachableCors, 0);
   }
 
   if (response.status === 401) {
     // The session expired or was revoked server-side. Drop it so the app asks
     // for a login rather than retrying with a token that will never work.
     clearSession();
-    throw new ApiError("Uw sessie is verlopen. Log opnieuw in.", 401);
+    throw new ApiError(text().shell.api.sessionExpired, 401);
   }
 
   if (!response.ok) {
@@ -108,9 +106,9 @@ async function describeFailure(response: Response): Promise<string> {
     // Not a problem document; fall through to the status text.
   }
 
-  if (response.status === 413) return "Het bestand is te groot voor de API.";
-  if (response.status === 502) return "De extractie is mislukt bij de provider.";
-  return `De API gaf status ${response.status}.`;
+  if (response.status === 413) return text().shell.api.tooLarge;
+  if (response.status === 502) return text().shell.api.providerFailed;
+  return text().common.apiStatus(response.status);
 }
 
 /** The API response as a review draft: the server's model, normalised. */
