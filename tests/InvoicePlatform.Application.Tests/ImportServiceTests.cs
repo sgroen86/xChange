@@ -32,7 +32,7 @@ public class ImportServiceTests
             new InvoiceCalculationValidator(),
             new CanonicalInvoiceXmlSerializer(),
             new LearningService(new FakeLearningStore(), _clock), new FakePlatformStore(), new FakeUsageMeter());
-        _service = new ImportService(_imports, _imports, _documents, extraction, _clock);
+        _service = new ImportService(_imports, _imports, _documents, extraction, TestConversions.Completion(_documents, _clock), _clock);
     }
 
     private static readonly byte[] Pdf = "%PDF-1.4"u8.ToArray();

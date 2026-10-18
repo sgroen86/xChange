@@ -4,6 +4,7 @@ using Amazon.DynamoDBv2;
 using Amazon.DynamoDBv2.Model;
 using InvoicePlatform.Application.Imports;
 using InvoicePlatform.Domain.Canonical;
+using InvoicePlatform.Domain.EInvoicing;
 using InvoicePlatform.Domain.Imports;
 using ImportStatus = InvoicePlatform.Domain.Imports.ImportStatus;
 using InvoicePlatform.Domain.Validation;
@@ -49,6 +50,8 @@ internal sealed class DynamoDbImportRepository(IAmazonDynamoDB dynamo, IOptions<
                     ["warnings"] = new(JsonSerializer.Serialize(record.Warnings, Json)),
                     ["providerModel"] = Nullable(record.ProviderModel),
                     ["error"] = Nullable(record.Error),
+                    ["rulesetId"] = Nullable(record.RulesetId),
+                    ["violations"] = new(JsonSerializer.Serialize(record.Violations, Json)),
                     ["createdAt"] = new(record.CreatedAt.ToString("O")),
                     ["createdByUserId"] = Nullable(record.CreatedByUserId),
                     ["updatedAt"] = new(record.UpdatedAt.ToString("O")),
@@ -131,6 +134,10 @@ internal sealed class DynamoDbImportRepository(IAmazonDynamoDB dynamo, IOptions<
             : [],
         ProviderModel = Optional(item, "providerModel"),
         Error = Optional(item, "error"),
+        RulesetId = Optional(item, "rulesetId"),
+        Violations = Optional(item, "violations") is { } violations
+            ? JsonSerializer.Deserialize<List<RuleViolation>>(violations, Json) ?? []
+            : [],
         CreatedAt = DateTimeOffset.Parse(item["createdAt"].S, CultureInfo.InvariantCulture),
         CreatedByUserId = Optional(item, "createdByUserId"),
         UpdatedAt = Optional(item, "updatedAt") is { } updated ? DateTimeOffset.Parse(updated, CultureInfo.InvariantCulture) : default,

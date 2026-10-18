@@ -1,4 +1,5 @@
 using InvoicePlatform.Domain.Canonical;
+using InvoicePlatform.Domain.EInvoicing;
 using InvoicePlatform.Domain.Validation;
 
 namespace InvoicePlatform.Domain.Imports;
@@ -22,12 +23,22 @@ public enum ImportStatus
 
     /// <summary>Reading failed; <see cref="ImportRecord.Error"/> says why. Can be retried.</summary>
     Failed,
+
+    /// <summary>
+    /// Off the review list - booked, or dismissed - but kept, because it is a
+    /// conversion its sender may still ask about. Only <see cref="ImportSource.Api"/>
+    /// imports reach it; the others are deleted when they leave the list.
+    /// </summary>
+    Closed,
 }
 
 public enum ImportSource
 {
     Upload,
     Email,
+
+    /// <summary>Sent to the conversion API with an organisation's API key.</summary>
+    Api,
 }
 
 /// <summary>
@@ -71,6 +82,16 @@ public sealed record ImportRecord
     public string? ProviderModel { get; init; }
 
     public string? Error { get; init; }
+
+    /// <summary>
+    /// For a conversion: the format the file is made in. What the sender asked
+    /// for, or - when they asked for none - the format chosen when it was
+    /// checked, so the file is made in the format that was checked.
+    /// </summary>
+    public string? RulesetId { get; init; }
+
+    /// <summary>For a conversion that could not be finished without a person: what stopped it.</summary>
+    public IReadOnlyList<RuleViolation> Violations { get; init; } = [];
 
     public required DateTimeOffset CreatedAt { get; init; }
 

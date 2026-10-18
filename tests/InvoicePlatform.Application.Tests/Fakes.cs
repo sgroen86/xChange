@@ -1,7 +1,11 @@
+using InvoicePlatform.Application.Conversions;
 using InvoicePlatform.Application.Identity;
 using InvoicePlatform.Application.Invoices;
+using InvoicePlatform.Application.Learning;
 using InvoicePlatform.Application.Organizations;
 using InvoicePlatform.Application.Relations;
+using InvoicePlatform.Domain.EInvoicing;
+using InvoicePlatform.Domain.EInvoicing.Ubl;
 using InvoicePlatform.Domain.Identity;
 using InvoicePlatform.Domain.Invoices;
 using InvoicePlatform.Domain.Organizations;
@@ -136,6 +140,29 @@ internal sealed class FakePlatformStore : IPlatformStore
 
     public Task<bool> TryDeleteInvitationAsync(string codeHash, CancellationToken cancellationToken = default)
         => Task.FromResult(_invitations.Remove(codeHash));
+}
+
+/// <summary>
+/// The after-read step for conversions, built from fakes. Tests that never
+/// send a conversion only need it to construct an ImportService.
+/// </summary>
+internal static class TestConversions
+{
+    public static ConversionCompletion Completion(
+        FakeInvoiceStore store,
+        IClock clock,
+        FakeOfficialValidator? official = null,
+        FakeUsageMeter? usage = null)
+    {
+        var settings = new FakeSettingsStore();
+        var registry = new InvoiceRulesetRegistry();
+        var relations = new RelationService(new FakeRelationStore(), clock, registry);
+        var export = new ExportInvoiceService(
+            store, settings, registry, new InvoiceEnrichment(settings, relations), new UblInvoiceWriter(),
+            official ?? new FakeOfficialValidator(), new FakePlatformStore(), usage ?? new FakeUsageMeter());
+        var booking = new BookInvoiceService(store, store, clock, relations, new LearningService(new FakeLearningStore(), clock));
+        return new ConversionCompletion(export, booking, store, clock);
+    }
 }
 
 /// <summary>Answers with whatever verdict the test sets; by default "no failures".</summary>

@@ -1,3 +1,4 @@
+using InvoicePlatform.Application.Conversions;
 using InvoicePlatform.Application.Interpretation;
 using InvoicePlatform.Application.Imports;
 using InvoicePlatform.Application.Invoices;
@@ -92,6 +93,10 @@ public static class DependencyInjection
         services.AddSingleton<IClock, SystemClock>();
         services.AddScoped<AuthService>();
 
+        // API keys for the conversion API, in the same table as sessions.
+        services.AddSingleton<IApiKeyStore, DynamoDbApiKeyStore>();
+        services.AddScoped<ApiKeyService>();
+
         // Self sign-up: pending sign-ups expire by themselves; the confirmation goes out through SES.
         services
             .AddOptions<EmailOptions>()
@@ -147,6 +152,10 @@ public static class DependencyInjection
         services.AddScoped<InboxService>();
         services.AddScoped<BookInvoiceService>();
         services.AddScoped<ExportInvoiceService>();
+
+        // The conversion API: imports sent with an API key, finished by the worker when they can be.
+        services.AddScoped<ConversionCompletion>();
+        services.AddScoped<ConversionService>();
 
         // The complete official rules run in a separate Lambda (validator/).
         services

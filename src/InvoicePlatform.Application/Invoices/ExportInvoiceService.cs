@@ -2,6 +2,7 @@ using InvoicePlatform.Application.Usage;
 using System.Text;
 using System.Text.RegularExpressions;
 using InvoicePlatform.Application.Organizations;
+using InvoicePlatform.Domain.Calculation;
 using InvoicePlatform.Domain.Canonical;
 using InvoicePlatform.Domain.EInvoicing;
 using InvoicePlatform.Domain.EInvoicing.Ubl;
@@ -80,7 +81,44 @@ public sealed partial class ExportInvoiceService(
             return ExportOutcome.NotBooked;
         }
 
-        var enriched = await enrichment.EnrichAsync(organizationId, stored.Invoice, cancellationToken).ConfigureAwait(false);
+        var outcome = await ProduceAsync(organizationId, invoiceId, stored.Invoice, requestedRulesetId, cancellationToken).ConfigureAwait(false);
+        return outcome.Kind == ExportOutcomeKind.Exported
+            ? outcome with { FileName = FileName(stored.Invoice.InvoiceNumber ?? invoiceId, outcome.RulesetId!) }
+            : outcome;
+    }
+
+    /// <summary>
+    /// Everything an export checks, for a draft that is not booked yet: the
+    /// figures as booking would store them, the same format resolution, the
+    /// runtime rules and the official ones. No trial rule (checking is free)
+    /// and nothing is stored. Exported means it would export as it stands.
+    /// </summary>
+    /// <param name="invoiceId">The id it would be booked under (its document UUID derives from it).</param>
+    public async Task<ExportOutcome> CheckAsBookedAsync(
+        string organizationId,
+        string invoiceId,
+        CanonicalInvoiceDraft draft,
+        string? requestedRulesetId,
+        CancellationToken cancellationToken = default)
+    {
+        if (requestedRulesetId is not null && rulesets.Find(requestedRulesetId) is null)
+        {
+            return ExportOutcome.UnknownRuleset;
+        }
+
+        return await ProduceAsync(organizationId, invoiceId, InvoiceTotalsCalculator.Apply(draft), requestedRulesetId, cancellationToken)
+            .ConfigureAwait(false);
+    }
+
+    /// <summary>Makes the file from an invoice as stored, and checks it completely.</summary>
+    private async Task<ExportOutcome> ProduceAsync(
+        string organizationId,
+        string invoiceId,
+        CanonicalInvoiceDraft invoice,
+        string? requestedRulesetId,
+        CancellationToken cancellationToken)
+    {
+        var enriched = await enrichment.EnrichAsync(organizationId, invoice, cancellationToken).ConfigureAwait(false);
 
         var organization = await settings.GetAsync(organizationId, cancellationToken).ConfigureAwait(false);
         var record = await platform.FindOrganizationAsync(organizationId, cancellationToken).ConfigureAwait(false);
@@ -99,7 +137,7 @@ public sealed partial class ExportInvoiceService(
         var result = ValidatedCanonicalInvoice.Validate(ruleset, draft);
         if (result.Invoice is null)
         {
-            return new ExportOutcome(ExportOutcomeKind.Incomplete, Violations: result.Violations);
+            return new ExportOutcome(ExportOutcomeKind.Incomplete, Violations: result.Violations, RulesetId: ruleset.Id);
         }
 
         var xml = writer.Write(result.Invoice);
@@ -109,20 +147,20 @@ public sealed partial class ExportInvoiceService(
         var official = await officialValidator.ValidateAsync(ruleset.Id, xml, cancellationToken).ConfigureAwait(false);
         if (!official.Available)
         {
-            return ExportOutcome.ValidationUnavailable;
+            return ExportOutcome.ValidationUnavailable with { RulesetId = ruleset.Id };
         }
 
         var fatal = official.Failures.Where(f => f.IsFatal).Select(ToViolation).ToList();
         if (fatal.Count > 0)
         {
-            return new ExportOutcome(ExportOutcomeKind.Incomplete, Violations: fatal);
+            return new ExportOutcome(ExportOutcomeKind.Incomplete, Violations: fatal, RulesetId: ruleset.Id);
         }
 
         return new ExportOutcome(
             ExportOutcomeKind.Exported,
-            FileName: FileName(stored.Invoice.InvoiceNumber ?? invoiceId, ruleset.Id),
             Content: new UTF8Encoding(false).GetBytes(xml),
-            Warnings: official.Failures.Where(f => !f.IsFatal).Select(ToViolation).ToList());
+            Warnings: official.Failures.Where(f => !f.IsFatal).Select(ToViolation).ToList(),
+            RulesetId: ruleset.Id);
     }
 
     /// <summary>An official failure in the shape the screen already shows; its path is a location in the document.</summary>
@@ -158,12 +196,14 @@ public enum ExportOutcomeKind
 }
 
 /// <param name="Warnings">Official warnings for an exported file; they do not block it.</param>
+/// <param name="RulesetId">The format that was checked, once one was chosen.</param>
 public sealed record ExportOutcome(
     ExportOutcomeKind Kind,
     string? FileName = null,
     byte[]? Content = null,
     IReadOnlyList<RuleViolation>? Violations = null,
-    IReadOnlyList<RuleViolation>? Warnings = null)
+    IReadOnlyList<RuleViolation>? Warnings = null,
+    string? RulesetId = null)
 {
     public static readonly ExportOutcome NotFound = new(ExportOutcomeKind.NotFound);
 

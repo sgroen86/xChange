@@ -1,3 +1,4 @@
+using InvoicePlatform.Application.Conversions;
 using InvoicePlatform.Application.Identity;
 using InvoicePlatform.Application.Invoices;
 using InvoicePlatform.Domain.Imports;
@@ -33,13 +34,17 @@ public sealed class ImportService(
     IImportQueue queue,
     IDocumentStore documents,
     ExtractInvoiceService extraction,
+    ConversionCompletion conversions,
     IClock clock)
 {
     /// <summary>
     /// Stores the PDF and records the import. An upload goes on the queue at
-    /// once; a mailed PDF waits for a user's approval (anyone who knows the
+    /// once, and so does a conversion (its sender holds a key an admin
+    /// issued); a mailed PDF waits for a user's approval (anyone who knows the
     /// address can send one, and reading spends model credit).
     /// </summary>
+    /// <param name="userId">Who sent it: a user id, or "apikey:&lt;keyId&gt;" for a conversion.</param>
+    /// <param name="rulesetId">For a conversion: the format asked for, if any.</param>
     public async Task<ImportRecord> SubmitAsync(
         string organizationId,
         ImportSource source,
@@ -48,6 +53,7 @@ public sealed class ImportService(
         string? userId = null,
         string? sender = null,
         string? subject = null,
+        string? rulesetId = null,
         CancellationToken cancellationToken = default)
     {
         var id = Guid.NewGuid().ToString("n");
@@ -67,6 +73,7 @@ public sealed class ImportService(
             DocumentKey = key,
             Sender = sender,
             Subject = subject,
+            RulesetId = rulesetId,
             CreatedAt = now,
             CreatedByUserId = userId,
             UpdatedAt = now,
@@ -107,7 +114,7 @@ public sealed class ImportService(
 
         // Never read what is already read, nor a mailed PDF nobody approved -
         // whatever put the message on the queue.
-        if (record is null || record.Status is ImportStatus.Ready or ImportStatus.AwaitingApproval)
+        if (record is null || record.Status is ImportStatus.Ready or ImportStatus.AwaitingApproval or ImportStatus.Closed)
         {
             return;
         }
@@ -140,10 +147,29 @@ public sealed class ImportService(
         }
 
         await imports.SaveAsync(record, cancellationToken).ConfigureAwait(false);
+
+        // A conversion is finished without a person when it can be: saved as
+        // read first, so a failure from here on never makes it read again.
+        if (record is { Source: ImportSource.Api, Status: ImportStatus.Ready })
+        {
+            try
+            {
+                record = await conversions.CompleteAsync(record, cancellationToken).ConfigureAwait(false);
+            }
+            catch (Exception exception) when (exception is not OperationCanceledException || !cancellationToken.IsCancellationRequested)
+            {
+                // It stays in the review list, where a person can finish it.
+                record = record with { Error = $"Automatisch afronden is mislukt: {exception.Message}", UpdatedAt = clock.UtcNow };
+            }
+
+            await imports.SaveAsync(record, cancellationToken).ConfigureAwait(false);
+        }
     }
 
+    /// <summary>The review list: everything not yet booked or dismissed.</summary>
     public async Task<IReadOnlyList<ImportRecord>> ListAsync(string organizationId, CancellationToken cancellationToken = default)
         => (await imports.ListAsync(organizationId, cancellationToken).ConfigureAwait(false))
+            .Where(r => r.Status != ImportStatus.Closed)
             .OrderByDescending(r => r.CreatedAt)
             .ToList();
 
@@ -162,8 +188,8 @@ public sealed class ImportService(
     {
         var record = await imports.GetAsync(organizationId, importId, cancellationToken).ConfigureAwait(false);
 
-        // Retrying is not a way around approval.
-        if (record is null || record.Status == ImportStatus.AwaitingApproval)
+        // Retrying is not a way around approval, nor a way to read a closed conversion again.
+        if (record is null || record.Status is ImportStatus.AwaitingApproval or ImportStatus.Closed)
         {
             return false;
         }
@@ -176,12 +202,22 @@ public sealed class ImportService(
     /// <summary>
     /// Takes an import off the list: after it was booked, or when it is not
     /// wanted. The PDF stays; a booked invoice uses the same document.
+    ///
+    /// A conversion is closed rather than deleted: its sender may still ask
+    /// for its status and file, and the format it asked for is kept on it.
     /// </summary>
     public async Task<bool> DismissAsync(string organizationId, string importId, CancellationToken cancellationToken = default)
     {
-        if (await imports.GetAsync(organizationId, importId, cancellationToken).ConfigureAwait(false) is null)
+        var record = await imports.GetAsync(organizationId, importId, cancellationToken).ConfigureAwait(false);
+        if (record is null || record.Status == ImportStatus.Closed)
         {
             return false;
+        }
+
+        if (record.Source == ImportSource.Api)
+        {
+            await imports.SaveAsync(record with { Status = ImportStatus.Closed, UpdatedAt = clock.UtcNow }, cancellationToken).ConfigureAwait(false);
+            return true;
         }
 
         await imports.DeleteAsync(organizationId, importId, cancellationToken).ConfigureAwait(false);

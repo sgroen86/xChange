@@ -31,7 +31,8 @@ public class InboxServiceTests
         var extraction = new ExtractInvoiceService(
             new NeverCalled(), new InvoiceEnrichment(new FakeSettingsStore(), relations), new InvoiceCalculationValidator(),
             new CanonicalInvoiceXmlSerializer(), new LearningService(new FakeLearningStore(), clock), new FakePlatformStore(), new FakeUsageMeter());
-        var imports = new ImportService(_imports, _imports, new FakeInvoiceStore(), extraction, clock);
+        var store = new FakeInvoiceStore();
+        var imports = new ImportService(_imports, _imports, store, extraction, TestConversions.Completion(store, clock), clock);
         _inbox = new InboxService(_directory, _mail, imports, new InboxSettings(Domain));
     }
 
