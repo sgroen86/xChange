@@ -31,8 +31,39 @@ softwareleveranciers die **ons eigen UBL** ongewijzigd verstuurt, statusmeldinge
 | Tickstar, ecosio, Pagero, Avalara | ja | ja | ja, meer enterprise | op aanvraag |
 | Recommand, e-invoice.be | **nee** | ja | ja, goedkoop (€0,07–0,30) | valt af voor Singapore |
 
-**Voorstel:** sandbox-accounts aanvragen bij **Storecove** en **Ademico**, beide API's
-proberen met onze referentiebestanden (BIS 3.0, PINT-SG, NLCIUS), en kiezen op:
+### Meerdere access points: de beste per land (besluit 2026-10-18)
+
+xChange werkt met **meer dan één access point** en kiest per verzending de beste.
+
+- **De route volgt het land van de afzender, niet dat van de ontvanger.** Elk access point
+  levert aan elke PEPPOL-ontvanger, waar ook ter wereld. Wat per land verschilt, is de
+  eis aan de afzender:
+  - een Singaporese afzender moet via een door IMDA geaccrediteerd access point (dat ook
+    de gegevens voor IRAS doorgeeft);
+  - een Nederlandse, Belgische of Britse afzender kan via een goedkoper Europees access
+    point.
+- **Routering:**
+  - `Country` krijgt een standaard-access point, net als het standaardformaat;
+  - de platformbeheerder kan dat per organisatie overschrijven, bijvoorbeeld voor een
+    klant met een eigen contract;
+  - een organisatie is altijd bij precies één access point als afzender aangemeld, dat
+    van haar route.
+- **Code:** `IAccessPoint` per partner, een register zoals `InvoiceRulesetRegistry`, en
+  de verzending onthoudt via welk access point hij ging, zodat de status bij het juiste
+  access point wordt opgevraagd.
+- **Volgorde:** eerst één access point voor Singapore (de eigen organisatie zit daar),
+  daarna een goedkopere Europese erbij zodra er organisaties in NL of BE zijn. De
+  architectuur staat beide vanaf het begin toe.
+
+| Afzender in | Kandidaten |
+|---|---|
+| Singapore | Storecove, Ademico (beide IMDA) |
+| Nederland, België | Recommand (vanaf €0,07), e-invoice.be (vanaf €0,18), Ademico, Storecove |
+| Verenigd Koninkrijk | Ademico, Storecove, e-invoice.be |
+
+**Voorstel:** sandbox-accounts aanvragen bij **Storecove** en **Ademico** voor Singapore,
+en bij **Recommand** voor Europa. Alle API's proberen met onze referentiebestanden
+(BIS 3.0, PINT-SG, NLCIUS), en per land kiezen op:
 1. ondersteuning van PINT-SG en NLCIUS als ruw document;
 2. de kwaliteit van de API en webhooks;
 3. de prijs bij ons volume;
@@ -126,7 +157,8 @@ Per verzonden factuur:
 
 ## Beslissingen voor de gebruiker
 
-1. **Welke partner:** sandbox-accounts aanvragen bij Storecove en Ademico (voorstel).
+1. **Welke partners:** meerdere, de beste per land van de afzender (besloten). Voorstel:
+   sandbox-accounts aanvragen bij Storecove en Ademico (Singapore) en Recommand (Europa).
 2. **Definitief na verzending:** akkoord dat een verzonden factuur alleen met een
    creditnota wordt gecorrigeerd (voorstel: ja).
 3. **Aanmelden per organisatie:** elke organisatie wordt als eigen afzender aangemeld bij
