@@ -44,7 +44,11 @@ builder.Services.AddCors(options =>
     {
         if (allowedOrigins.Length > 0)
         {
-            policy.WithOrigins(allowedOrigins).AllowAnyHeader().AllowAnyMethod();
+            // The download's file name and the official warnings travel in
+            // headers; a browser hides response headers cross-origin unless
+            // they are exposed here.
+            policy.WithOrigins(allowedOrigins).AllowAnyHeader().AllowAnyMethod()
+                .WithExposedHeaders("Content-Disposition", ExportEndpoints.WarningsHeader);
         }
     });
 });

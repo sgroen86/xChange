@@ -18,7 +18,7 @@ It prints every failed assert and exits 1 when any is `fatal`. It needs a JDK 21
 | `validator/dependencies.json` | The validator's own jars (Saxon-HE 12, xmlresolver, aws-lambda-java-core), pinned. |
 | `validation/fetch.py` | Downloads and verifies both, cached in `validation/.cache/`. |
 | `validator/` | Java 21: `OfficialRules` compiles the rules once and runs them; `Handler` is the `xchange-validator` Lambda; `Cli` is the command line above. `build.sh` builds both. |
-| `src/.../OfficialValidation/` | The API calls the Lambda after writing a file and before returning it. A fatal failure blocks the download; an unreachable validator does too. |
+| `src/InvoicePlatform.Infrastructure/Validator/` | The API calls the Lambda after writing a file and before returning it. A fatal failure blocks the download; an unreachable validator does too. |
 
 ## Current artefacts
 

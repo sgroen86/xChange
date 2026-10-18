@@ -115,3 +115,17 @@ internal sealed class FakePlatformStore : IPlatformStore
     public Task<bool> TryDeleteInvitationAsync(string codeHash, CancellationToken cancellationToken = default)
         => Task.FromResult(_invitations.Remove(codeHash));
 }
+
+/// <summary>Answers with whatever verdict the test sets; by default "no failures".</summary>
+internal sealed class FakeOfficialValidator : IOfficialValidator
+{
+    public OfficialValidation Verdict { get; set; } = new(true, "3.0.21", []);
+
+    public int Calls { get; private set; }
+
+    public Task<OfficialValidation> ValidateAsync(string rulesetId, string xml, CancellationToken cancellationToken = default)
+    {
+        Calls++;
+        return Task.FromResult(Verdict);
+    }
+}

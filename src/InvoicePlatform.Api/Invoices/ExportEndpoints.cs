@@ -12,6 +12,9 @@ namespace InvoicePlatform.Api.Invoices;
 /// </summary>
 public static class ExportEndpoints
 {
+    /// <summary>Official warnings for a downloaded file: base64 of a JSON array of violations.</summary>
+    public const string WarningsHeader = "X-Validation-Warnings";
+
     public static RouteGroupBuilder MapExportEndpoints(this RouteGroupBuilder group)
     {
         // Checking stores nothing and exporting is reading, so every role may.
@@ -60,9 +63,19 @@ public static class ExportEndpoints
         var outcome = await service.ExportAsync(user.OrganizationId, invoiceId, ruleset, cancellationToken)
             .ConfigureAwait(false);
 
+        if (outcome.Kind == ExportOutcomeKind.Exported && outcome.Warnings is { Count: > 0 } warnings)
+        {
+            var json = System.Text.Json.JsonSerializer.SerializeToUtf8Bytes(ToResponse(warnings).Violations);
+            context.Response.Headers[WarningsHeader] = Convert.ToBase64String(json);
+        }
+
         return outcome.Kind switch
         {
             ExportOutcomeKind.Exported => Results.File(outcome.Content!, ExportInvoiceService.MediaType, outcome.FileName),
+            ExportOutcomeKind.ValidationUnavailable => Results.Problem(
+                detail: "De officiële controle is nu niet beschikbaar. Probeer het zo opnieuw.",
+                title: "Controle niet beschikbaar",
+                statusCode: StatusCodes.Status503ServiceUnavailable),
             ExportOutcomeKind.Incomplete => Results.Json(ToResponse(outcome.Violations!), statusCode: StatusCodes.Status422UnprocessableEntity),
             ExportOutcomeKind.UnknownRuleset => Results.Problem(
                 detail: $"Regelset '{ruleset}' bestaat niet.", title: "Onbekende regelset", statusCode: StatusCodes.Status400BadRequest),

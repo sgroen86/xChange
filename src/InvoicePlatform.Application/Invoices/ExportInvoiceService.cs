@@ -10,14 +10,16 @@ namespace InvoicePlatform.Application.Invoices;
 /// <summary>
 /// Checking a draft against a ruleset, and exporting a booked invoice as an
 /// e-invoice. The file is made from the invoice as it is stored, so what is
-/// downloaded always matches the record.
+/// downloaded always matches the record, and every file is run through the
+/// complete official rules before it is handed out.
 /// </summary>
 public sealed partial class ExportInvoiceService(
     IInvoiceRepository invoices,
     IOrganizationSettingsStore settings,
     InvoiceRulesetRegistry rulesets,
     InvoiceEnrichment enrichment,
-    UblInvoiceWriter writer)
+    UblInvoiceWriter writer,
+    IOfficialValidator officialValidator)
 {
     public const string MediaType = "application/xml";
 
@@ -68,11 +70,31 @@ public sealed partial class ExportInvoiceService(
         }
 
         var xml = writer.Write(result.Invoice);
+
+        // The runtime rules above are a subset; the official ones are complete.
+        // No verdict means no file: an unchecked document is never handed out.
+        var official = await officialValidator.ValidateAsync(ruleset.Id, xml, cancellationToken).ConfigureAwait(false);
+        if (!official.Available)
+        {
+            return ExportOutcome.ValidationUnavailable;
+        }
+
+        var fatal = official.Failures.Where(f => f.IsFatal).Select(ToViolation).ToList();
+        if (fatal.Count > 0)
+        {
+            return new ExportOutcome(ExportOutcomeKind.Incomplete, Violations: fatal);
+        }
+
         return new ExportOutcome(
             ExportOutcomeKind.Exported,
             FileName: FileName(stored.Invoice.InvoiceNumber ?? invoiceId, ruleset.Id),
-            Content: new UTF8Encoding(false).GetBytes(xml));
+            Content: new UTF8Encoding(false).GetBytes(xml),
+            Warnings: official.Failures.Where(f => !f.IsFatal).Select(ToViolation).ToList());
     }
+
+    /// <summary>An official failure in the shape the screen already shows; its path is a location in the document.</summary>
+    private static RuleViolation ToViolation(OfficialFailure failure)
+        => new(failure.RuleId, null, failure.Location, failure.Message);
 
     /// <summary>"F-2026/041" + ruleset -> "F-2026-041-peppol-bis-billing-3.0.xml".</summary>
     private static string FileName(string invoiceNumber, string rulesetId)
@@ -91,15 +113,22 @@ public enum ExportOutcomeKind
     Incomplete,
     NotFound,
     UnknownRuleset,
+
+    /// <summary>The official validator could not be asked; no file is handed out.</summary>
+    ValidationUnavailable,
 }
 
+/// <param name="Warnings">Official warnings for an exported file; they do not block it.</param>
 public sealed record ExportOutcome(
     ExportOutcomeKind Kind,
     string? FileName = null,
     byte[]? Content = null,
-    IReadOnlyList<RuleViolation>? Violations = null)
+    IReadOnlyList<RuleViolation>? Violations = null,
+    IReadOnlyList<RuleViolation>? Warnings = null)
 {
     public static readonly ExportOutcome NotFound = new(ExportOutcomeKind.NotFound);
 
     public static readonly ExportOutcome UnknownRuleset = new(ExportOutcomeKind.UnknownRuleset);
+
+    public static readonly ExportOutcome ValidationUnavailable = new(ExportOutcomeKind.ValidationUnavailable);
 }

@@ -33,6 +33,9 @@ public sealed class SignedInFactory : WebApplicationFactory<Program>
 
     public InMemoryPlatform Platform { get; } = new();
 
+    /// <summary>The official verdict every export gets; by default "no failures".</summary>
+    public StubOfficialValidator Official { get; } = new();
+
     public HttpClient As(string token)
     {
         var client = CreateClient();
@@ -59,6 +62,8 @@ public sealed class SignedInFactory : WebApplicationFactory<Program>
     protected override void ConfigureWebHost(Microsoft.AspNetCore.Hosting.IWebHostBuilder builder)
     {
         builder.UseSetting("Anthropic:ApiKey", "test-key-never-used");
+        // The production origin, so CORS behaves as it does for the real site.
+        builder.UseSetting("Cors:AllowedOrigins:0", "https://greenitsolutions.net");
 
         builder.ConfigureServices(services =>
         {
@@ -70,6 +75,7 @@ public sealed class SignedInFactory : WebApplicationFactory<Program>
             services.RemoveAll<IDocumentStore>();
             services.RemoveAll<IRelationRepository>();
             services.RemoveAll<IPlatformStore>();
+            services.RemoveAll<IOfficialValidator>();
 
             var identity = new SignedInIdentity();
             services.AddSingleton<IUserStore>(identity);
@@ -80,6 +86,7 @@ public sealed class SignedInFactory : WebApplicationFactory<Program>
             services.AddSingleton<IDocumentStore>(Invoices);
             services.AddSingleton<IRelationRepository>(Relations);
             services.AddSingleton<IPlatformStore>(Platform);
+            services.AddSingleton<IOfficialValidator>(Official);
         });
     }
 
@@ -292,4 +299,12 @@ public sealed class InMemoryPlatform : IPlatformStore
             return Task.FromResult(_invitations.Remove(codeHash));
         }
     }
+}
+
+public sealed class StubOfficialValidator : IOfficialValidator
+{
+    public OfficialValidation Verdict { get; set; } = new(true, "3.0.21", []);
+
+    public Task<OfficialValidation> ValidateAsync(string rulesetId, string xml, CancellationToken cancellationToken = default)
+        => Task.FromResult(Verdict);
 }
