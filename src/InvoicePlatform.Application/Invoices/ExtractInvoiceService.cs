@@ -6,8 +6,8 @@ using InvoicePlatform.Domain.Validation;
 namespace InvoicePlatform.Application.Invoices;
 
 /// <summary>
-/// The extraction use case: interpret a PDF, check the arithmetic, and produce
-/// the canonical XML.
+/// The extraction use case: interpret a PDF, fill what the organisation already
+/// told us, check the arithmetic, and produce the canonical XML.
 ///
 /// The ordering matters and is the whole point of the pipeline in CLAUDE.md:
 /// the model only ever produces the draft, and the XML is generated afterwards
@@ -15,22 +15,27 @@ namespace InvoicePlatform.Application.Invoices;
 /// </summary>
 public sealed class ExtractInvoiceService(
     IInvoiceInterpreter interpreter,
+    InvoiceEnrichment enrichment,
     InvoiceCalculationValidator validator,
     CanonicalInvoiceXmlSerializer serializer)
 {
     public async Task<ExtractInvoiceResult> ExtractAsync(
+        string organizationId,
         ReadOnlyMemory<byte> pdf,
         CancellationToken cancellationToken = default)
     {
         var interpretation = await interpreter.InterpretAsync(pdf, cancellationToken)
             .ConfigureAwait(false);
 
-        var warnings = validator.Validate(interpretation.Draft);
-        var xml = serializer.Serialize(interpretation.Draft);
+        var enriched = await enrichment.EnrichAsync(organizationId, interpretation.Draft, cancellationToken)
+            .ConfigureAwait(false);
+
+        var warnings = enriched.Notices.Concat(validator.Validate(enriched.Draft)).ToList();
+        var xml = serializer.Serialize(enriched.Draft);
 
         return new ExtractInvoiceResult(
             InvoiceId: Guid.NewGuid().ToString("n"),
-            Draft: interpretation.Draft,
+            Draft: enriched.Draft,
             CanonicalXml: xml,
             Warnings: warnings,
             Execution: interpretation.Execution);

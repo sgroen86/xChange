@@ -44,6 +44,7 @@ public static class DependencyInjection
 
         services.AddSingleton<IAnthropicApiKeyProvider, AnthropicApiKeyProvider>();
         services.AddSingleton<IInvoiceInterpreter, AnthropicInvoiceInterpreter>();
+        services.AddScoped<InvoiceEnrichment>();
         services.AddScoped<ExtractInvoiceService>();
 
         return services;
@@ -93,6 +94,7 @@ public static class DependencyInjection
         services.AddSingleton<IInvoiceRepository, DynamoDbInvoiceRepository>();
         services.AddSingleton<IDocumentStore, S3DocumentStore>();
         services.AddScoped<BookInvoiceService>();
+        services.AddScoped<ExportInvoiceService>();
 
         return services;
     }

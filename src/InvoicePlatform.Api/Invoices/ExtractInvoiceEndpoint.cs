@@ -111,7 +111,9 @@ public static class ExtractInvoiceEndpoint
 
         try
         {
-            var result = await service.ExtractAsync(bytes, cancellationToken).ConfigureAwait(false);
+            // The organisation comes from the session, never from the request.
+            var user = request.HttpContext.GetAuthenticatedUser()!;
+            var result = await service.ExtractAsync(user.OrganizationId, bytes, cancellationToken).ConfigureAwait(false);
             return Results.Ok(ToResponse(result));
         }
         catch (InvoiceInterpretationException exception)
