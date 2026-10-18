@@ -22,6 +22,8 @@ export interface NavItem {
   hidden?: boolean;
   /** Rendered only when a review is in progress. */
   requiresInvoice?: boolean;
+  /** Rendered only for the platform administrator. */
+  requiresPlatformAdmin?: boolean;
 }
 
 export type NavEntry = NavSection | NavItem;
@@ -48,6 +50,7 @@ export const navStructure: NavEntry[] = [
   { section: "Beheer" },
   { id: "gebruikers", label: "Gebruikers", icon: "users", hidden: true },
   { id: "instellingen", label: "Instellingen", icon: "settings", href: "/settings" },
+  { id: "platform", label: "Platform", icon: "users", href: "/platform", requiresPlatformAdmin: true },
 ];
 
 /** Page titles shown in the header, keyed by nav id. */
@@ -57,4 +60,6 @@ export const pageTitles: Record<string, { title: string; breadcrumb: string }> =
   review: { title: "Factuur beoordelen", breadcrumb: "xChange / Beoordelen" },
   relations: { title: "Relaties", breadcrumb: "xChange / Relaties" },
   instellingen: { title: "Instellingen", breadcrumb: "Beheer / Instellingen" },
+  platform: { title: "Platform", breadcrumb: "Beheer / Platform" },
+  invite: { title: "Uitnodiging", breadcrumb: "xChange / Account aanmaken" },
 };

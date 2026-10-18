@@ -31,6 +31,8 @@ function activeNavId(pathname: string): string {
   if (pathname.includes("/invoices")) return "invoices";
   if (pathname.includes("/settings")) return "instellingen";
   if (pathname.includes("/relations")) return "relations";
+  if (pathname.includes("/platform")) return "platform";
+  if (pathname.includes("/invite")) return "invite";
   return "upload";
 }
 
@@ -40,7 +42,8 @@ export function AppShell({ children }: { children: React.ReactNode }) {
   const [collapsed, setCollapsed] = useState(false);
   const [mobileOpen, setMobileOpen] = useState(false);
 
-  const onLoginPage = pathname.startsWith("/login");
+  // Pages for people without a session: logging in, and accepting an invitation.
+  const onLoginPage = pathname.startsWith("/login") || pathname.startsWith("/invite");
 
   /* The session is an external store, not React state. useSyncExternalStore
      reads it without an effect and re-renders when it changes; the server
@@ -75,7 +78,10 @@ export function AppShell({ children }: { children: React.ReactNode }) {
     .join(" ");
 
   const isVisible = (item: NavItem) =>
-    !item.hidden && !(item.requiresInvoice && !invoiceId) && Boolean(item.href || item.requiresInvoice);
+    !item.hidden &&
+    !(item.requiresInvoice && !invoiceId) &&
+    !(item.requiresPlatformAdmin && !user?.isPlatformAdmin) &&
+    Boolean(item.href || item.requiresInvoice);
 
   // Drop section labels whose items are all hidden, so no empty headings render.
   const visibleEntries = navStructure.filter((entry, index) => {

@@ -6,7 +6,7 @@ import { useEffect, useState } from "react";
 import { Icon } from "../../components/Icon";
 import { useToast } from "../../components/Toast";
 import { ApiError, isApiConfigured } from "../../lib/api";
-import { isSetupRequired, login, setupFirstUser } from "../../lib/auth";
+import { isSetupRequired, listCountries, login, setupFirstUser, type CountryOption } from "../../lib/auth";
 
 /**
  * Login, and first-run setup when no account exists yet — the same two states
@@ -22,6 +22,8 @@ export default function LoginClient() {
   const [password, setPassword] = useState("");
   const [name, setName] = useState("");
   const [organizationName, setOrganizationName] = useState("");
+  const [countryCode, setCountryCode] = useState("");
+  const [countries, setCountries] = useState<CountryOption[]>([]);
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
 
@@ -29,8 +31,13 @@ export default function LoginClient() {
     let cancelled = false;
 
     isSetupRequired()
-      .then((required) => {
-        if (!cancelled) setMode(required ? "setup" : "login");
+      .then(async (required) => {
+        if (cancelled) return;
+        setMode(required ? "setup" : "login");
+        if (required) {
+          const loaded = await listCountries();
+          if (!cancelled) setCountries(loaded);
+        }
       })
       .catch(() => {
         if (!cancelled) setMode("login");
@@ -50,7 +57,7 @@ export default function LoginClient() {
 
     try {
       if (mode === "setup") {
-        const session = await setupFirstUser(email, password, name, organizationName);
+        const session = await setupFirstUser(email, password, name, organizationName, countryCode);
         showToast(`Welkom, ${session.user.name}.`, "success");
       } else {
         const session = await login(email, password);
@@ -139,7 +146,27 @@ export default function LoginClient() {
                     type="text"
                     value={organizationName}
                     onChange={(event) => setOrganizationName(event.target.value)}
+                    required
                   />
+                </div>
+                <div className="form-group">
+                  <label className="form-label" htmlFor="country">
+                    Land
+                  </label>
+                  <select
+                    id="country"
+                    className="form-input"
+                    value={countryCode}
+                    onChange={(event) => setCountryCode(event.target.value)}
+                    required
+                  >
+                    <option value="">Kies een land</option>
+                    {countries.map((country) => (
+                      <option key={country.code} value={country.code}>
+                        {country.name}
+                      </option>
+                    ))}
+                  </select>
                 </div>
               </>
             )}

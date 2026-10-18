@@ -13,6 +13,9 @@ export interface RulesetInfo {
 }
 
 export interface OrganizationSettings {
+  /** Read-only here; only the platform administrator changes them. */
+  organizationName?: string | null;
+  countryCode?: string | null;
   defaultRulesetId: string | null;
   endpointId: string | null;
   endpointScheme: string | null;

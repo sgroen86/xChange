@@ -5,7 +5,7 @@ import { useEffect, useState, useSyncExternalStore } from "react";
 import { Icon } from "../../components/Icon";
 import { useToast } from "../../components/Toast";
 import { isApiConfigured } from "../../lib/api";
-import { getServerUserSnapshot, getUserSnapshot, subscribeToUser } from "../../lib/auth";
+import { getServerUserSnapshot, getUserSnapshot, listCountries, subscribeToUser, type CountryOption } from "../../lib/auth";
 import { FALLBACK_SETTINGS, getSettings, updateSettings, type OrganizationSettings } from "../../lib/settings";
 import { ENDPOINT_SCHEMES } from "../invoices/[invoiceId]/review/fields";
 
@@ -24,6 +24,20 @@ export default function SettingsClient() {
   const [endpointId, setEndpointId] = useState("");
   const [endpointScheme, setEndpointScheme] = useState("");
   const [saving, setSaving] = useState(false);
+  const [countries, setCountries] = useState<CountryOption[]>([]);
+
+  useEffect(() => {
+    let cancelled = false;
+    listCountries().then((loaded) => {
+      if (!cancelled) setCountries(loaded);
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  const countryName = (code: string | null | undefined) =>
+    code ? (countries.find((c) => c.code === code)?.name ?? code) : "Nog niet vastgelegd";
 
   useEffect(() => {
     let cancelled = false;
@@ -88,6 +102,20 @@ export default function SettingsClient() {
       {settings !== null && (
         <form className="form card" onSubmit={save}>
           <div className="card__body">
+            <div className="form__row">
+              <div className="form__group">
+                <label htmlFor="organizationName">Organisatie</label>
+                <input id="organizationName" type="text" value={settings.organizationName ?? "—"} readOnly />
+              </div>
+              <div className="form__group">
+                <label htmlFor="countryCode">Land</label>
+                <input id="countryCode" type="text" value={countryName(settings.countryCode)} readOnly />
+              </div>
+            </div>
+            <div className="form-help" style={{ marginBottom: "var(--space-4)" }}>
+              Naam en land wijzigt de platformbeheerder.
+            </div>
+
             <div className="form__group">
               <label htmlFor="defaultRuleset">Standaard exportformaat</label>
               <select
