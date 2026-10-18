@@ -53,7 +53,8 @@ export function ExportPanel(props: Props) {
   ];
 
   return (
-    <div className="card">
+    // .form gives the format menu and its row the same styling as the invoice fields.
+    <div className="card form">
       <div className="card__header">
         <h3>Exporteren</h3>
       </div>

@@ -26,7 +26,7 @@ export function LinesCard({ lines, nets, readOnly, onAdd, onRemove }: Props) {
       </div>
       <div className="card__body card__body--flush">
         <div className="table-wrap">
-          <table className="table">
+          <table className="table lines-table">
             <thead>
               <tr>
                 <th>Omschrijving</th>
