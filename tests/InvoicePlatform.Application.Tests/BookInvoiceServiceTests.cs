@@ -39,6 +39,14 @@ public class BookInvoiceServiceTests
     }
 
     [Fact]
+    public async Task A_booked_invoice_is_outgoing()
+    {
+        var stored = await _service.BookAsync(OrgA, "u", ADraft(), new byte[] { 1 }, "a.pdf", "m");
+
+        Assert.Equal(InvoiceDirection.Outgoing, stored.Direction);
+    }
+
+    [Fact]
     public async Task An_invoice_is_invisible_to_another_organisation()
     {
         // The property that matters most: a tenant cannot reach another

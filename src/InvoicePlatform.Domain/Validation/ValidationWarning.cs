@@ -4,6 +4,9 @@ public enum ValidationSeverity
 {
     Warning,
     Error,
+
+    /// <summary>Not a problem: tells the reviewer something was filled in for them.</summary>
+    Info,
 }
 
 /// <summary>

@@ -150,7 +150,12 @@ public static class ExtractInvoiceEndpoint
         Code = warning.Code,
         Path = warning.Path,
         Message = warning.Message,
-        Severity = warning.Severity == ValidationSeverity.Error ? "error" : "warning",
+        Severity = warning.Severity switch
+        {
+            ValidationSeverity.Error => "error",
+            ValidationSeverity.Info => "info",
+            _ => "warning",
+        },
         ExtractedValue = warning.ExtractedValue,
         CalculatedValue = warning.CalculatedValue,
     };
