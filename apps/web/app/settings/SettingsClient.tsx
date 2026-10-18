@@ -8,6 +8,7 @@ import { isApiConfigured } from "../../lib/api";
 import { getServerUserSnapshot, getUserSnapshot, listCountries, subscribeToUser, type CountryOption } from "../../lib/auth";
 import { FALLBACK_SETTINGS, getSettings, updateSettings, type OrganizationSettings } from "../../lib/settings";
 import { ENDPOINT_SCHEMES } from "../invoices/[invoiceId]/review/fields";
+import { ApiKeys } from "./ApiKeys";
 import { InboxAddress } from "./InboxAddress";
 import { LearnedCorrections } from "./LearnedCorrections";
 import { UsageCard } from "./UsageCard";
@@ -193,6 +194,8 @@ export default function SettingsClient() {
       <UsageCard />
 
       <InboxAddress canEdit={canEdit} />
+
+      {isApiConfigured && canEdit && <ApiKeys />}
 
       {isApiConfigured && <LearnedCorrections canForget={user?.role === "Admin" || user?.role === "User"} />}
     </div>

@@ -165,6 +165,7 @@ export default function ImportsClient() {
                         <div className="text-xs text-muted">
                           {formatBytes(item.byteSize)}
                           {item.source === "email" && item.sender ? ` · van ${item.sender}` : ""}
+                          {item.source === "api" ? " · via API" : ""}
                         </div>
                         {item.subject && <div className="text-xs text-muted">{item.subject}</div>}
                       </td>

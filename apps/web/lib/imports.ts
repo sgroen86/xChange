@@ -14,7 +14,8 @@ export type ImportStatus = "awaitingApproval" | "queued" | "processing" | "ready
 
 export interface ImportItem {
   importId: string;
-  source: "upload" | "email";
+  /** "api": sent to the conversion API with an API key. */
+  source: "upload" | "email" | "api";
   status: ImportStatus;
   fileName: string;
   byteSize: number;
