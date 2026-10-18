@@ -251,28 +251,13 @@ Resources:
       # Anthropic credit - acceptable while this is a testing prototype, and
       # called out in docs/aws-deployment.md. Add auth before real use.
       AuthType: NONE
-      Cors:
-        AllowOrigins:
-          - !Ref AllowedOrigin
-          - !Ref AllowedOriginWww
-        # The function URL answers preflights itself, so every method the API
-        # uses must be listed here; without PUT, saving settings, correcting a
-        # relation or editing an organisation is blocked in the browser.
-        AllowMethods:
-          - POST
-          - GET
-          - PUT
-        # Response headers a browser may read cross-origin: the download's
-        # file name, and the official warnings that come with an export.
-        ExposeHeaders:
-          - content-disposition
-          - x-validation-warnings
-        AllowHeaders:
-          - content-type
-          # Without this the browser's preflight rejects the login token and
-          # every authenticated call fails as a CORS error, not a 401.
-          - authorization
-        MaxAge: 3600
+      # No Cors block, deliberately: the app is the only CORS layer
+      # (Program.cs). With CORS set here as well, Lambda added its own
+      # Access-Control-Allow-Origin next to the app's, and browsers reject a
+      # response with two - every call from the site failed. The app answers
+      # preflights itself, allows the methods the site uses (PUT included)
+      # and exposes Content-Disposition and X-Validation-Warnings; that is
+      # covered by RouteProtectionTests.
 
   # Since October 2025 a function URL needs BOTH lambda:InvokeFunctionUrl and
   # lambda:InvokeFunction; with only the first, every request returns 403 even

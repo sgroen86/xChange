@@ -99,6 +99,40 @@ public class RouteProtectionTests : IClassFixture<RouteProtectionTests.Factory>
         Assert.Single(origins);
     }
 
+    [Fact]
+    public async Task The_app_answers_a_put_preflight_itself_with_one_origin_header()
+    {
+        // The app is the only CORS layer: the function URL's own CORS settings
+        // were removed after they and the app both added the origin header
+        // and browsers rejected every call. So the app must answer preflights
+        // for every method the site uses, PUT included.
+        var client = _factory.CreateClient();
+        var request = new HttpRequestMessage(HttpMethod.Options, "/api/v1/organization/settings");
+        request.Headers.Add("Origin", TestOrigin);
+        request.Headers.Add("Access-Control-Request-Method", "PUT");
+        request.Headers.Add("Access-Control-Request-Headers", "authorization,content-type");
+
+        var response = await client.SendAsync(request);
+
+        Assert.True(response.IsSuccessStatusCode);
+        Assert.Single(response.Headers.GetValues("Access-Control-Allow-Origin"));
+        Assert.Contains("PUT", string.Join(",", response.Headers.GetValues("Access-Control-Allow-Methods")), StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task Responses_expose_the_download_headers_once()
+    {
+        var client = _factory.CreateClient();
+        var request = new HttpRequestMessage(HttpMethod.Get, "/api/v1/auth/status");
+        request.Headers.Add("Origin", TestOrigin);
+
+        var response = await client.SendAsync(request);
+
+        var exposed = Assert.Single(response.Headers.GetValues("Access-Control-Expose-Headers"));
+        Assert.Contains("Content-Disposition", exposed, StringComparison.Ordinal);
+        Assert.Contains("X-Validation-Warnings", exposed, StringComparison.Ordinal);
+    }
+
     /// <summary>
     /// Substitutes in-memory stores for DynamoDB.
     ///
