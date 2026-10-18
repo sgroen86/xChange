@@ -1,6 +1,7 @@
 using System.Diagnostics;
 using System.Text.Json;
 using Anthropic;
+using Anthropic.Exceptions;
 using Anthropic.Models.Messages;
 using InvoicePlatform.Application.Interpretation;
 using Microsoft.Extensions.Logging;
@@ -86,14 +87,27 @@ public sealed class AnthropicInvoiceInterpreter : IInvoiceInterpreter
     private AnthropicClient? _client;
     private readonly SemaphoreSlim _clientGate = new(1, 1);
 
+    /// <summary>Set only by tests, to stand in for Anthropic; null uses the SDK's own.</summary>
+    private readonly HttpClient? _httpClient;
+
     public AnthropicInvoiceInterpreter(
         IAnthropicApiKeyProvider apiKeys,
         IOptions<AnthropicOptions> options,
         ILogger<AnthropicInvoiceInterpreter> logger)
+        : this(apiKeys, options, logger, httpClient: null)
+    {
+    }
+
+    public AnthropicInvoiceInterpreter(
+        IAnthropicApiKeyProvider apiKeys,
+        IOptions<AnthropicOptions> options,
+        ILogger<AnthropicInvoiceInterpreter> logger,
+        HttpClient? httpClient)
     {
         _apiKeys = apiKeys;
         _options = options.Value;
         _logger = logger;
+        _httpClient = httpClient;
     }
 
     private async Task<AnthropicClient> GetClientAsync(CancellationToken cancellationToken)
@@ -106,14 +120,53 @@ public sealed class AnthropicInvoiceInterpreter : IInvoiceInterpreter
         await _clientGate.WaitAsync(cancellationToken).ConfigureAwait(false);
         try
         {
-            return _client ??= new AnthropicClient
+            if (_client is not null)
             {
-                ApiKey = await _apiKeys.GetApiKeyAsync(cancellationToken).ConfigureAwait(false),
-            };
+                return _client;
+            }
+
+            var apiKey = await _apiKeys.GetApiKeyAsync(cancellationToken).ConfigureAwait(false);
+            return _client = _httpClient is null
+                ? new AnthropicClient { ApiKey = apiKey }
+                : new AnthropicClient { ApiKey = apiKey, HttpClient = _httpClient };
         }
         finally
         {
             _clientGate.Release();
+        }
+    }
+
+    /// <summary>
+    /// Sends the request; when Anthropic rejects the key, reads the key again
+    /// and retries once. The key is cached for the life of a Lambda instance,
+    /// so without this a rotated key (or a replaced expired one) would keep
+    /// failing on every warm instance until it happened to be recycled.
+    /// </summary>
+    private async Task<Message> CreateAsync(MessageCreateParams request, CancellationToken cancellationToken)
+    {
+        try
+        {
+            var client = await GetClientAsync(cancellationToken).ConfigureAwait(false);
+            return await client.Messages.Create(request, cancellationToken: cancellationToken).ConfigureAwait(false);
+        }
+        catch (AnthropicUnauthorizedException)
+        {
+            _logger.LogWarning("Anthropic rejected the API key; reading it again and retrying once");
+            _apiKeys.Invalidate();
+            _client = null;
+        }
+
+        try
+        {
+            var client = await GetClientAsync(cancellationToken).ConfigureAwait(false);
+            return await client.Messages.Create(request, cancellationToken: cancellationToken).ConfigureAwait(false);
+        }
+        catch (AnthropicUnauthorizedException exception)
+        {
+            throw new InvoiceInterpretationException(
+                "Anthropic rejected the API key: it is invalid or has expired. Create a new key in the "
+                    + "Anthropic Console and store it in Secrets Manager under xchange/anthropic-api-key.",
+                exception);
         }
     }
 
@@ -168,11 +221,8 @@ public sealed class AnthropicInvoiceInterpreter : IInvoiceInterpreter
         using var timeout = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
         timeout.CancelAfter(TimeSpan.FromSeconds(_options.TimeoutSeconds));
 
-        var client = await GetClientAsync(timeout.Token).ConfigureAwait(false);
-
         var stopwatch = Stopwatch.StartNew();
-        var response = await client.Messages.Create(request, cancellationToken: timeout.Token)
-            .ConfigureAwait(false);
+        var response = await CreateAsync(request, timeout.Token).ConfigureAwait(false);
         stopwatch.Stop();
 
         if (response.StopReason == "refusal")
