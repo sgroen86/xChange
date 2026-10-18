@@ -39,6 +39,9 @@ internal static class PeppolRules
                 "Elektronisch adres (PEPPOL-id) van de verkoper ontbreekt.");
         }
 
+        Identifiers(invoice.Seller, "seller", findings);
+        Identifiers(invoice.Buyer, "buyer", findings);
+
         for (var index = 0; index < invoice.Lines.Count; index++)
         {
             var line = invoice.Lines[index];
@@ -70,6 +73,61 @@ internal static class PeppolRules
 
         return findings.Violations;
     }
+
+    /// <summary>
+    /// Check digits for the identifier schemes the review screen offers besides
+    /// the Dutch ones: GLN (0088, PEPPOL-COMMON-R040) and the Belgian enterprise
+    /// number (0208, PEPPOL-COMMON-R043), on both the endpoint and the legal
+    /// registration.
+    /// </summary>
+    private static void Identifiers(CanonicalParty? party, string side, Findings findings)
+    {
+        Identifier(party?.ElectronicAddress, party?.ElectronicAddressScheme, $"{side}.electronicAddress", findings);
+        Identifier(party?.LegalRegistrationId, party?.LegalRegistrationScheme, $"{side}.legalRegistrationId", findings);
+    }
+
+    private static void Identifier(string? value, string? scheme, string path, Findings findings)
+    {
+        if (Findings.Missing(value))
+        {
+            return;
+        }
+
+        var trimmed = value!.Trim();
+
+        if (scheme == "0088" && !IsGln(trimmed))
+        {
+            findings.Add("PEPPOL-COMMON-R040", null, path, $"'{trimmed}' is geen geldig GLN-nummer (controlecijfer klopt niet).");
+        }
+        else if (scheme == "0208" && !IsBelgianEnterpriseNumber(trimmed))
+        {
+            findings.Add("PEPPOL-COMMON-R043", null, path,
+                $"'{trimmed}' is geen geldig Belgisch ondernemingsnummer (tien cijfers, controlegetal modulo 97).");
+        }
+    }
+
+    /// <summary>GS1 check digit: weights 3 and 1 from the right, as u:gln in the official rules.</summary>
+    private static bool IsGln(string value)
+    {
+        if (value.Length < 2 || !value.All(char.IsAsciiDigit))
+        {
+            return false;
+        }
+
+        var sum = 0;
+        for (int position = value.Length - 2, weightIndex = 0; position >= 0; position--, weightIndex++)
+        {
+            sum += (value[position] - '0') * (weightIndex % 2 == 0 ? 3 : 1);
+        }
+
+        return (10 - (sum % 10)) % 10 == value[^1] - '0';
+    }
+
+    /// <summary>Ten digits; the last two equal 97 minus the first eight modulo 97, as u:mod97-0208.</summary>
+    private static bool IsBelgianEnterpriseNumber(string value)
+        => value.Length == 10
+            && value.All(char.IsAsciiDigit)
+            && int.Parse(value[8..], CultureInfo.InvariantCulture) == 97 - (int.Parse(value[..8], CultureInfo.InvariantCulture) % 97);
 
     private static void TypeCode(CanonicalInvoiceDraft invoice, Findings findings)
     {

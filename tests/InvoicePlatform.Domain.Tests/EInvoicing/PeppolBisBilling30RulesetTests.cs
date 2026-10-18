@@ -82,6 +82,8 @@ public class PeppolBisBilling30RulesetTests
         { "BR-CL-11", "buyer.legalRegistrationScheme", d => d with { Buyer = d.Buyer! with { LegalRegistrationScheme = "KVK" } } },
         { "PEPPOL-EN16931-R010", "buyer.electronicAddress", d => d with { Buyer = d.Buyer! with { ElectronicAddress = null } } },
         { "PEPPOL-EN16931-R020", "seller.electronicAddress", d => d with { Seller = d.Seller! with { ElectronicAddress = null } } },
+        { "PEPPOL-COMMON-R040", "buyer.electronicAddress", d => d with { Buyer = d.Buyer! with { ElectronicAddress = "8712345678901", ElectronicAddressScheme = "0088" } } },
+        { "PEPPOL-COMMON-R043", "buyer.electronicAddress", d => d with { Buyer = d.Buyer! with { ElectronicAddress = "0123456748", ElectronicAddressScheme = "0208" } } },
 
         // Lines
         { "BR-16", "lines", d => d with { Lines = [] } },
@@ -164,6 +166,19 @@ public class PeppolBisBilling30RulesetTests
         };
 
         Assert.DoesNotContain(Violations(draft), v => v.RuleId.StartsWith("NL-", StringComparison.Ordinal));
+    }
+
+    [Theory]
+    [InlineData("0088", "8712345678906")]
+    [InlineData("0208", "0123456749")]
+    public void Valid_check_digits_pass(string scheme, string identifier)
+    {
+        var draft = SampleInvoices.Valid() with
+        {
+            Buyer = SampleInvoices.Valid().Buyer! with { ElectronicAddress = identifier, ElectronicAddressScheme = scheme },
+        };
+
+        Assert.DoesNotContain(Violations(draft), v => v.RuleId.StartsWith("PEPPOL-COMMON", StringComparison.Ordinal));
     }
 
     [Fact]
