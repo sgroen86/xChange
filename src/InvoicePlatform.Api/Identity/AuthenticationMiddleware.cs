@@ -96,6 +96,39 @@ public static class AuthorizationExtensions
 
         return builder;
     }
+
+    /// <summary>
+    /// Rejects anyone who is not a platform administrator - including the Admin
+    /// of an organisation, whose role says nothing about the platform.
+    /// </summary>
+    public static TBuilder RequirePlatformAdmin<TBuilder>(this TBuilder builder)
+        where TBuilder : IEndpointConventionBuilder
+    {
+        builder.AddEndpointFilter(async (context, next) =>
+        {
+            var user = context.HttpContext.GetAuthenticatedUser();
+
+            if (user is null)
+            {
+                return Results.Problem(
+                    detail: "Log in om deze actie uit te voeren.",
+                    title: "Niet ingelogd",
+                    statusCode: StatusCodes.Status401Unauthorized);
+            }
+
+            if (!user.IsPlatformAdmin)
+            {
+                return Results.Problem(
+                    detail: "Alleen de platformbeheerder kan dit.",
+                    title: "Geen toegang",
+                    statusCode: StatusCodes.Status403Forbidden);
+            }
+
+            return await next(context).ConfigureAwait(false);
+        });
+
+        return builder;
+    }
 }
 
 /// <summary>Mirrors Domain's UserRole without the API referencing it by value.</summary>

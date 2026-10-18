@@ -94,6 +94,7 @@ api.MapStoredInvoiceEndpoints();
 api.MapExportEndpoints();
 api.MapOrganizationEndpoints();
 api.MapRelationEndpoints();
+api.MapPlatformEndpoints();
 
 app.Run();
 

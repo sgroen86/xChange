@@ -5,6 +5,7 @@ using InvoicePlatform.Application.Relations;
 using InvoicePlatform.Domain.Canonical;
 using InvoicePlatform.Domain.Identity;
 using InvoicePlatform.Domain.Invoices;
+using InvoicePlatform.Domain.Organizations;
 using InvoicePlatform.Domain.Relations;
 using Microsoft.AspNetCore.Mvc.Testing;
 using Microsoft.Extensions.DependencyInjection;
@@ -16,7 +17,8 @@ namespace InvoicePlatform.Integration.Tests;
 /// The real API with in-memory stores and a fixed set of signed-in users, so
 /// role and tenant rules can be tested end to end without AWS credentials.
 ///
-/// Tokens: admin-a, user-a and readonly-a belong to org-a; admin-b to org-b.
+/// Tokens: admin-a, user-a and readonly-a belong to org-a; admin-b to org-b;
+/// platform-a is a platform administrator, and Admin of org-a.
 /// </summary>
 public sealed class SignedInFactory : WebApplicationFactory<Program>
 {
@@ -28,6 +30,8 @@ public sealed class SignedInFactory : WebApplicationFactory<Program>
     public InMemorySettings Settings { get; } = new();
 
     public InMemoryRelations Relations { get; } = new();
+
+    public InMemoryPlatform Platform { get; } = new();
 
     public HttpClient As(string token)
     {
@@ -65,6 +69,7 @@ public sealed class SignedInFactory : WebApplicationFactory<Program>
             services.RemoveAll<IInvoiceRepository>();
             services.RemoveAll<IDocumentStore>();
             services.RemoveAll<IRelationRepository>();
+            services.RemoveAll<IPlatformStore>();
 
             var identity = new SignedInIdentity();
             services.AddSingleton<IUserStore>(identity);
@@ -74,6 +79,7 @@ public sealed class SignedInFactory : WebApplicationFactory<Program>
             services.AddSingleton<IInvoiceRepository>(Invoices);
             services.AddSingleton<IDocumentStore>(Invoices);
             services.AddSingleton<IRelationRepository>(Relations);
+            services.AddSingleton<IPlatformStore>(Platform);
         });
     }
 
@@ -85,6 +91,7 @@ public sealed class SignedInFactory : WebApplicationFactory<Program>
             new() { Id = "user-a", OrganizationId = OrgA, Email = "user@a", PasswordHash = "-", Name = "User A", Role = UserRole.User },
             new() { Id = "readonly-a", OrganizationId = OrgA, Email = "readonly@a", PasswordHash = "-", Name = "Readonly A", Role = UserRole.ReadOnly },
             new() { Id = "admin-b", OrganizationId = OrgB, Email = "admin@b", PasswordHash = "-", Name = "Admin B", Role = UserRole.Admin },
+            new() { Id = "platform-a", OrganizationId = OrgA, Email = "platform@a", PasswordHash = "-", Name = "Platform", Role = UserRole.Admin, IsPlatformAdmin = true },
         ];
 
         // The token is the user id: good enough for a test, never for anything else.
@@ -223,5 +230,66 @@ public sealed class InMemoryRelations : IRelationRepository
         }
 
         return Task.CompletedTask;
+    }
+}
+
+public sealed class InMemoryPlatform : IPlatformStore
+{
+    private readonly Dictionary<string, Organization> _organizations = [];
+    private readonly Dictionary<string, Invitation> _invitations = [];
+
+    public Task<Organization?> FindOrganizationAsync(string organizationId, CancellationToken cancellationToken = default)
+    {
+        lock (_organizations)
+        {
+            return Task.FromResult(_organizations.GetValueOrDefault(organizationId));
+        }
+    }
+
+    public Task<IReadOnlyList<Organization>> ListOrganizationsAsync(CancellationToken cancellationToken = default)
+    {
+        lock (_organizations)
+        {
+            return Task.FromResult<IReadOnlyList<Organization>>(_organizations.Values.ToList());
+        }
+    }
+
+    public Task SaveOrganizationAsync(Organization organization, CancellationToken cancellationToken = default)
+    {
+        lock (_organizations)
+        {
+            _organizations[organization.OrganizationId] = organization;
+        }
+
+        return Task.CompletedTask;
+    }
+
+    public Task<int> CountUsersAsync(string organizationId, CancellationToken cancellationToken = default)
+        => Task.FromResult(0);
+
+    public Task SaveInvitationAsync(Invitation invitation, CancellationToken cancellationToken = default)
+    {
+        lock (_invitations)
+        {
+            _invitations[invitation.CodeHash] = invitation;
+        }
+
+        return Task.CompletedTask;
+    }
+
+    public Task<Invitation?> FindInvitationAsync(string codeHash, CancellationToken cancellationToken = default)
+    {
+        lock (_invitations)
+        {
+            return Task.FromResult(_invitations.GetValueOrDefault(codeHash));
+        }
+    }
+
+    public Task<bool> TryDeleteInvitationAsync(string codeHash, CancellationToken cancellationToken = default)
+    {
+        lock (_invitations)
+        {
+            return Task.FromResult(_invitations.Remove(codeHash));
+        }
     }
 }

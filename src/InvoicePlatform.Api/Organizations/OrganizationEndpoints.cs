@@ -33,7 +33,12 @@ public static class OrganizationEndpoints
     {
         var user = context.GetAuthenticatedUser()!;
         var settings = await service.GetAsync(user.OrganizationId, cancellationToken).ConfigureAwait(false);
-        return Results.Ok(ToResponse(settings, service));
+        var organization = await service.GetOrganizationAsync(user.OrganizationId, cancellationToken).ConfigureAwait(false);
+        return Results.Ok(ToResponse(settings, service) with
+        {
+            OrganizationName = organization?.Name,
+            CountryCode = organization?.CountryCode,
+        });
     }
 
     private static async Task<IResult> UpdateAsync(
@@ -59,8 +64,13 @@ public static class OrganizationEndpoints
             request.EndpointScheme,
             cancellationToken).ConfigureAwait(false);
 
+        var organization = await service.GetOrganizationAsync(user.OrganizationId, cancellationToken).ConfigureAwait(false);
         return result.Succeeded
-            ? Results.Ok(ToResponse(result.Settings!, service))
+            ? Results.Ok(ToResponse(result.Settings!, service) with
+            {
+                OrganizationName = organization?.Name,
+                CountryCode = organization?.CountryCode,
+            })
             : Results.Problem(detail: result.Error, title: "Instellingen niet opgeslagen", statusCode: StatusCodes.Status400BadRequest);
     }
 

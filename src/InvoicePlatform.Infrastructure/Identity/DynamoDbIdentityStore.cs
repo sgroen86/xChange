@@ -333,6 +333,7 @@ internal sealed class DynamoDbIdentityStore(
         ["name"] = new(user.Name),
         ["role"] = new(user.Role.ToString()),
         ["isActive"] = new AttributeValue { BOOL = user.IsActive },
+        ["isPlatformAdmin"] = new AttributeValue { BOOL = user.IsPlatformAdmin },
         ["createdAt"] = new(user.CreatedAt.ToString("O")),
         ["lastLoginAt"] = user.LastLoginAt is { } last
             ? new AttributeValue(last.ToString("O"))
@@ -348,6 +349,8 @@ internal sealed class DynamoDbIdentityStore(
         Name = item["name"].S,
         Role = Enum.TryParse<UserRole>(item["role"].S, out var role) ? role : UserRole.User,
         IsActive = item["isActive"].BOOL ?? false,
+        // Absent on accounts made before platform administrators existed.
+        IsPlatformAdmin = item.TryGetValue("isPlatformAdmin", out var platformAdmin) && platformAdmin.BOOL == true,
         CreatedAt = DateTimeOffset.Parse(item["createdAt"].S),
         LastLoginAt = item.TryGetValue("lastLoginAt", out var last) && last.S is { } value
             ? DateTimeOffset.Parse(value)

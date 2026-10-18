@@ -17,6 +17,13 @@ public sealed record RulesetInfo
 /// <summary>Wire shape of GET and PUT /api/v1/organization/settings.</summary>
 public sealed record OrganizationSettingsResponse
 {
+    /// <summary>Read-only here: only the platform administrator changes name and country.</summary>
+    [JsonPropertyName("organizationName")]
+    public string? OrganizationName { get; init; }
+
+    [JsonPropertyName("countryCode")]
+    public string? CountryCode { get; init; }
+
     [JsonPropertyName("defaultRulesetId")]
     public string? DefaultRulesetId { get; init; }
 
