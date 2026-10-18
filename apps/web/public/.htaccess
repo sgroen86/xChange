@@ -29,6 +29,10 @@
 # Note: under a /DEV/ path the site's root .htaccess sets IS_STAGING and forces
 # no-store on everything, which deliberately overrides the immutable rule below.
 <IfModule mod_headers.c>
+  # Not for search engines, on every response - not only the HTML pages, which
+  # also carry <meta name="robots" content="noindex, nofollow">.
+  Header always set X-Robots-Tag "noindex, nofollow"
+
   <FilesMatch "\.(js|css|woff2?|svg|ico)$">
     Header set Cache-Control "public, max-age=31536000, immutable"
   </FilesMatch>
