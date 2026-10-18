@@ -28,16 +28,23 @@ public class CodeListsTests
 
     [Theory]
     [InlineData("EUR", true)]
+    [InlineData("SGD", true)]
+    [InlineData("GBP", true)]
+    [InlineData("XYZ", false)]
     [InlineData("eur", false)]
     [InlineData("EURO", false)]
-    public void Currency_codes_are_three_capitals(string code, bool valid)
+    public void Currency_codes_come_from_the_official_iso_4217_list(string code, bool valid)
         => Assert.Equal(valid, CodeLists.IsCurrencyCode(code));
 
     [Theory]
     [InlineData("NL", true)]
+    [InlineData("SG", true)]
+    [InlineData("GB", true)]
+    [InlineData("UK", false)]
+    [InlineData("XX", false)]
     [InlineData("NLD", false)]
     [InlineData("nl", false)]
-    public void Country_codes_are_two_capitals(string code, bool valid)
+    public void Country_codes_come_from_the_official_iso_3166_list(string code, bool valid)
         => Assert.Equal(valid, CodeLists.IsCountryCode(code));
 
     [Theory]

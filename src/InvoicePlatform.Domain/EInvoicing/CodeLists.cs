@@ -6,10 +6,10 @@ namespace InvoicePlatform.Domain.EInvoicing;
 /// The code lists the runtime rules check, from the PEPPOL BIS Billing 3.0
 /// code lists in release 3.0.21.
 ///
-/// Currency, country and unit codes are checked for shape only (three capitals,
-/// two capitals, a Rec 20 style code). Embedding the full ISO and UN/ECE lists
-/// is left to the official validator in CI; what extraction gets wrong in
-/// practice ("eur", "EURO", "stuks") the shape check already catches.
+/// Currency and country codes are checked against the full official lists
+/// (<see cref="IsoCodeLists"/>). Unit codes are checked for shape only: the
+/// UN/ECE Rec 20 list is long, and the official validation of every exported
+/// file catches a well-formed but unknown unit.
 /// </summary>
 public static partial class CodeLists
 {
@@ -66,9 +66,11 @@ public static partial class CodeLists
 
     public static bool IsCreditNoteType(string? code) => code is not null && CreditNoteTypeCodes.Contains(code);
 
-    public static bool IsCurrencyCode(string? code) => code is not null && CurrencyShape().IsMatch(code);
+    /// <summary>An ISO 4217 code from the official list (BR-CL-04).</summary>
+    public static bool IsCurrencyCode(string? code) => code is not null && IsoCodeLists.Currencies.Contains(code);
 
-    public static bool IsCountryCode(string? code) => code is not null && CountryShape().IsMatch(code);
+    /// <summary>An ISO 3166-1 code from the official list (BR-CL-14).</summary>
+    public static bool IsCountryCode(string? code) => code is not null && IsoCodeLists.Countries.Contains(code);
 
     public static bool IsUnitCode(string? code) => code is not null && UnitShape().IsMatch(code);
 
@@ -87,12 +89,6 @@ public static partial class CodeLists
 
     /// <summary>Direct debit codes that require a mandate (PEPPOL-EN16931-R061).</summary>
     public static bool IsDirectDebit(string? code) => code is "49" or "59";
-
-    [GeneratedRegex("^[A-Z]{3}$")]
-    private static partial Regex CurrencyShape();
-
-    [GeneratedRegex("^[A-Z]{2}$")]
-    private static partial Regex CountryShape();
 
     [GeneratedRegex("^[A-Z0-9]{1,3}$")]
     private static partial Regex UnitShape();
