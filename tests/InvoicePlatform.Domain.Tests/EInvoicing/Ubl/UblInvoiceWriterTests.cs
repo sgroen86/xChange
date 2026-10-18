@@ -44,6 +44,9 @@ public class UblInvoiceWriterTests
         "pint-sg-invoice-sgd.xml",
         "pint-sg-invoice-usd.xml",
         "pint-sg-creditnote.xml",
+        "invoice-gb-standard.xml",
+        "invoice-be-standard.xml",
+        "invoice-sg-to-gb.xml",
     };
 
     private static (CanonicalInvoiceDraft Draft, IInvoiceRuleset Ruleset) SampleFor(string file) => file switch
@@ -54,6 +57,9 @@ public class UblInvoiceWriterTests
         "pint-sg-invoice-sgd.xml" => (SampleInvoices.Singapore(), new PintSgBilling1Ruleset()),
         "pint-sg-invoice-usd.xml" => (SampleInvoices.SingaporeInUsDollars(), new PintSgBilling1Ruleset()),
         "pint-sg-creditnote.xml" => (SampleInvoices.SingaporeCreditNote(), new PintSgBilling1Ruleset()),
+        "invoice-gb-standard.xml" => (SampleInvoices.UnitedKingdom(), new PeppolBisBilling30Ruleset()),
+        "invoice-be-standard.xml" => (SampleInvoices.Belgium(), new PeppolBisBilling30Ruleset()),
+        "invoice-sg-to-gb.xml" => (SampleInvoices.SingaporeToUnitedKingdom(), new PeppolBisBilling30Ruleset()),
         _ => throw new ArgumentOutOfRangeException(nameof(file)),
     };
 

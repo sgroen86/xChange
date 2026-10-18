@@ -154,13 +154,14 @@ export const TYPE_CODES: Option[] = [
 
 export const CURRENCIES: Option[] = ["EUR", "USD", "GBP", "SGD"].map((code) => ({ value: code, label: code }));
 
-/** Electronic address schemes (EAS) that matter for Dutch, Belgian and Singapore trading partners. */
+/** Electronic address schemes (EAS) that matter for Dutch, Belgian, British and Singapore trading partners. */
 export const ENDPOINT_SCHEMES: Option[] = [
   { value: "0106", label: "0106 · KvK-nummer" },
   { value: "0190", label: "0190 · OIN (overheid)" },
   { value: "9944", label: "9944 · Nederlands btw-nummer" },
   { value: "0208", label: "0208 · Belgisch ondernemingsnummer" },
   { value: "9925", label: "9925 · Belgisch btw-nummer" },
+  { value: "9932", label: "9932 · Brits btw-nummer" },
   { value: "0088", label: "0088 · GLN" },
   { value: "0195", label: "0195 · Singapore UEN" },
 ];

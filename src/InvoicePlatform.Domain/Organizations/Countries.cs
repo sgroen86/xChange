@@ -7,7 +7,12 @@ namespace InvoicePlatform.Domain.Organizations;
 /// <param name="Code">ISO 3166-1 alpha-2. The United Kingdom is "GB", as PEPPOL expects.</param>
 /// <param name="Name">Dutch, for the screens.</param>
 /// <param name="DefaultRulesetId">The export format an organisation there starts with.</param>
-public sealed record Country(string Code, string Name, string DefaultRulesetId);
+/// <param name="TaxNumberIsVatIdentifier">
+/// True where a company's tax number is a VAT number in the EN 16931 sense
+/// (BT-31). False for Singapore: a GST registration number is a tax
+/// registration identifier (BT-32) once the invoice leaves PINT-SG.
+/// </param>
+public sealed record Country(string Code, string Name, string DefaultRulesetId, bool TaxNumberIsVatIdentifier = true);
 
 /// <summary>
 /// The countries xChange serves. This is the one place a country is added;
@@ -18,7 +23,7 @@ public static class Countries
 {
     public static readonly IReadOnlyList<Country> All =
     [
-        new("SG", "Singapore", PintSgBilling1Ruleset.RulesetId),
+        new("SG", "Singapore", PintSgBilling1Ruleset.RulesetId, TaxNumberIsVatIdentifier: false),
         new("GB", "Verenigd Koninkrijk", PeppolBisBilling30Ruleset.RulesetId),
         new("NL", "Nederland", PeppolBisBilling30Ruleset.RulesetId),
         new("BE", "België", PeppolBisBilling30Ruleset.RulesetId),

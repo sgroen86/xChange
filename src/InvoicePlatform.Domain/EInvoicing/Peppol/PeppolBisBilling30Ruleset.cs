@@ -1,4 +1,5 @@
 using InvoicePlatform.Domain.Canonical;
+using InvoicePlatform.Domain.Organizations;
 
 namespace InvoicePlatform.Domain.EInvoicing.Peppol;
 
@@ -54,8 +55,30 @@ public sealed class PeppolBisBilling30Ruleset : IInvoiceRuleset
         WritesDocumentUuid: false,
         WritesTaxCurrencyTotals: false);
 
-    /// <summary>BIS 3.0 as xChange uses it has no separate tax currency.</summary>
-    public CanonicalInvoiceDraft Prepare(CanonicalInvoiceDraft draft) => draft with { TaxCurrencyCode = null };
+    /// <summary>
+    /// BIS 3.0 as xChange uses it has no separate tax currency. A seller from a
+    /// country without VAT numbers (Singapore) has its GST number in the VAT
+    /// field, where PINT-SG wants it; here it is a tax registration identifier
+    /// (BT-32), so it moves there unless one is already given.
+    /// </summary>
+    public CanonicalInvoiceDraft Prepare(CanonicalInvoiceDraft draft)
+    {
+        ArgumentNullException.ThrowIfNull(draft);
+
+        var seller = draft.Seller;
+        if (seller is not null
+            && !Findings.Missing(seller.VatIdentifier)
+            && Countries.Find(seller.Address?.CountryCode) is { TaxNumberIsVatIdentifier: false })
+        {
+            seller = seller with
+            {
+                TaxRegistrationId = Findings.Missing(seller.TaxRegistrationId) ? seller.VatIdentifier : seller.TaxRegistrationId,
+                VatIdentifier = null,
+            };
+        }
+
+        return draft with { TaxCurrencyCode = null, Seller = seller };
+    }
 
     public IReadOnlyList<RuleViolation> Check(CanonicalInvoiceDraft invoice)
     {
@@ -65,6 +88,7 @@ public sealed class PeppolBisBilling30Ruleset : IInvoiceRuleset
             .Concat(EuVatRules.Check(invoice))
             .Concat(PeppolRules.Check(invoice))
             .Concat(DutchRules.Check(invoice))
+            .Concat(VatNumberShapes.Check(invoice))
             .DistinctBy(violation => (violation.RuleId, violation.Path))
             .OrderBy(violation => violation.Path, StringComparer.Ordinal)
             .ThenBy(violation => violation.RuleId, StringComparer.Ordinal)

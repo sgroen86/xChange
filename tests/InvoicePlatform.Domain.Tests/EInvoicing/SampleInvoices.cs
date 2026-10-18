@@ -268,4 +268,157 @@ internal static class SampleInvoices
         PrecedingInvoiceReference = "SG-2026-0101",
         Lines = [Singapore().Lines[0] with { Quantity = 2m }],
     };
+
+    /// <summary>A British invoice between two UK companies, in pounds at 20%.</summary>
+    public static CanonicalInvoiceDraft UnitedKingdom() => new()
+    {
+        TypeCode = "380",
+        InvoiceNumber = "TD-2026-0310",
+        IssueDate = "2026-10-01",
+        DueDate = "2026-10-31",
+        CurrencyCode = "GBP",
+        BuyerReference = "PO-4471",
+        Seller = new CanonicalParty
+        {
+            Name = "Thames Digital Ltd",
+            VatIdentifier = "GB123456789",
+            LegalRegistrationId = "09876543",
+            ElectronicAddress = "GB123456789",
+            ElectronicAddressScheme = "9932",
+            Address = new CanonicalAddress
+            {
+                StreetName = "12 Bankside",
+                PostalZone = "SE1 9JE",
+                CityName = "London",
+                CountryCode = "GB",
+            },
+        },
+        Buyer = new CanonicalParty
+        {
+            Name = "Pennine Logistics Ltd",
+            VatIdentifier = "GB987654321",
+            ElectronicAddress = "GB987654321",
+            ElectronicAddressScheme = "9932",
+            Address = new CanonicalAddress
+            {
+                StreetName = "4 Canal Street",
+                PostalZone = "M1 3HE",
+                CityName = "Manchester",
+                CountryCode = "GB",
+            },
+        },
+        Payment = new CanonicalPaymentDetails
+        {
+            PaymentMeansCode = "30",
+            Iban = "GB29NWBK60161331926819",
+            AccountName = "Thames Digital Ltd",
+            PaymentReference = "TD-2026-0310",
+        },
+        Lines =
+        [
+            new CanonicalInvoiceLine
+            {
+                LineId = "1",
+                Description = "Managed hosting, October",
+                Quantity = 1m,
+                UnitCode = "C62",
+                UnitPrice = 840.00m,
+                VatCategoryCode = "S",
+                VatPercentage = 20m,
+            },
+            new CanonicalInvoiceLine
+            {
+                LineId = "2",
+                Description = "Support hours",
+                Quantity = 3.5m,
+                UnitCode = "HUR",
+                UnitPrice = 95.00m,
+                VatCategoryCode = "S",
+                VatPercentage = 20m,
+            },
+        ],
+    };
+
+    /// <summary>A Belgian invoice between two Belgian companies, addressed by enterprise number (0208).</summary>
+    public static CanonicalInvoiceDraft Belgium() => new()
+    {
+        TypeCode = "380",
+        InvoiceNumber = "BD-2026-0077",
+        IssueDate = "2026-10-01",
+        DueDate = "2026-10-31",
+        CurrencyCode = "EUR",
+        BuyerReference = "BO-2026-12",
+        Seller = new CanonicalParty
+        {
+            Name = "Brussels Data BV",
+            VatIdentifier = "BE0477472701",
+            LegalRegistrationId = "0477472701",
+            LegalRegistrationScheme = "0208",
+            ElectronicAddress = "0477472701",
+            ElectronicAddressScheme = "0208",
+            Address = new CanonicalAddress
+            {
+                StreetName = "Wetstraat 16",
+                PostalZone = "1000",
+                CityName = "Brussel",
+                CountryCode = "BE",
+            },
+        },
+        Buyer = new CanonicalParty
+        {
+            Name = "Antwerp Port Services NV",
+            VatIdentifier = "BE0815531854",
+            ElectronicAddress = "0815531854",
+            ElectronicAddressScheme = "0208",
+            Address = new CanonicalAddress
+            {
+                StreetName = "Havenlaan 2",
+                PostalZone = "2000",
+                CityName = "Antwerpen",
+                CountryCode = "BE",
+            },
+        },
+        Payment = new CanonicalPaymentDetails
+        {
+            PaymentMeansCode = "30",
+            Iban = "BE68539007547034",
+            AccountName = "Brussels Data BV",
+            PaymentReference = "BD-2026-0077",
+        },
+        Lines =
+        [
+            new CanonicalInvoiceLine
+            {
+                LineId = "1",
+                Description = "Datamigratie",
+                Quantity = 12m,
+                UnitCode = "HUR",
+                UnitPrice = 110.00m,
+                VatCategoryCode = "S",
+                VatPercentage = 21m,
+            },
+        ],
+    };
+
+    /// <summary>
+    /// The Singapore organisation invoicing a UK company under BIS 3.0: services
+    /// reverse-charged (AE), the UK customer accounts for the VAT. The GST number
+    /// sits where the PDF puts it; the ruleset moves it to BT-32.
+    /// </summary>
+    public static CanonicalInvoiceDraft SingaporeToUnitedKingdom() => Singapore() with
+    {
+        InvoiceNumber = "SG-2026-0140",
+        DocumentUuid = null,
+        CurrencyCode = "GBP",
+        BuyerReference = "PO-4502",
+        Buyer = UnitedKingdom().Buyer,
+        Lines =
+        [
+            Singapore().Lines[0] with { VatCategoryCode = "AE", VatPercentage = 0m },
+        ],
+        VatBreakdown =
+        [
+            new CanonicalVatBreakdownLine { VatCategoryCode = "AE", VatPercentage = 0m, ExemptionReason = "Reverse charge" },
+        ],
+    };
 }
