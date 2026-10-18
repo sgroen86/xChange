@@ -60,6 +60,41 @@ file, the trial rule (402) and the official validation are exactly the app's.
 A conversion counts as one conversion, like an upload. A trial can convert and see the status but not
 download the XML. No per-key rate limit yet; the queue's worker concurrency (2) already paces reading.
 
+## Deviations (as built)
+
+Where the code showed a point above would not work as written, the closest sound alternative was
+built. Developer docs: `docs/api/conversions.md`.
+
+- **"Leaves the review list" closes rather than deletes.** The app deletes an import once it is booked
+  (the review screen dismisses it), which would also delete the conversion's requested format and
+  make the conversion unfindable. A new import status `Closed` takes an `Api` import off the list
+  without deleting it - when the worker books it, and when the app dismisses it. Uploads and mailed
+  PDFs are still deleted. A closed conversion is never read or retried again.
+- **The checked format is the file's format.** With no `format` asked for, the format chosen when the
+  worker checks the draft is stored on the conversion, and `GET …/xml` uses it, rather than resolving
+  again at download (by then a relation or setting may have changed).
+- **"No errors" is strict.** Besides rule violations, a conversion goes to review when reading left a
+  warning (a printed total that does not add up - `CALC-*` - or a buyer that disagrees with the
+  relation), or when the official validator was unavailable (`XC-OFFICIAL-UNAVAILABLE`): nothing is
+  booked unseen without the official verdict. Those reasons appear in `violations`. If booking itself
+  throws, the conversion stays in review with "Automatisch afronden is mislukt" as its error.
+  *(review)*
+- **No learning from an automatic booking.** It is booked without the extraction id: nobody corrected
+  anything. When a person books it from the review list, the app passes the extraction id as usual.
+- **`failed` also covers "removed in the app".** A conversion dismissed (or its invoice deleted)
+  without a booked invoice reports `failed`; one saved as a concept stays `needs_review`.
+- **402 before 409.** On a trial, `GET …/xml` answers 402 straight away, also while the conversion is
+  not ready, so a trial integration is not left polling for a file it cannot get.
+- **Keys only, both ways.** A signed-in session is not accepted by the conversion endpoints either;
+  key management (list, create, revoke) is Admin-only, listing included.
+- **Key storage detail.** Lookup item `APIKEY#<sha256> / APIKEY`, listing item
+  `ORG#<org> / APIKEY#<keyId>`; the visible prefix is the first 12 characters (`xck_` + 8). The
+  last-used time is written at most every 5 minutes, as a conditional put so a use racing a revoke
+  cannot bring the key back.
+- **Infrastructure.** The worker now invokes the official validator (alias + `OfficialValidation__
+  FunctionName`) and writes the PDF when booking (`s3:PutObject`). The API role already had what key
+  storage needs on the identity table.
+
 ## Not in this piece
 
 Sending UBL in for delivery (needs the access point), webhooks instead of polling, a public developer
