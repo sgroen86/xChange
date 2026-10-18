@@ -1,4 +1,5 @@
 using InvoicePlatform.Application.Interpretation;
+using InvoicePlatform.Application.Imports;
 using InvoicePlatform.Application.Invoices;
 using InvoicePlatform.Application.Learning;
 using InvoicePlatform.Application.Networks;
@@ -11,7 +12,9 @@ using InvoicePlatform.Domain.Validation;
 using Amazon.DynamoDBv2;
 using Amazon.Lambda;
 using Amazon.S3;
+using Amazon.SQS;
 using InvoicePlatform.Application.Identity;
+using InvoicePlatform.Infrastructure.Imports;
 using InvoicePlatform.Infrastructure.Invoices;
 using InvoicePlatform.Infrastructure.Learning;
 using InvoicePlatform.Infrastructure.Networks;
@@ -107,6 +110,15 @@ public static class DependencyInjection
         services.AddScoped<RelationService>();
         services.AddSingleton<ILearningStore, DynamoDbLearningStore>();
         services.AddScoped<LearningService>();
+
+        // Batch and email import: records in DynamoDB, the queue on SQS, read by the worker.
+        services
+            .AddOptions<ImportQueueOptions>()
+            .Bind(configuration.GetSection(ImportQueueOptions.SectionName));
+        services.AddSingleton<IAmazonSQS>(_ => new AmazonSQSClient());
+        services.AddSingleton<IImportRepository, DynamoDbImportRepository>();
+        services.AddSingleton<IImportQueue, SqsImportQueue>();
+        services.AddScoped<ImportService>();
         services.AddScoped<BookInvoiceService>();
         services.AddScoped<ExportInvoiceService>();
 

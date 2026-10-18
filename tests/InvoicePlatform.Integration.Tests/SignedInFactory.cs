@@ -1,4 +1,5 @@
 using InvoicePlatform.Application.Identity;
+using InvoicePlatform.Application.Imports;
 using InvoicePlatform.Application.Invoices;
 using InvoicePlatform.Application.Learning;
 using InvoicePlatform.Application.Networks;
@@ -6,6 +7,7 @@ using InvoicePlatform.Application.Organizations;
 using InvoicePlatform.Application.Relations;
 using InvoicePlatform.Domain.Canonical;
 using InvoicePlatform.Domain.Identity;
+using InvoicePlatform.Domain.Imports;
 using InvoicePlatform.Domain.Invoices;
 using InvoicePlatform.Domain.Learning;
 using InvoicePlatform.Domain.Networks;
@@ -43,6 +45,8 @@ public sealed class SignedInFactory : WebApplicationFactory<Program>
     public StubReceiverNetwork Network { get; } = new();
 
     public InMemoryLearningStore Learning { get; } = new();
+
+    public InMemoryImports Imports { get; } = new();
 
     public HttpClient As(string token)
     {
@@ -86,6 +90,8 @@ public sealed class SignedInFactory : WebApplicationFactory<Program>
             services.RemoveAll<IOfficialValidator>();
             services.RemoveAll<IReceiverNetwork>();
             services.RemoveAll<ILearningStore>();
+            services.RemoveAll<IImportRepository>();
+            services.RemoveAll<IImportQueue>();
 
             var identity = new SignedInIdentity();
             services.AddSingleton<IUserStore>(identity);
@@ -99,6 +105,8 @@ public sealed class SignedInFactory : WebApplicationFactory<Program>
             services.AddSingleton<IOfficialValidator>(Official);
             services.AddSingleton<IReceiverNetwork>(Network);
             services.AddSingleton<ILearningStore>(Learning);
+            services.AddSingleton<IImportRepository>(Imports);
+            services.AddSingleton<IImportQueue>(Imports);
         });
     }
 
@@ -310,6 +318,60 @@ public sealed class InMemoryPlatform : IPlatformStore
         {
             return Task.FromResult(_invitations.Remove(codeHash));
         }
+    }
+}
+
+/// <summary>Imports and their queue in memory; the queue only records what was put on it.</summary>
+public sealed class InMemoryImports : IImportRepository, IImportQueue
+{
+    private readonly Dictionary<(string Org, string Id), ImportRecord> _records = [];
+
+    public List<(string Org, string Id)> Queued { get; } = [];
+
+    public Task SaveAsync(ImportRecord record, CancellationToken cancellationToken = default)
+    {
+        lock (_records)
+        {
+            _records[(record.OrganizationId, record.ImportId)] = record;
+        }
+
+        return Task.CompletedTask;
+    }
+
+    public Task<ImportRecord?> GetAsync(string organizationId, string importId, CancellationToken cancellationToken = default)
+    {
+        lock (_records)
+        {
+            return Task.FromResult(_records.GetValueOrDefault((organizationId, importId)));
+        }
+    }
+
+    public Task<IReadOnlyList<ImportRecord>> ListAsync(string organizationId, CancellationToken cancellationToken = default)
+    {
+        lock (_records)
+        {
+            return Task.FromResult<IReadOnlyList<ImportRecord>>(_records.Where(kv => kv.Key.Org == organizationId).Select(kv => kv.Value).ToList());
+        }
+    }
+
+    public Task DeleteAsync(string organizationId, string importId, CancellationToken cancellationToken = default)
+    {
+        lock (_records)
+        {
+            _records.Remove((organizationId, importId));
+        }
+
+        return Task.CompletedTask;
+    }
+
+    public Task EnqueueAsync(string organizationId, string importId, CancellationToken cancellationToken = default)
+    {
+        lock (Queued)
+        {
+            Queued.Add((organizationId, importId));
+        }
+
+        return Task.CompletedTask;
     }
 }
 

@@ -35,6 +35,7 @@ import {
 import { formatMoney } from "../../../../lib/money";
 import { getPdf } from "../../../../lib/pdfStore";
 import { chooseFormat } from "../../../../lib/formatChoice";
+import { dismissImport } from "../../../../lib/imports";
 import { matchRelation } from "../../../../lib/relationKeys";
 import { listRelations, type Relation } from "../../../../lib/relations";
 import { defaultRulesetOf, FALLBACK_SETTINGS, getSettings, type OrganizationSettings } from "../../../../lib/settings";
@@ -382,6 +383,10 @@ export default function ReviewClient() {
         providerModel: draft.source.engine,
         extractionId: draft.extractionId,
       });
+      if (draft.fromImport) {
+        // Booked: it no longer waits in the list. If this fails it can be removed there by hand.
+        void dismissImport(invoiceId).catch(() => undefined);
+      }
       setBookedFingerprint(editableFingerprint(normalizeInvoice(stored.canonicalInvoice)));
       saveDraft(draft);
       showToast("Factuur geboekt en opgeslagen.", "success");

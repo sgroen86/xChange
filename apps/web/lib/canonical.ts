@@ -132,6 +132,8 @@ export interface ReviewDraft {
   id: string;
   /** The server's id for this upload; booking passes it back so xChange learns from the corrections. */
   extractionId?: string;
+  /** Opened from the "te beoordelen" list; booking takes it off that list. */
+  fromImport?: boolean;
   invoice: CanonicalInvoice;
   source: {
     fileName: string;

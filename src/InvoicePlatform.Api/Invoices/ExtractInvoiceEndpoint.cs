@@ -65,49 +65,13 @@ public static class ExtractInvoiceEndpoint
     {
         var logger = loggerFactory.CreateLogger(typeof(ExtractInvoiceEndpoint));
 
-        if (!request.HasFormContentType)
+        var upload = await ReadPdfAsync(request, cancellationToken).ConfigureAwait(false);
+        if (upload.Problem is not null)
         {
-            return Problem(StatusCodes.Status400BadRequest,
-                "Unsupported content type",
-                "The request must be multipart/form-data.");
+            return upload.Problem;
         }
 
-        var form = await request.ReadFormAsync(cancellationToken).ConfigureAwait(false);
-        var file = form.Files[FormFieldName];
-
-        if (file is null)
-        {
-            return Problem(StatusCodes.Status400BadRequest,
-                "Missing file",
-                $"The request must contain a form field named \"{FormFieldName}\".");
-        }
-
-        if (file.Length == 0)
-        {
-            return Problem(StatusCodes.Status400BadRequest, "Empty file", "The uploaded file is empty.");
-        }
-
-        if (file.Length > MaxUploadBytes)
-        {
-            return Problem(StatusCodes.Status413PayloadTooLarge,
-                "File too large",
-                $"The file is {file.Length} bytes. The maximum is {MaxUploadBytes} bytes (20 MB).");
-        }
-
-        using var buffer = new MemoryStream(capacity: (int)file.Length);
-        await using (var upload = file.OpenReadStream())
-        {
-            await upload.CopyToAsync(buffer, cancellationToken).ConfigureAwait(false);
-        }
-
-        var bytes = buffer.ToArray();
-
-        if (!IsPdf(bytes))
-        {
-            return Problem(StatusCodes.Status400BadRequest,
-                "Not a PDF",
-                "Only PDF files are accepted. The uploaded file does not start with a PDF header.");
-        }
+        var bytes = upload.Pdf!;
 
         try
         {
@@ -130,6 +94,61 @@ public static class ExtractInvoiceEndpoint
         }
     }
 
+    /// <summary>
+    /// The PDF from a multipart upload, with every check an upload gets: form
+    /// field present, not empty, within the size limit, and really a PDF.
+    /// Shared by single extraction and batch import.
+    /// </summary>
+    internal static async Task<(byte[]? Pdf, string FileName, IResult? Problem)> ReadPdfAsync(
+        HttpRequest request, CancellationToken cancellationToken)
+    {
+        if (!request.HasFormContentType)
+        {
+            return (null, "", Problem(StatusCodes.Status400BadRequest,
+                "Unsupported content type",
+                "The request must be multipart/form-data."));
+        }
+
+        var form = await request.ReadFormAsync(cancellationToken).ConfigureAwait(false);
+        var file = form.Files[FormFieldName];
+
+        if (file is null)
+        {
+            return (null, "", Problem(StatusCodes.Status400BadRequest,
+                "Missing file",
+                $"The request must contain a form field named \"{FormFieldName}\"."));
+        }
+
+        if (file.Length == 0)
+        {
+            return (null, file.FileName, Problem(StatusCodes.Status400BadRequest, "Empty file", "The uploaded file is empty."));
+        }
+
+        if (file.Length > MaxUploadBytes)
+        {
+            return (null, file.FileName, Problem(StatusCodes.Status413PayloadTooLarge,
+                "File too large",
+                $"The file is {file.Length} bytes. The maximum is {MaxUploadBytes} bytes."));
+        }
+
+        using var buffer = new MemoryStream(capacity: (int)file.Length);
+        await using (var stream = file.OpenReadStream())
+        {
+            await stream.CopyToAsync(buffer, cancellationToken).ConfigureAwait(false);
+        }
+
+        var bytes = buffer.ToArray();
+
+        if (!IsPdf(bytes))
+        {
+            return (null, file.FileName, Problem(StatusCodes.Status400BadRequest,
+                "Not a PDF",
+                "Only PDF files are accepted. The uploaded file does not start with a PDF header."));
+        }
+
+        return (bytes, string.IsNullOrWhiteSpace(file.FileName) ? "document.pdf" : Path.GetFileName(file.FileName), null);
+    }
+
     private static bool IsPdf(ReadOnlySpan<byte> content)
         => content.Length >= PdfMagic.Length && content[..PdfMagic.Length].SequenceEqual(PdfMagic);
 
@@ -147,7 +166,7 @@ public static class ExtractInvoiceEndpoint
         },
     };
 
-    private static ExtractInvoiceWarning ToWarning(ValidationWarning warning) => new()
+    internal static ExtractInvoiceWarning ToWarning(ValidationWarning warning) => new()
     {
         Code = warning.Code,
         Path = warning.Path,

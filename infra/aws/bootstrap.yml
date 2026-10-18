@@ -162,6 +162,31 @@ Resources:
                   - lambda:DeleteAlias
                 Resource: !Sub arn:aws:lambda:${AWS::Region}:${AWS::AccountId}:function:xchange-*
 
+              # The worker is triggered by the import queue. Event source
+              # mappings have generated ids, so they cannot be named up front.
+              - Sid: WorkerTrigger
+                Effect: Allow
+                Action:
+                  - lambda:CreateEventSourceMapping
+                  - lambda:UpdateEventSourceMapping
+                  - lambda:DeleteEventSourceMapping
+                  - lambda:GetEventSourceMapping
+                  - lambda:ListEventSourceMappings
+                Resource: '*'
+
+              - Sid: ImportQueues
+                Effect: Allow
+                Action:
+                  - sqs:CreateQueue
+                  - sqs:DeleteQueue
+                  - sqs:GetQueueAttributes
+                  - sqs:SetQueueAttributes
+                  - sqs:GetQueueUrl
+                  - sqs:TagQueue
+                  - sqs:UntagQueue
+                  - sqs:ListQueueTags
+                Resource: !Sub arn:aws:sqs:${AWS::Region}:${AWS::AccountId}:xchange-*
+
               - Sid: IdentityTable
                 Effect: Allow
                 Action:
@@ -224,6 +249,7 @@ Resources:
                 Resource:
                   - !Sub arn:aws:iam::${AWS::AccountId}:role/xchange-api-lambda
                   - !Sub arn:aws:iam::${AWS::AccountId}:role/xchange-validator-lambda
+                  - !Sub arn:aws:iam::${AWS::AccountId}:role/xchange-worker-lambda
 
               - Sid: UploadDeploymentArtifacts
                 Effect: Allow

@@ -31,6 +31,10 @@ Parameters:
     Type: String
     Description: Key of the official-rules validator zip (validator/build.sh) for this commit.
 
+  WorkerArtifactKey:
+    Type: String
+    Description: Key of the background worker zip (src/InvoicePlatform.Worker) for this commit.
+
   AnthropicModel:
     Type: String
     Default: claude-opus-5
@@ -117,6 +121,10 @@ Resources:
                   - s3:GetObject
                   - s3:PutObject
                 Resource: !Sub ${DocumentBucket.Arn}/*
+              # Batch import: the API stores the PDF and queues it; the worker reads it.
+              - Effect: Allow
+                Action: sqs:SendMessage
+                Resource: !GetAtt ImportQueue.Arn
 
   # Users, sessions and login-attempt counters.
   #
@@ -238,6 +246,7 @@ Resources:
           Cors__AllowedOrigins__0: !Ref AllowedOrigin
           Cors__AllowedOrigins__1: !Ref AllowedOriginWww
           OfficialValidation__FunctionName: !Ref ValidatorAlias
+          Imports__QueueUrl: !Ref ImportQueue
       Tags:
         - Key: Project
           Value: xchange
@@ -356,6 +365,129 @@ Resources:
       FunctionName: !Ref ValidatorFunction
       FunctionVersion: !GetAtt ValidatorVersion.Version
       Name: live
+
+  # Batch and email import. The API stores each PDF and puts its id on this
+  # queue; the worker reads it in the background, with the same extraction as
+  # a single upload. The visibility timeout is six times the worker's own, as
+  # AWS advises for Lambda consumers.
+  ImportQueue:
+    Type: AWS::SQS::Queue
+    Properties:
+      QueueName: xchange-imports
+      VisibilityTimeout: 1800
+      MessageRetentionPeriod: 345600
+      SqsManagedSseEnabled: true
+      RedrivePolicy:
+        deadLetterTargetArn: !GetAtt ImportDeadLetters.Arn
+        maxReceiveCount: 3
+      Tags:
+        - Key: Project
+          Value: xchange
+
+  # Messages the worker failed three times for a reason other than the
+  # document (storage, network). A document the model cannot read is marked
+  # failed on the import instead, and is never retried by itself.
+  ImportDeadLetters:
+    Type: AWS::SQS::Queue
+    Properties:
+      QueueName: xchange-imports-failed
+      MessageRetentionPeriod: 1209600
+      SqsManagedSseEnabled: true
+      Tags:
+        - Key: Project
+          Value: xchange
+
+  WorkerRole:
+    Type: AWS::IAM::Role
+    Properties:
+      # Named, because the deploy role may only manage roles it knows by name.
+      RoleName: xchange-worker-lambda
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: lambda.amazonaws.com
+            Action: sts:AssumeRole
+      ManagedPolicyArns:
+        - arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole
+      Policies:
+        - PolicyName: worker
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action: secretsmanager:GetSecretValue
+                Resource: !Ref AnthropicSecretArn
+              - Effect: Allow
+                Action:
+                  - sqs:ReceiveMessage
+                  - sqs:DeleteMessage
+                  - sqs:GetQueueAttributes
+                Resource: !GetAtt ImportQueue.Arn
+              # Imports, learning and relations live in the invoice table.
+              - Effect: Allow
+                Action:
+                  - dynamodb:GetItem
+                  - dynamodb:PutItem
+                  - dynamodb:Query
+                  - dynamodb:DeleteItem
+                Resource: !GetAtt InvoiceTable.Arn
+              # The organisation's settings fill the seller's electronic address.
+              - Effect: Allow
+                Action: dynamodb:GetItem
+                Resource: !GetAtt IdentityTable.Arn
+              - Effect: Allow
+                Action: s3:GetObject
+                Resource: !Sub ${DocumentBucket.Arn}/*
+      Tags:
+        - Key: Project
+          Value: xchange
+
+  Worker:
+    Type: AWS::Lambda::Function
+    Properties:
+      FunctionName: xchange-worker
+      Runtime: dotnet8
+      Handler: InvoicePlatform.Worker::InvoicePlatform.Worker.ImportFunction::HandleAsync
+      Role: !GetAtt WorkerRole.Arn
+      MemorySize: !Ref MemorySize
+      # As the API: longer than the interpreter's own timeout.
+      Timeout: 300
+      Code:
+        S3Bucket: !Ref ArtifactBucket
+        S3Key: !Ref WorkerArtifactKey
+      Environment:
+        Variables:
+          Anthropic__Model: !Ref AnthropicModel
+          Anthropic__ApiKeySecretArn: !Ref AnthropicSecretArn
+          Identity__TableName: !Ref IdentityTable
+          InvoiceStorage__TableName: !Ref InvoiceTable
+          InvoiceStorage__BucketName: !Ref DocumentBucket
+          Imports__QueueUrl: !Ref ImportQueue
+      Tags:
+        - Key: Project
+          Value: xchange
+
+  WorkerLogs:
+    Type: AWS::Logs::LogGroup
+    Properties:
+      LogGroupName: !Sub /aws/lambda/${Worker}
+      RetentionInDays: 14
+
+  # One PDF per invocation, and at most two at a time: Anthropic's rate
+  # limits, not Lambda, are the bottleneck, and a batch of fifty should queue
+  # rather than all fail at once.
+  WorkerTrigger:
+    Type: AWS::Lambda::EventSourceMapping
+    Properties:
+      EventSourceArn: !GetAtt ImportQueue.Arn
+      FunctionName: !Ref Worker
+      BatchSize: 1
+      FunctionResponseTypes:
+        - ReportBatchItemFailures
+      ScalingConfig:
+        MaximumConcurrency: 2
 
 Outputs:
   ServiceUrl:

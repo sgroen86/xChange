@@ -9,6 +9,7 @@ import { extractInvoice, isApiConfigured, toDraft } from "../../lib/api";
 import { ApiError } from "../../lib/api";
 import { mockDraft } from "../../lib/canonical";
 import { checkPdf, formatBytes, MAX_PDF_BYTES } from "../../lib/pdf";
+import { submitImport } from "../../lib/imports";
 import { putPdf } from "../../lib/pdfStore";
 import { newInvoiceId, saveDraft, saveServerResult } from "../../lib/store";
 
@@ -25,6 +26,10 @@ export default function UploadPage() {
   const inputRef = useRef<HTMLInputElement>(null);
 
   const [file, setFile] = useState<File | null>(null);
+  /** Several PDFs at once: imported and read in the background. */
+  const [batch, setBatch] = useState<File[]>([]);
+  const [batchDone, setBatchDone] = useState(0);
+  const [importing, setImporting] = useState(false);
   const [errors, setErrors] = useState<string[]>([]);
   const [dragging, setDragging] = useState(false);
   const [stageIndex, setStageIndex] = useState(-1);
@@ -48,15 +53,60 @@ export default function UploadPage() {
     [showToast],
   );
 
+  /** One file: read now, as before. Several: queued for the background. */
+  const acceptFiles = useCallback(
+    (files: FileList | null) => {
+      const chosen = Array.from(files ?? []);
+      if (chosen.length > 1 && isApiConfigured) {
+        setFile(null);
+        setErrors([]);
+        setBatch(chosen);
+        setBatchDone(0);
+      } else if (chosen[0]) {
+        setBatch([]);
+        void acceptFile(chosen[0]);
+      }
+    },
+    [acceptFile],
+  );
+
   const onDrop = useCallback(
     (event: React.DragEvent<HTMLDivElement>) => {
       event.preventDefault();
       setDragging(false);
-      const dropped = event.dataTransfer.files?.[0];
-      if (dropped) void acceptFile(dropped);
+      acceptFiles(event.dataTransfer.files);
     },
-    [acceptFile],
+    [acceptFiles],
   );
+
+  const importBatch = async () => {
+    if (importing || batch.length === 0) return;
+    setImporting(true);
+    const refused: string[] = [];
+
+    for (const candidate of batch) {
+      const check = await checkPdf(candidate);
+      if (!check.ok) {
+        refused.push(`${candidate.name}: ${check.errors.join(" ")}`);
+      } else {
+        try {
+          await submitImport(candidate);
+        } catch (cause) {
+          refused.push(`${candidate.name}: ${cause instanceof Error ? cause.message : "niet geaccepteerd"}`);
+        }
+      }
+      setBatchDone((done) => done + 1);
+    }
+
+    setImporting(false);
+    if (refused.length > 0) {
+      setErrors(refused);
+      showToast(`${batch.length - refused.length} van ${batch.length} geïmporteerd.`, "warning");
+    } else {
+      showToast(`${batch.length} facturen worden in de achtergrond gelezen.`, "success");
+      router.push("/imports");
+    }
+  };
 
   const clearFile = () => {
     setFile(null);
@@ -164,7 +214,7 @@ export default function UploadPage() {
                   <Icon name="upload" />
                 </div>
                 <div className="dropzone__text">
-                  Sleep een PDF hierheen of <strong>blader</strong>
+                  Sleep een of meer PDF&apos;s hierheen of <strong>blader</strong>
                 </div>
                 <div className="dropzone__text text-muted text-xs">
                   Alleen PDF, maximaal {formatBytes(MAX_PDF_BYTES)}
@@ -175,12 +225,46 @@ export default function UploadPage() {
                 ref={inputRef}
                 type="file"
                 accept="application/pdf,.pdf"
+                multiple={isApiConfigured}
                 hidden
-                onChange={(event) => {
-                  const chosen = event.target.files?.[0];
-                  if (chosen) void acceptFile(chosen);
-                }}
+                onChange={(event) => acceptFiles(event.target.files)}
               />
+
+              {batch.length > 0 && (
+                <div style={{ marginTop: "var(--space-4)" }}>
+                  <div className="alert alert--info">
+                    <Icon name="info" />
+                    <div>
+                      {batch.length} PDF&apos;s geselecteerd. Ze worden in de achtergrond gelezen en
+                      verschijnen onder <strong>Te beoordelen</strong>.
+                      {importing && ` (${batchDone} van ${batch.length} verzonden)`}
+                    </div>
+                  </div>
+                  <ul className="alert__list">
+                    {batch.map((candidate) => (
+                      <li key={`${candidate.name}-${candidate.size}`}>
+                        {candidate.name} · {formatBytes(candidate.size)}
+                      </li>
+                    ))}
+                  </ul>
+                  <div className="form__actions">
+                    <button type="button" className="btn btn--primary" onClick={() => void importBatch()} disabled={importing}>
+                      <Icon name="zap" /> {importing ? "Bezig…" : `${batch.length} facturen importeren`}
+                    </button>
+                    <button
+                      type="button"
+                      className="btn btn--secondary"
+                      onClick={() => {
+                        setBatch([]);
+                        setErrors([]);
+                      }}
+                      disabled={importing}
+                    >
+                      Wissen
+                    </button>
+                  </div>
+                </div>
+              )}
 
               {file && (
                 <div style={{ marginTop: "var(--space-4)" }}>

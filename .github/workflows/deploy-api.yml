@@ -106,7 +106,13 @@ jobs:
           # folder, so zip from within the publish directory.
           (cd publish && zip -qr ../xchange-api.zip .)
 
+          # The background worker that reads queued imports: its own function, its own zip.
+          dotnet publish src/InvoicePlatform.Worker/InvoicePlatform.Worker.csproj \
+            -c Release -o publish-worker --no-self-contained
+          (cd publish-worker && zip -qr ../xchange-worker.zip .)
+
           echo "key=xchange-api/${GITHUB_SHA}.zip" >> "$GITHUB_OUTPUT"
+          echo "worker_key=xchange-worker/${GITHUB_SHA}.zip" >> "$GITHUB_OUTPUT"
           echo "validator_key=xchange-validator/${GITHUB_SHA}.zip" >> "$GITHUB_OUTPUT"
           echo "Package size: $(du -h xchange-api.zip | cut -f1)"
 
@@ -161,6 +167,8 @@ jobs:
             "s3://${{ steps.bootstrap.outputs.bucket }}/${{ steps.package.outputs.key }}"
           aws s3 cp validator/build/xchange-validator.zip \
             "s3://${{ steps.bootstrap.outputs.bucket }}/${{ steps.package.outputs.validator_key }}"
+          aws s3 cp xchange-worker.zip \
+            "s3://${{ steps.bootstrap.outputs.bucket }}/${{ steps.package.outputs.worker_key }}"
 
       - name: Deploy the service stack
         id: service
@@ -189,6 +197,7 @@ jobs:
               ArtifactBucket="${{ steps.bootstrap.outputs.bucket }}" \
               ArtifactKey="${{ steps.package.outputs.key }}" \
               ValidatorArtifactKey="${{ steps.package.outputs.validator_key }}" \
+              WorkerArtifactKey="${{ steps.package.outputs.worker_key }}" \
               AnthropicSecretArn="${{ steps.secret.outputs.arn }}"
 
           URL=$(aws cloudformation describe-stacks --stack-name "$SERVICE_STACK" \

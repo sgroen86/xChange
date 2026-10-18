@@ -11,6 +11,7 @@
     <PackageReference Include="AWSSDK.Lambda" Version="4.0.110" />
     <PackageReference Include="AWSSDK.S3" Version="4.0.102.5" />
     <PackageReference Include="AWSSDK.SecretsManager" Version="4.0.100.12" />
+    <PackageReference Include="AWSSDK.SQS" Version="4.0.100.18" />
     <PackageReference Include="BCrypt.Net-Next" Version="4.2.0" />
     <PackageReference Include="DnsClient" Version="1.8.0" />
     <PackageReference Include="Microsoft.Extensions.DependencyInjection.Abstractions" Version="10.0.11" />
