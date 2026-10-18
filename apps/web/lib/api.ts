@@ -121,6 +121,7 @@ export function toDraft(
 ): ReviewDraft {
   return {
     id: response.invoiceId,
+    extractionId: response.invoiceId,
     invoice: normalizeInvoice(response.canonicalInvoice),
     source: {
       fileName,

@@ -79,6 +79,8 @@ export async function bookInvoice(input: {
   pdf: Blob;
   sourceFileName: string;
   providerModel?: string;
+  /** The upload this invoice came from, so xChange learns from what was corrected. */
+  extractionId?: string;
 }): Promise<StoredInvoice> {
   return request<StoredInvoice>("/api/v1/invoices", {
     method: "POST",
@@ -89,6 +91,7 @@ export async function bookInvoice(input: {
       documentBase64: await toBase64(input.pdf),
       sourceFileName: input.sourceFileName,
       providerModel: input.providerModel,
+      extractionId: input.extractionId,
     }),
   });
 }

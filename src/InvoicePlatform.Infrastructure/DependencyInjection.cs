@@ -1,5 +1,6 @@
 using InvoicePlatform.Application.Interpretation;
 using InvoicePlatform.Application.Invoices;
+using InvoicePlatform.Application.Learning;
 using InvoicePlatform.Application.Networks;
 using InvoicePlatform.Application.Organizations;
 using InvoicePlatform.Application.Relations;
@@ -12,6 +13,7 @@ using Amazon.Lambda;
 using Amazon.S3;
 using InvoicePlatform.Application.Identity;
 using InvoicePlatform.Infrastructure.Invoices;
+using InvoicePlatform.Infrastructure.Learning;
 using InvoicePlatform.Infrastructure.Networks;
 using InvoicePlatform.Infrastructure.Validator;
 using InvoicePlatform.Infrastructure.Relations;
@@ -103,6 +105,8 @@ public static class DependencyInjection
         services.AddSingleton<IDocumentStore, S3DocumentStore>();
         services.AddSingleton<IRelationRepository, DynamoDbRelationRepository>();
         services.AddScoped<RelationService>();
+        services.AddSingleton<ILearningStore, DynamoDbLearningStore>();
+        services.AddScoped<LearningService>();
         services.AddScoped<BookInvoiceService>();
         services.AddScoped<ExportInvoiceService>();
 

@@ -1,6 +1,7 @@
 using Amazon.Lambda.AspNetCoreServer.Hosting;
 using InvoicePlatform.Api.Identity;
 using InvoicePlatform.Api.Invoices;
+using InvoicePlatform.Api.Learning;
 using InvoicePlatform.Api.Networks;
 using InvoicePlatform.Api.Organizations;
 using InvoicePlatform.Api.Relations;
@@ -101,6 +102,7 @@ api.MapOrganizationEndpoints();
 api.MapRelationEndpoints();
 api.MapPlatformEndpoints();
 api.MapReceiverEndpoints();
+api.MapLearningEndpoints();
 
 app.Run();
 

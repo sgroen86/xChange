@@ -1,3 +1,4 @@
+using InvoicePlatform.Application.Learning;
 using InvoicePlatform.Application.Invoices;
 using InvoicePlatform.Application.Relations;
 using InvoicePlatform.Domain.Canonical;
@@ -20,7 +21,7 @@ public class RelationServiceTests
     {
         _relations = new RelationService(_store, _clock, new InvoiceRulesetRegistry());
         var invoices = new FakeInvoiceStore();
-        _booking = new BookInvoiceService(invoices, invoices, _clock, _relations);
+        _booking = new BookInvoiceService(invoices, invoices, _clock, _relations, new LearningService(new FakeLearningStore(), _clock));
     }
 
     private static CanonicalParty VanDijk(string? endpoint = "87654321") => new()

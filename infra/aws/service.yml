@@ -108,6 +108,9 @@ Resources:
                   - dynamodb:GetItem
                   - dynamodb:PutItem
                   - dynamodb:Query
+                  # Booking takes the upload's extraction (read and delete in one call),
+                  # and a reviewer can make xChange forget a correction.
+                  - dynamodb:DeleteItem
                 Resource: !GetAtt InvoiceTable.Arn
               - Effect: Allow
                 Action:
@@ -175,6 +178,11 @@ Resources:
           KeyType: HASH
         - AttributeName: sk
           KeyType: RANGE
+      TimeToLiveSpecification:
+        # What the model read for an upload is kept 30 days, for learning
+        # from the reviewer's corrections; invoices themselves never expire.
+        AttributeName: expiresAt
+        Enabled: true
       SSESpecification:
         SSEEnabled: true
       Tags:

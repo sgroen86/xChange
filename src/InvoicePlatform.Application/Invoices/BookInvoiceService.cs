@@ -1,4 +1,5 @@
 using InvoicePlatform.Application.Identity;
+using InvoicePlatform.Application.Learning;
 using InvoicePlatform.Application.Relations;
 using InvoicePlatform.Domain.Calculation;
 using InvoicePlatform.Domain.Canonical;
@@ -17,11 +18,13 @@ public sealed class BookInvoiceService(
     IInvoiceRepository invoices,
     IDocumentStore documents,
     IClock clock,
-    RelationService relations)
+    RelationService relations,
+    LearningService learning)
 {
     /// <param name="invoiceId">
     /// Supply an existing id to re-book a correction; omit it for a new invoice.
     /// </param>
+    /// <param name="extractionId">The upload this invoice came from, so xChange learns from what the reviewer corrected.</param>
     public async Task<StoredInvoice> BookAsync(
         string organizationId,
         string userId,
@@ -30,6 +33,7 @@ public sealed class BookInvoiceService(
         string sourceFileName,
         string providerModel,
         string? invoiceId = null,
+        string? extractionId = null,
         CancellationToken cancellationToken = default)
     {
         var id = invoiceId ?? Guid.NewGuid().ToString("n");
@@ -64,6 +68,14 @@ public sealed class BookInvoiceService(
         // invoice that was kept, and if this step fails the booking still
         // stands - booking again is harmless.
         await relations.RememberBuyerAsync(organizationId, stored.Invoice.Buyer, cancellationToken).ConfigureAwait(false);
+
+        // Learning compares the booking with what the model read for this
+        // upload - the draft as the reviewer left it, not the recalculated
+        // one: the calculator's figures are not corrections.
+        if (!string.IsNullOrWhiteSpace(extractionId))
+        {
+            await learning.LearnAsync(organizationId, extractionId, draft, cancellationToken).ConfigureAwait(false);
+        }
 
         return stored;
     }

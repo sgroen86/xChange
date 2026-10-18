@@ -21,6 +21,10 @@ public sealed record BookInvoiceRequest
 
     [JsonPropertyName("providerModel")]
     public string? ProviderModel { get; init; }
+
+    /// <summary>The upload this invoice came from (the extraction's invoiceId), so xChange learns from the corrections.</summary>
+    [JsonPropertyName("extractionId")]
+    public string? ExtractionId { get; init; }
 }
 
 public sealed record StoredInvoiceResponse

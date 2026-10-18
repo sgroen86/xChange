@@ -130,6 +130,8 @@ export interface CanonicalInvoice {
 /** What the review screen holds: the invoice plus where it came from. */
 export interface ReviewDraft {
   id: string;
+  /** The server's id for this upload; booking passes it back so xChange learns from the corrections. */
+  extractionId?: string;
   invoice: CanonicalInvoice;
   source: {
     fileName: string;

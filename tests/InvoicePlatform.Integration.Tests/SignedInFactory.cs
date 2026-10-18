@@ -1,11 +1,13 @@
 using InvoicePlatform.Application.Identity;
 using InvoicePlatform.Application.Invoices;
+using InvoicePlatform.Application.Learning;
 using InvoicePlatform.Application.Networks;
 using InvoicePlatform.Application.Organizations;
 using InvoicePlatform.Application.Relations;
 using InvoicePlatform.Domain.Canonical;
 using InvoicePlatform.Domain.Identity;
 using InvoicePlatform.Domain.Invoices;
+using InvoicePlatform.Domain.Learning;
 using InvoicePlatform.Domain.Networks;
 using InvoicePlatform.Domain.Organizations;
 using InvoicePlatform.Domain.Relations;
@@ -39,6 +41,8 @@ public sealed class SignedInFactory : WebApplicationFactory<Program>
     public StubOfficialValidator Official { get; } = new();
 
     public StubReceiverNetwork Network { get; } = new();
+
+    public InMemoryLearningStore Learning { get; } = new();
 
     public HttpClient As(string token)
     {
@@ -81,6 +85,7 @@ public sealed class SignedInFactory : WebApplicationFactory<Program>
             services.RemoveAll<IPlatformStore>();
             services.RemoveAll<IOfficialValidator>();
             services.RemoveAll<IReceiverNetwork>();
+            services.RemoveAll<ILearningStore>();
 
             var identity = new SignedInIdentity();
             services.AddSingleton<IUserStore>(identity);
@@ -93,6 +98,7 @@ public sealed class SignedInFactory : WebApplicationFactory<Program>
             services.AddSingleton<IPlatformStore>(Platform);
             services.AddSingleton<IOfficialValidator>(Official);
             services.AddSingleton<IReceiverNetwork>(Network);
+            services.AddSingleton<ILearningStore>(Learning);
         });
     }
 
@@ -304,6 +310,49 @@ public sealed class InMemoryPlatform : IPlatformStore
         {
             return Task.FromResult(_invitations.Remove(codeHash));
         }
+    }
+}
+
+/// <summary>Learning data in memory, keyed by organisation as DynamoDB keys it.</summary>
+public sealed class InMemoryLearningStore : ILearningStore
+{
+    private readonly Dictionary<(string Org, string Id), ExtractionSnapshot> _extractions = [];
+    private readonly Dictionary<string, IReadOnlyList<LearnedCorrection>> _corrections = [];
+
+    public Task SaveExtractionAsync(string organizationId, ExtractionSnapshot snapshot, CancellationToken cancellationToken = default)
+    {
+        lock (_extractions)
+        {
+            _extractions[(organizationId, snapshot.ExtractionId)] = snapshot;
+        }
+
+        return Task.CompletedTask;
+    }
+
+    public Task<ExtractionSnapshot?> TakeExtractionAsync(string organizationId, string extractionId, CancellationToken cancellationToken = default)
+    {
+        lock (_extractions)
+        {
+            return Task.FromResult(_extractions.Remove((organizationId, extractionId), out var snapshot) ? snapshot : null);
+        }
+    }
+
+    public Task<IReadOnlyList<LearnedCorrection>> GetCorrectionsAsync(string organizationId, CancellationToken cancellationToken = default)
+    {
+        lock (_corrections)
+        {
+            return Task.FromResult(_corrections.GetValueOrDefault(organizationId) ?? []);
+        }
+    }
+
+    public Task SaveCorrectionsAsync(string organizationId, IReadOnlyList<LearnedCorrection> corrections, CancellationToken cancellationToken = default)
+    {
+        lock (_corrections)
+        {
+            _corrections[organizationId] = corrections;
+        }
+
+        return Task.CompletedTask;
     }
 }
 

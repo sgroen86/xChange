@@ -380,6 +380,7 @@ export default function ReviewClient() {
         pdf: blob,
         sourceFileName: draft.source.fileName,
         providerModel: draft.source.engine,
+        extractionId: draft.extractionId,
       });
       setBookedFingerprint(editableFingerprint(normalizeInvoice(stored.canonicalInvoice)));
       saveDraft(draft);

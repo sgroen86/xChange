@@ -89,6 +89,7 @@ public static class StoredInvoiceEndpoints
             request.SourceFileName,
             request.ProviderModel ?? "onbekend",
             request.InvoiceId,
+            request.ExtractionId,
             cancellationToken).ConfigureAwait(false);
 
         return Results.Ok(ToResponse(stored));
