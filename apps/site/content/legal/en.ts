@@ -33,7 +33,7 @@ export const legalEn: LegalContent = {
           "Invoices and PDFs you upload or email to xChange, and the data on them, such as names, addresses and contact details of your customers. We process these as a processor.",
           "Emails sent to your personal xChange inbox address, including their attachments.",
           "Corrections you make on the review screen. We use them to learn for your organisation only, so the next invoice needs fewer fixes.",
-          "Billing data: your plan, payments and invoices from us. Payments are handled by Stripe; we do not store full card numbers.",
+          "Billing data: your plan, payments and invoices from us. Payments are handled by our payment provider; we do not store full card numbers.",
           "Technical logs: IP address, timestamps and error messages, generated when you use the application.",
           "Correspondence with us, for example when you email us with a question.",
         ],
@@ -61,7 +61,7 @@ export const legalEn: LegalContent = {
       {
         heading: "Use of AI",
         paragraphs: [
-          "When you upload a PDF, or approve a PDF that was emailed to your inbox, it is read by an AI model from Anthropic (Claude) to extract the invoice fields.",
+          "When you upload a PDF, or approve a PDF that was emailed to your inbox, it is read by an AI model of a specialised processor to extract the invoice fields.",
           "A person always reviews and, where needed, corrects the result before anything is exported. Amounts, totals and the XML file are calculated by deterministic software, not by the AI model.",
           "There is no automated decision-making with legal or similarly significant effects for you within the meaning of Article 22 of the GDPR.",
         ],
@@ -74,19 +74,28 @@ export const legalEn: LegalContent = {
         table: {
           head: ["Processor", "Purpose", "Location"],
           rows: [
-            ["Amazon Web Services", "Hosting and storage", "Frankfurt, Germany (EU)"],
-            ["Anthropic", "Reading uploaded PDFs", "United States"],
-            ["Stripe", "Payment processing", "EU/United States"],
+            ["Hosting provider", "Hosting and storage", "European Union"],
+            [
+              "AI text-recognition provider",
+              "Reading uploaded PDFs",
+              "European Union and United States",
+            ],
+            [
+              "Payment provider",
+              "Payment processing",
+              "European Union and United States",
+            ],
           ],
         },
         after: [
+          `An up-to-date list of our processors is available on request at ${company.contactEmail}.`,
           "We share personal data with authorities only when we are required to by law.",
         ],
       },
       {
         heading: "Transfers outside the EEA",
         paragraphs: [
-          "Anthropic processes uploaded PDFs in the United States. That transfer takes place under the EU standard contractual clauses.",
+          "Reading PDFs may involve processing outside the EU, in the United States. That transfer takes place under the EU standard contractual clauses.",
           "Any other transfer of personal data outside the European Economic Area takes place only with appropriate safeguards as required by the GDPR.",
         ],
       },
@@ -180,7 +189,7 @@ export const legalEn: LegalContent = {
         heading: "Plans, prices and payment",
         paragraphs: [
           "We offer monthly subscriptions with a number of included Conversions, and pay-as-you-go credit packs.",
-          "Current prices are shown on the pricing page. All prices exclude VAT. Payment is handled by Stripe.",
+          "Current prices are shown on the pricing page. All prices exclude VAT. Payment is handled by our payment provider.",
           `We announce price changes at least ${company.noticePeriod} in advance. A new price takes effect from the next billing period after that notice.`,
         ],
       },
@@ -275,13 +284,13 @@ export const legalEn: LegalContent = {
       {
         heading: "Where your data lives",
         paragraphs: [
-          "xChange runs on Amazon Web Services in the Frankfurt region, in the EU. Your documents and invoice records are stored there.",
+          "xChange is hosted in the European Union. Your documents and invoice records are stored there.",
         ],
       },
       {
         heading: "How invoices are read",
         paragraphs: [
-          "An AI model from Anthropic reads the PDF and extracts the invoice fields. Anthropic processes this in the United States, under the EU standard contractual clauses.",
+          "An AI model of a specialised processor reads the PDF and extracts the invoice fields. This may involve processing outside the EU, in the United States; that transfer takes place under the EU standard contractual clauses.",
           "You review every field before anything is exported. Totals and the XML file are calculated deterministically: there is no AI in the arithmetic or in generating the file.",
           "Every export is checked against the complete official validation rules for its format. A file with an error is never handed out.",
         ],
@@ -291,12 +300,21 @@ export const legalEn: LegalContent = {
         table: {
           head: ["Subprocessor", "Purpose", "Location"],
           rows: [
-            ["Amazon Web Services", "Hosting and storage", "Frankfurt, Germany (EU)"],
-            ["Anthropic", "Reading uploaded PDFs", "United States"],
-            ["Stripe", "Payment processing", "EU/United States"],
+            ["Hosting provider", "Hosting and storage", "European Union"],
+            [
+              "AI text-recognition provider",
+              "Reading uploaded PDFs",
+              "European Union and United States",
+            ],
+            [
+              "Payment provider",
+              "Payment processing",
+              "European Union and United States",
+            ],
           ],
         },
         after: [
+          `An up-to-date list of our subprocessors is available on request at ${company.contactEmail}.`,
           "We announce changes to our subprocessors in advance.",
         ],
       },

@@ -30,7 +30,7 @@ export const en: Dictionary = {
     privacy: "Privacy policy",
     terms: "Terms of service",
     trust: "Trust & security",
-    hostedInEu: "Hosted in the EU (Frankfurt)",
+    hostedInEu: "Hosted in the EU",
     rights: "All rights reserved.",
   },
   common: {
@@ -98,7 +98,7 @@ export const en: Dictionary = {
         },
         {
           title: "AI reads the invoice",
-          text: "Claude, Anthropic's AI model, extracts supplier, customer, lines, VAT and totals from your PDF.",
+          text: "AI reads supplier, customer, lines, VAT and totals from your PDF.",
         },
         {
           title: "You review",
@@ -153,7 +153,7 @@ export const en: Dictionary = {
         {
           icon: "lock",
           title: "Data in the EU",
-          text: "Your data is stored with Amazon Web Services in Frankfurt. Received emails are deleted after 30 days.",
+          text: "Your data is stored securely in the EU. Received emails are deleted after 30 days.",
         },
       ],
     },
@@ -257,14 +257,14 @@ export const en: Dictionary = {
         "PEPPOL lookup by VAT or company number",
         "Customers remembered and filled in automatically",
         "Learning from your corrections",
-        "Data hosted in the EU (Frankfurt)",
+        "Data hosted in the EU",
       ],
       comingSoon: ["Sending directly through a PEPPOL access point", "Receiving incoming invoices"],
     },
     notes: [
       "All prices exclude VAT.",
       "A conversion is one PDF read into an invoice.",
-      "Plans are monthly and can be cancelled at any time. Payments are handled securely by Stripe.",
+      "Plans are monthly and can be cancelled at any time. Pay securely online.",
     ],
     questions: {
       title: "Questions about pricing",
@@ -275,7 +275,7 @@ export const en: Dictionary = {
         },
         {
           q: "Do I need a card for the trial?",
-          a: "No. You get {n} free conversions without any payment details. You only pay, via Stripe, once you choose a plan or buy credits.",
+          a: "No. You get {n} free conversions without any payment details. You only pay once you choose a plan or buy credits.",
         },
         {
           q: "Can I change plans or cancel?",
@@ -331,7 +331,7 @@ export const en: Dictionary = {
       },
       {
         q: "Where is my data stored?",
-        a: "In the EU, with Amazon Web Services in Frankfurt. The PDF is read by Anthropic in the United States, under the EU standard contractual clauses. The Trust & security page lists all subprocessors and retention periods.",
+        a: "In the EU. To read PDFs we work with carefully selected processors, bound by data processing agreements. Where data is processed outside the EU, this happens under the EU standard contractual clauses. See our privacy policy for details.",
       },
       {
         q: "How long do you keep my data?",

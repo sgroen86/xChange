@@ -31,7 +31,7 @@ export const fr: Dictionary = {
     privacy: "Politique de confidentialité",
     terms: "Conditions générales",
     trust: "Confiance et sécurité",
-    hostedInEu: "Hébergé dans l’UE (Francfort)",
+    hostedInEu: "Hébergé dans l’UE",
     rights: "Tous droits réservés.",
   },
   common: {
@@ -99,7 +99,7 @@ export const fr: Dictionary = {
         },
         {
           title: "L’IA lit la facture",
-          text: "Claude, le modèle d’IA d’Anthropic, extrait de votre PDF le fournisseur, le client, les lignes, la TVA et les totaux.",
+          text: "L’IA extrait de votre PDF le fournisseur, le client, les lignes, la TVA et les totaux.",
         },
         {
           title: "Vous vérifiez",
@@ -154,7 +154,7 @@ export const fr: Dictionary = {
         {
           icon: "lock",
           title: "Données dans l’UE",
-          text: "Vos données sont stockées chez Amazon Web Services à Francfort. Les e-mails reçus sont supprimés après 30 jours.",
+          text: "Vos données sont stockées en toute sécurité dans l’UE. Les e-mails reçus sont supprimés après 30 jours.",
         },
       ],
     },
@@ -258,14 +258,14 @@ export const fr: Dictionary = {
         "Recherche PEPPOL par numéro de TVA ou d’entreprise",
         "Clients mémorisés et complétés automatiquement",
         "Apprentissage à partir de vos corrections",
-        "Données hébergées dans l’UE (Francfort)",
+        "Données hébergées dans l’UE",
       ],
       comingSoon: ["Envoi direct via un point d’accès PEPPOL", "Réception des factures entrantes"],
     },
     notes: [
       "Tous les prix s’entendent hors TVA.",
       "Une conversion correspond à un PDF lu et transformé en facture.",
-      "Les abonnements sont mensuels et résiliables à tout moment. Le paiement est traité en toute sécurité par Stripe.",
+      "Les abonnements sont mensuels et résiliables à tout moment. Le paiement en ligne est sécurisé.",
     ],
     questions: {
       title: "Questions sur les tarifs",
@@ -276,7 +276,7 @@ export const fr: Dictionary = {
         },
         {
           q: "Faut-il une carte bancaire pour l’essai ?",
-          a: "Non. Vous recevez {n} conversions gratuites sans données de paiement. Vous ne payez, via Stripe, qu’une fois un abonnement ou des crédits choisis.",
+          a: "Non. Vous recevez {n} conversions gratuites sans données de paiement. Vous ne payez qu’une fois un abonnement ou des crédits choisis.",
         },
         {
           q: "Puis-je changer d’abonnement ou résilier ?",
@@ -332,7 +332,7 @@ export const fr: Dictionary = {
       },
       {
         q: "Où mes données sont-elles stockées ?",
-        a: "Dans l’UE, chez Amazon Web Services à Francfort. Le PDF est lu par Anthropic aux États-Unis, dans le cadre des clauses contractuelles types de l’UE. La page Confiance et sécurité liste tous les sous-traitants et les durées de conservation.",
+        a: "Dans l’UE. Pour lire les PDF, nous travaillons avec des sous-traitants soigneusement sélectionnés, liés par des accords de traitement des données. Lorsque des données sont traitées hors de l’UE, c’est dans le cadre des clauses contractuelles types de l’UE. Pour en savoir plus, consultez notre politique de confidentialité.",
       },
       {
         q: "Combien de temps conservez-vous mes données ?",

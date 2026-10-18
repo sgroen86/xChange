@@ -33,7 +33,7 @@ export const legalFr: LegalContent = {
           `Factures et PDF que vous chargez ou envoyez par e-mail. Pour ces données, nous agissons en tant que sous-traitant.`,
           `E-mails envoyés à votre adresse de réception xChange.`,
           `Corrections que vous apportez lors de la vérification, que nous utilisons pour apprendre au profit de votre propre organisation.`,
-          `Données de paiement : elles sont traitées par Stripe. Nous ne conservons pas les numéros complets de carte bancaire.`,
+          `Données de paiement : elles sont traitées par notre prestataire de paiement. Nous ne conservons pas les numéros complets de carte bancaire.`,
           `Journaux techniques : adresse IP, horodatages et messages d’erreur.`,
           `La correspondance que vous échangez avec nous.`,
         ],
@@ -70,7 +70,7 @@ export const legalFr: LegalContent = {
       {
         heading: "Utilisation de l’IA",
         paragraphs: [
-          `Les PDF que vous chargez sont lus par un modèle d’IA d’Anthropic (Claude) afin d’en extraire les champs de la facture.`,
+          `Les PDF que vous chargez sont lus par un modèle d’IA d’un sous-traitant spécialisé afin d’en extraire les champs de la facture.`,
           `Une personne vérifie le résultat avant que quoi que ce soit ne soit exporté. Les montants et le fichier XML sont calculés de manière déterministe, sans IA.`,
           `Nous ne prenons aucune décision fondée exclusivement sur un traitement automatisé produisant des effets juridiques ou des effets similaires significatifs au sens de l’article 22 du RGPD.`,
         ],
@@ -80,23 +80,28 @@ export const legalFr: LegalContent = {
         table: {
           head: ["Sous-traitant", "Finalité", "Localisation"],
           rows: [
+            ["Hébergeur", "Hébergement et stockage", "Union européenne"],
             [
-              "Amazon Web Services",
-              "Hébergement et stockage",
-              "Francfort, Allemagne (UE)",
+              "Prestataire de reconnaissance de texte par IA",
+              "Lecture des PDF chargés",
+              "Union européenne et États-Unis",
             ],
-            ["Anthropic", "Lecture des PDF chargés", "États-Unis"],
-            ["Stripe", "Traitement des paiements", "UE/États-Unis"],
+            [
+              "Prestataire de paiement",
+              "Traitement des paiements",
+              "Union européenne et États-Unis",
+            ],
           ],
         },
         after: [
+          `Une liste à jour de nos sous-traitants est disponible sur demande à ${company.contactEmail}.`,
           `Nous ne communiquons des données aux autorités que lorsque la loi nous y oblige.`,
         ],
       },
       {
         heading: "Transferts hors de l’EEE",
         paragraphs: [
-          `Anthropic traite les PDF chargés aux États-Unis. Ce transfert est encadré par les clauses contractuelles types de l’Union européenne.`,
+          `La lecture des PDF peut impliquer un traitement hors de l’UE, aux États-Unis. Ce transfert est encadré par les clauses contractuelles types de l’Union européenne.`,
           `Tout autre transfert en dehors de l’Espace économique européen n’a lieu qu’avec des garanties appropriées.`,
         ],
       },
@@ -173,7 +178,7 @@ export const legalFr: LegalContent = {
       {
         heading: "Le service",
         paragraphs: [
-          `xChange transforme vos propres factures de vente au format PDF en factures électroniques validées. Vous chargez un ou plusieurs PDF, ou vous les envoyez par e-mail à votre adresse de réception personnelle ; les PDF reçus par e-mail attendent votre approbation avant d’être lus. Une IA (Claude, d’Anthropic) lit la facture, puis vous vérifiez et corrigez les champs sur un écran de vérification avec validation en direct.`,
+          `xChange transforme vos propres factures de vente au format PDF en factures électroniques validées. Vous chargez un ou plusieurs PDF, ou vous les envoyez par e-mail à votre adresse de réception personnelle ; les PDF reçus par e-mail attendent votre approbation avant d’être lus. Une IA lit la facture, puis vous vérifiez et corrigez les champs sur un écran de vérification avec validation en direct.`,
           `Le Service exporte aux formats PEPPOL BIS Billing 3.0, NLCIUS / SI-UBL 2.0 et PINT-SG (ce dernier à titre de démonstration uniquement). Chaque fichier est contrôlé au regard de l’ensemble des règles de validation officielles avant de pouvoir être téléchargé ; un fichier comportant une erreur n’est jamais délivré.`,
           `Ne sont pas encore inclus : l’envoi de factures via un point d’accès PEPPOL et la réception de factures entrantes. Aujourd’hui, vous téléchargez le fichier validé et vous l’envoyez via votre propre point d’accès ou logiciel comptable, ou vous le remettez à votre client par la voie convenue avec lui.`,
           `Le Service évolue : des fonctionnalités peuvent être ajoutées, modifiées ou retirées au fil du temps.`,
@@ -198,7 +203,7 @@ export const legalFr: LegalContent = {
         heading: "Formules, prix et paiement",
         paragraphs: [
           `Nous proposons des abonnements mensuels comprenant un nombre de Conversions, ainsi que des packs de Crédits sans abonnement.`,
-          `Les prix figurent sur la page tarifs et s’entendent hors TVA. Le paiement s’effectue via Stripe.`,
+          `Les prix figurent sur la page tarifs et s’entendent hors TVA. Le paiement s’effectue via notre prestataire de paiement.`,
           `Toute modification de prix est annoncée au moins ${company.noticePeriod} à l’avance et prend effet à partir de la période de facturation suivante.`,
         ],
       },
@@ -292,13 +297,13 @@ export const legalFr: LegalContent = {
       {
         heading: "Où sont vos données",
         paragraphs: [
-          `xChange est hébergé chez Amazon Web Services, dans la région de Francfort (UE). Vos documents et vos factures y sont stockés.`,
+          `xChange est hébergé dans l’Union européenne. Vos documents et vos factures y sont stockés.`,
         ],
       },
       {
         heading: "Comment les factures sont lues",
         paragraphs: [
-          `Une IA d’Anthropic lit le PDF. Anthropic traite les PDF aux États-Unis, dans le cadre des clauses contractuelles types de l’Union européenne.`,
+          `Un modèle d’IA d’un sous-traitant spécialisé lit le PDF et en extrait les champs de la facture. Ce traitement peut avoir lieu hors de l’UE, aux États-Unis ; ce transfert est encadré par les clauses contractuelles types de l’Union européenne.`,
           `Vous vérifiez tout le résultat avant l’export. Les totaux et le fichier XML sont calculés de manière déterministe : l’IA n’intervient pas dans les calculs.`,
           `Chaque export est contrôlé au regard de l’ensemble des règles de validation officielles. Un fichier comportant une erreur n’est jamais délivré.`,
         ],
@@ -308,16 +313,21 @@ export const legalFr: LegalContent = {
         table: {
           head: ["Sous-traitant", "Finalité", "Localisation"],
           rows: [
+            ["Hébergeur", "Hébergement et stockage", "Union européenne"],
             [
-              "Amazon Web Services",
-              "Hébergement et stockage",
-              "Francfort, Allemagne (UE)",
+              "Prestataire de reconnaissance de texte par IA",
+              "Lecture des PDF chargés",
+              "Union européenne et États-Unis",
             ],
-            ["Anthropic", "Lecture des PDF chargés", "États-Unis"],
-            ["Stripe", "Traitement des paiements", "UE/États-Unis"],
+            [
+              "Prestataire de paiement",
+              "Traitement des paiements",
+              "Union européenne et États-Unis",
+            ],
           ],
         },
         after: [
+          `Une liste à jour de nos sous-traitants ultérieurs est disponible sur demande à ${company.contactEmail}.`,
           `Toute modification de la liste des sous-traitants est annoncée à l’avance.`,
         ],
       },

@@ -30,7 +30,7 @@ export const nl: Dictionary = {
     privacy: "Privacybeleid",
     terms: "Algemene voorwaarden",
     trust: "Vertrouwen & beveiliging",
-    hostedInEu: "Gehost in de EU (Frankfurt)",
+    hostedInEu: "Gehost in de EU",
     rights: "Alle rechten voorbehouden.",
   },
   common: {
@@ -98,7 +98,7 @@ export const nl: Dictionary = {
         },
         {
           title: "AI leest de factuur",
-          text: "Claude, het AI-model van Anthropic, haalt leverancier, klant, regels, btw en totalen uit je PDF.",
+          text: "AI haalt leverancier, klant, regels, btw en totalen uit je PDF.",
         },
         {
           title: "Jij controleert",
@@ -153,7 +153,7 @@ export const nl: Dictionary = {
         {
           icon: "lock",
           title: "Data in de EU",
-          text: "Je gegevens staan bij Amazon Web Services in Frankfurt. Ontvangen e-mails worden na 30 dagen verwijderd.",
+          text: "Je gegevens staan veilig opgeslagen in de EU. Ontvangen e-mails worden na 30 dagen verwijderd.",
         },
       ],
     },
@@ -257,14 +257,14 @@ export const nl: Dictionary = {
         "PEPPOL-opzoeking op btw- of ondernemingsnummer",
         "Klanten onthouden en automatisch invullen",
         "Leren van je correcties",
-        "Data gehost in de EU (Frankfurt)",
+        "Data gehost in de EU",
       ],
       comingSoon: ["Rechtstreeks versturen via een PEPPOL-accesspoint", "Inkomende facturen ontvangen"],
     },
     notes: [
       "Alle prijzen zijn exclusief btw.",
       "Een conversie is één PDF die wordt ingelezen tot een factuur.",
-      "Abonnementen zijn maandelijks opzegbaar. Betalen gaat veilig via Stripe.",
+      "Abonnementen zijn maandelijks opzegbaar. Je betaalt veilig online.",
     ],
     questions: {
       title: "Vragen over de prijzen",
@@ -275,7 +275,7 @@ export const nl: Dictionary = {
         },
         {
           q: "Heb ik een creditcard nodig voor de proefperiode?",
-          a: "Nee. Je krijgt {n} gratis conversies zonder betaalgegevens. Pas als je een abonnement of tegoed kiest, betaal je via Stripe.",
+          a: "Nee. Je krijgt {n} gratis conversies zonder betaalgegevens. Je betaalt pas als je een abonnement of tegoed kiest.",
         },
         {
           q: "Kan ik van abonnement wisselen of opzeggen?",
@@ -331,7 +331,7 @@ export const nl: Dictionary = {
       },
       {
         q: "Waar worden mijn gegevens bewaard?",
-        a: "In de EU, bij Amazon Web Services in Frankfurt. Het lezen van de PDF gebeurt door Anthropic in de Verenigde Staten, onder de standaardcontractbepalingen van de EU. Op de pagina Vertrouwen & beveiliging vind je alle subverwerkers en bewaartermijnen.",
+        a: "In de EU. Voor het lezen van PDF's werken we met zorgvuldig gekozen verwerkers, gebonden aan verwerkersovereenkomsten. Worden gegevens buiten de EU verwerkt, dan gebeurt dat onder de standaardcontractbepalingen van de EU. Meer lees je in onze privacyverklaring.",
       },
       {
         q: "Hoe lang bewaren jullie mijn gegevens?",

@@ -40,7 +40,7 @@ export const legalNl: LegalContent = {
           "Facturen en pdf’s die je uploadt of mailt, met de persoonsgegevens die daarop staan. Hiervoor zijn we verwerker.",
           "E-mails die naar je xChange-inbox worden gestuurd.",
           "Correcties die je maakt bij het nakijken, zodat xChange leert voor jouw organisatie.",
-          "Betaalgegevens: die verwerkt Stripe. Wij slaan geen volledige kaartnummers op.",
+          "Betaalgegevens: die verwerkt onze betaalprovider. Wij slaan geen volledige kaartnummers op.",
           "Technische logs: IP-adres, tijdstippen en foutmeldingen.",
           "Correspondentie met ons, bijvoorbeeld supportvragen.",
         ],
@@ -74,7 +74,7 @@ export const legalNl: LegalContent = {
       {
         heading: "Gebruik van AI",
         paragraphs: [
-          "Pdf’s die je uploadt of mailt, worden gelezen door een AI-model van Anthropic (Claude), dat de factuurvelden eruit haalt.",
+          "Pdf’s die je uploadt of mailt, worden gelezen door een AI-model van een gespecialiseerde verwerker, dat de factuurvelden eruit haalt.",
           "Voordat er iets wordt geëxporteerd, kijkt een mens het resultaat na. Bedragen, totalen en de XML worden deterministisch berekend, zonder AI.",
           "Er is geen sprake van geautomatiseerde besluitvorming met rechtsgevolgen of vergelijkbare aanzienlijke gevolgen voor jou in de zin van artikel 22 AVG.",
         ],
@@ -84,19 +84,28 @@ export const legalNl: LegalContent = {
         table: {
           head: ["Verwerker", "Doel", "Locatie"],
           rows: [
-            ["Amazon Web Services", "Hosting en opslag", "Frankfurt, Duitsland (EU)"],
-            ["Anthropic", "Lezen van geüploade pdf’s", "Verenigde Staten"],
-            ["Stripe", "Verwerking van betalingen", "EU/Verenigde Staten"],
+            ["Hostingprovider", "Hosting en opslag", "Europese Unie"],
+            [
+              "Aanbieder van AI-tekstherkenning",
+              "Lezen van geüploade pdf’s",
+              "Europese Unie en Verenigde Staten",
+            ],
+            [
+              "Betaalprovider",
+              "Verwerking van betalingen",
+              "Europese Unie en Verenigde Staten",
+            ],
           ],
         },
         after: [
+          `Een actuele lijst van onze verwerkers kun je opvragen via ${company.contactEmail}.`,
           "Daarnaast verstrekken we gegevens aan overheidsinstanties alleen als de wet ons daartoe verplicht.",
         ],
       },
       {
         heading: "Doorgifte buiten de EER",
         paragraphs: [
-          "Anthropic verwerkt de geüploade pdf’s in de Verenigde Staten. Die doorgifte gebeurt op basis van de standaardcontractbepalingen van de Europese Commissie.",
+          "Bij het lezen van pdf’s kunnen gegevens buiten de EU worden verwerkt, in de Verenigde Staten. Die doorgifte gebeurt op basis van de standaardcontractbepalingen van de Europese Commissie.",
           "Andere doorgiften buiten de Europese Economische Ruimte gebeuren alleen met passende waarborgen.",
         ],
       },
@@ -201,7 +210,7 @@ export const legalNl: LegalContent = {
         heading: "Abonnementen, prijzen en betaling",
         paragraphs: [
           "Je kiest een maandabonnement met een aantal inbegrepen conversies, of je koopt creditpakketten en betaalt per gebruik.",
-          "De prijzen staan op de prijzenpagina en zijn exclusief btw. Betalingen lopen via Stripe.",
+          "De prijzen staan op de prijzenpagina en zijn exclusief btw. Betalingen lopen via onze betaalprovider.",
           `Prijswijzigingen kondigen we ten minste ${company.noticePeriod} vooraf aan. Ze gaan in vanaf de eerstvolgende factuurperiode.`,
         ],
       },
@@ -296,13 +305,13 @@ export const legalNl: LegalContent = {
       {
         heading: "Waar je gegevens staan",
         paragraphs: [
-          "xChange draait op Amazon Web Services in de regio Frankfurt, binnen de EU. Je documenten en factuurgegevens worden daar opgeslagen.",
+          "xChange wordt gehost in de Europese Unie. Je documenten en factuurgegevens worden daar opgeslagen.",
         ],
       },
       {
         heading: "Hoe facturen worden gelezen",
         paragraphs: [
-          "AI van Anthropic leest de pdf en haalt de factuurvelden eruit. Anthropic verwerkt dat in de Verenigde Staten, onder de standaardcontractbepalingen van de EU.",
+          "Een AI-model van een gespecialiseerde verwerker leest de pdf en haalt de factuurvelden eruit. Daarbij kunnen gegevens buiten de EU worden verwerkt, in de Verenigde Staten; die doorgifte gebeurt onder de standaardcontractbepalingen van de EU.",
           "Jij kijkt alles na voordat er iets wordt geëxporteerd.",
           "Totalen en XML worden deterministisch berekend. Er zit geen AI in de berekeningen.",
           "Elke export wordt gecontroleerd tegen de volledige officiële validatieregels. Een bestand met een fout geven we nooit vrij.",
@@ -313,12 +322,23 @@ export const legalNl: LegalContent = {
         table: {
           head: ["Subverwerker", "Doel", "Locatie"],
           rows: [
-            ["Amazon Web Services", "Hosting en opslag", "Frankfurt, Duitsland (EU)"],
-            ["Anthropic", "Lezen van geüploade pdf’s", "Verenigde Staten"],
-            ["Stripe", "Verwerking van betalingen", "EU/Verenigde Staten"],
+            ["Hostingprovider", "Hosting en opslag", "Europese Unie"],
+            [
+              "Aanbieder van AI-tekstherkenning",
+              "Lezen van geüploade pdf’s",
+              "Europese Unie en Verenigde Staten",
+            ],
+            [
+              "Betaalprovider",
+              "Verwerking van betalingen",
+              "Europese Unie en Verenigde Staten",
+            ],
           ],
         },
-        after: ["Wijzigingen in de subverwerkers kondigen we vooraf aan."],
+        after: [
+          `Een actuele lijst van onze subverwerkers kun je opvragen via ${company.contactEmail}.`,
+          "Wijzigingen in de subverwerkers kondigen we vooraf aan.",
+        ],
       },
       {
         heading: "Bewaartermijnen",
