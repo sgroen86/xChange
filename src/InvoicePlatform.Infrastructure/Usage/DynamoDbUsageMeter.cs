@@ -107,30 +107,32 @@ internal sealed class DynamoDbUsageMeter(IAmazonDynamoDB dynamo, IOptions<Invoic
 
         var used = response.Item.TryGetValue("used", out var u) ? int.Parse(u.N, CultureInfo.InvariantCulture) : 0;
         int? limit = response.Item.TryGetValue("limit", out var l) && l.N is not null ? int.Parse(l.N, CultureInfo.InvariantCulture) : null;
-        return new UsageSummary(used, limit);
+        var trial = response.Item.TryGetValue("plan", out var p) && p.S == "trial";
+        return new UsageSummary(used, limit, trial);
     }
 
-    public Task SetLimitAsync(string organizationId, int? limit, CancellationToken cancellationToken = default)
+    public Task SetLimitAsync(string organizationId, int? limit, bool trial = false, CancellationToken cancellationToken = default)
         => dynamo.UpdateItemAsync(
             limit is { } value
                 ? new UpdateItemRequest
                 {
                     TableName = _table,
                     Key = Key(organizationId, "ALLOWANCE"),
-                    UpdateExpression = "SET #limit = :limit, used = if_not_exists(used, :zero)",
-                    ExpressionAttributeNames = new Dictionary<string, string> { ["#limit"] = "limit" },
+                    UpdateExpression = "SET #limit = :limit, used = if_not_exists(used, :zero), #plan = :plan",
+                    ExpressionAttributeNames = new Dictionary<string, string> { ["#limit"] = "limit", ["#plan"] = "plan" },
                     ExpressionAttributeValues = new Dictionary<string, AttributeValue>
                     {
                         [":limit"] = new AttributeValue { N = value.ToString(CultureInfo.InvariantCulture) },
                         [":zero"] = new AttributeValue { N = "0" },
+                        [":plan"] = trial ? new AttributeValue("trial") : new AttributeValue { NULL = true },
                     },
                 }
                 : new UpdateItemRequest
                 {
                     TableName = _table,
                     Key = Key(organizationId, "ALLOWANCE"),
-                    UpdateExpression = "REMOVE #limit",
-                    ExpressionAttributeNames = new Dictionary<string, string> { ["#limit"] = "limit" },
+                    UpdateExpression = "REMOVE #limit, #plan",
+                    ExpressionAttributeNames = new Dictionary<string, string> { ["#limit"] = "limit", ["#plan"] = "plan" },
                 },
             cancellationToken);
 

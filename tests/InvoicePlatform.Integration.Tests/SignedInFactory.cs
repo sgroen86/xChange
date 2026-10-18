@@ -391,19 +391,19 @@ public sealed class CapturedMail : IEmailSender
 /// <summary>Conversions in memory: no limit unless one is set.</summary>
 public sealed class InMemoryUsage : IUsageMeter
 {
-    private readonly Dictionary<string, (int Used, int? Limit)> _usage = [];
+    private readonly Dictionary<string, (int Used, int? Limit, bool Trial)> _usage = [];
 
     public Task<bool> TryConsumeAsync(string organizationId, CancellationToken cancellationToken = default)
     {
         lock (_usage)
         {
-            var (used, limit) = _usage.GetValueOrDefault(organizationId);
+            var (used, limit, trial) = _usage.GetValueOrDefault(organizationId);
             if (limit is { } max && used >= max)
             {
                 return Task.FromResult(false);
             }
 
-            _usage[organizationId] = (used + 1, limit);
+            _usage[organizationId] = (used + 1, limit, trial);
             return Task.FromResult(true);
         }
     }
@@ -412,8 +412,8 @@ public sealed class InMemoryUsage : IUsageMeter
     {
         lock (_usage)
         {
-            var (used, limit) = _usage.GetValueOrDefault(organizationId);
-            _usage[organizationId] = (Math.Max(0, used - 1), limit);
+            var (used, limit, trial) = _usage.GetValueOrDefault(organizationId);
+            _usage[organizationId] = (Math.Max(0, used - 1), limit, trial);
         }
 
         return Task.CompletedTask;
@@ -423,16 +423,16 @@ public sealed class InMemoryUsage : IUsageMeter
     {
         lock (_usage)
         {
-            var (used, limit) = _usage.GetValueOrDefault(organizationId);
-            return Task.FromResult(new UsageSummary(used, limit));
+            var (used, limit, trial) = _usage.GetValueOrDefault(organizationId);
+            return Task.FromResult(new UsageSummary(used, limit, trial));
         }
     }
 
-    public Task SetLimitAsync(string organizationId, int? limit, CancellationToken cancellationToken = default)
+    public Task SetLimitAsync(string organizationId, int? limit, bool trial = false, CancellationToken cancellationToken = default)
     {
         lock (_usage)
         {
-            _usage[organizationId] = (_usage.GetValueOrDefault(organizationId).Used, limit);
+            _usage[organizationId] = (_usage.GetValueOrDefault(organizationId).Used, limit, trial && limit is not null);
         }
 
         return Task.CompletedTask;

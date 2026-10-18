@@ -21,11 +21,16 @@ public interface IUsageMeter
     Task<UsageSummary> GetAsync(string organizationId, CancellationToken cancellationToken = default);
 
     /// <param name="limit">Null removes the limit.</param>
-    Task SetLimitAsync(string organizationId, int? limit, CancellationToken cancellationToken = default);
+    /// <param name="trial">
+    /// A trial may read and check invoices but not take the result away:
+    /// downloading (and later sending) needs a plan.
+    /// </param>
+    Task SetLimitAsync(string organizationId, int? limit, bool trial = false, CancellationToken cancellationToken = default);
 }
 
 /// <param name="Limit">Null: no limit.</param>
-public sealed record UsageSummary(int Used, int? Limit)
+/// <param name="Trial">On a trial: no downloading or sending.</param>
+public sealed record UsageSummary(int Used, int? Limit, bool Trial = false)
 {
     public int? Remaining => Limit is { } limit ? Math.Max(0, limit - Used) : null;
 }

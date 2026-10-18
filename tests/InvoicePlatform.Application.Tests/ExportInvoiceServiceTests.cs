@@ -19,6 +19,7 @@ public class ExportInvoiceServiceTests
     private readonly FakeSettingsStore _settings = new();
     private readonly FakeOfficialValidator _official = new();
     private readonly FakePlatformStore _platform = new();
+    private readonly FakeUsageMeter _usage = new();
     private readonly FakeRelationStore _relations = new();
     private readonly ExportInvoiceService _service;
 
@@ -26,7 +27,7 @@ public class ExportInvoiceServiceTests
     {
         var registry = new InvoiceRulesetRegistry([new PeppolBisBilling30Ruleset(), new RenamedPeppol()]);
         var relations = new RelationService(_relations, new TestClock(DateTimeOffset.UnixEpoch), registry);
-        _service = new ExportInvoiceService(_invoices, _settings, registry, new InvoiceEnrichment(_settings, relations), new UblInvoiceWriter(), _official, _platform);
+        _service = new ExportInvoiceService(_invoices, _settings, registry, new InvoiceEnrichment(_settings, relations), new UblInvoiceWriter(), _official, _platform, _usage);
     }
 
     private async Task<string> Book(CanonicalInvoiceDraft draft, string organizationId = OrgA)
@@ -42,6 +43,21 @@ public class ExportInvoiceServiceTests
             CreatedByUserId = "u",
         });
         return id;
+    }
+
+    [Fact]
+    public async Task A_trial_checks_everything_but_cannot_download_the_file()
+    {
+        await _usage.SetLimitAsync(OrgA, 10, trial: true);
+        var id = await Book(CompleteInvoice.Create());
+
+        var outcome = await _service.ExportAsync(OrgA, id, null);
+        var check = await _service.CheckAsync(OrgA, PeppolBisBilling30Ruleset.RulesetId, CompleteInvoice.Create());
+
+        Assert.Equal(ExportOutcomeKind.PlanRequired, outcome.Kind);
+        Assert.Null(outcome.Content);
+        Assert.True(check.RulesetFound);
+        Assert.Empty(check.Violations);
     }
 
     [Fact]
@@ -70,7 +86,7 @@ public class ExportInvoiceServiceTests
         });
         var service = new ExportInvoiceService(
             _invoices, _settings, new InvoiceRulesetRegistry(), new InvoiceEnrichment(_settings, new RelationService(new FakeRelationStore(), new TestClock(DateTimeOffset.UnixEpoch), new InvoiceRulesetRegistry())),
-            new UblInvoiceWriter(), _official, _platform);
+            new UblInvoiceWriter(), _official, _platform, _usage);
         var id = await Book(CompleteInvoice.Singapore());
 
         var first = await service.ExportAsync(OrgA, id, null);

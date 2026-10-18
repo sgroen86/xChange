@@ -211,3 +211,16 @@ export function lookupReceiver(
     signal,
   });
 }
+
+export interface Usage {
+  used: number;
+  /** Null: no limit. */
+  limit: number | null;
+  remaining: number | null;
+  /** On a trial: everything can be checked, but downloading needs a plan. */
+  trial: boolean;
+}
+
+export function getUsage(): Promise<Usage> {
+  return request<Usage>("/api/v1/organization/usage");
+}

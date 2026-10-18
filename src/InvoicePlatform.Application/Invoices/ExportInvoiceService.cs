@@ -1,3 +1,4 @@
+using InvoicePlatform.Application.Usage;
 using System.Text;
 using System.Text.RegularExpressions;
 using InvoicePlatform.Application.Organizations;
@@ -21,7 +22,8 @@ public sealed partial class ExportInvoiceService(
     InvoiceEnrichment enrichment,
     UblInvoiceWriter writer,
     IOfficialValidator officialValidator,
-    IPlatformStore platform)
+    IPlatformStore platform,
+    IUsageMeter usage)
 {
     public const string MediaType = "application/xml";
 
@@ -56,6 +58,12 @@ public sealed partial class ExportInvoiceService(
         if (requestedRulesetId is not null && rulesets.Find(requestedRulesetId) is null)
         {
             return ExportOutcome.UnknownRuleset;
+        }
+
+        // A trial checks everything but takes nothing away: the file needs a plan.
+        if ((await usage.GetAsync(organizationId, cancellationToken).ConfigureAwait(false)).Trial)
+        {
+            return ExportOutcome.PlanRequired;
         }
 
         // Scoped by organisation: another tenant's invoice is simply not found.
@@ -134,6 +142,9 @@ public enum ExportOutcomeKind
 
     /// <summary>The official validator could not be asked; no file is handed out.</summary>
     ValidationUnavailable,
+
+    /// <summary>The organisation is on a trial: checking is free, the file needs a plan.</summary>
+    PlanRequired,
 }
 
 /// <param name="Warnings">Official warnings for an exported file; they do not block it.</param>
@@ -149,4 +160,6 @@ public sealed record ExportOutcome(
     public static readonly ExportOutcome UnknownRuleset = new(ExportOutcomeKind.UnknownRuleset);
 
     public static readonly ExportOutcome ValidationUnavailable = new(ExportOutcomeKind.ValidationUnavailable);
+
+    public static readonly ExportOutcome PlanRequired = new(ExportOutcomeKind.PlanRequired);
 }

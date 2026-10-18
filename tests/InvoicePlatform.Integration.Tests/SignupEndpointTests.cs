@@ -56,7 +56,7 @@ public class SignupEndpointTests
 
         // The test factory only knows its fixed sessions, so the new organisation's trial is read from the meter.
         var organizationId = body.GetProperty("user").GetProperty("organizationId").GetString()!;
-        Assert.Equal(new InvoicePlatform.Application.Usage.UsageSummary(0, 10), await factory.Usage.GetAsync(organizationId));
+        Assert.Equal(new InvoicePlatform.Application.Usage.UsageSummary(0, 10, Trial: true), await factory.Usage.GetAsync(organizationId));
     }
 
     [Fact]

@@ -63,7 +63,7 @@ public class SignupServiceTests
         Assert.Equal(UserRole.Admin, result.User!.Role);
         var organization = Assert.Single(await _platform.ListOrganizationsAsync());
         Assert.Equal(("Bakkerij Peeters", "BE"), (organization.Name, organization.CountryCode));
-        Assert.Equal(new UsageSummary(0, SignupService.TrialConversions), await _usage.GetAsync(organization.OrganizationId));
+        Assert.Equal(new UsageSummary(0, SignupService.TrialConversions, Trial: true), await _usage.GetAsync(organization.OrganizationId));
     }
 
     [Fact]

@@ -15,6 +15,8 @@ interface Props {
   defaultNote: string | null;
   /** Set when the buyer is on a network and does not accept the chosen format. */
   receiverWarning: string | null;
+  /** On a trial: everything is checked, but the file cannot be downloaded. */
+  trial: boolean;
   /** Numbers the server cannot read yet; they come before anything else. */
   localIssues: LocalIssue[];
   violations: RuleViolation[];
@@ -39,7 +41,9 @@ export function ExportPanel(props: Props) {
   const { rulesets, format, onFormat, localIssues, violations, checking, checkFailed } = props;
   const ruleset = rulesets.find((r) => r.id === format) ?? null;
 
-  const blockedReason = ruleset
+  const blockedReason = props.trial
+    ? "In de proefperiode kun je alles controleren. Het bestand downloaden kan met een abonnement."
+    : ruleset
     ? !props.apiConfigured
       ? "Zonder API is er geen export mogelijk."
       : !props.exportable

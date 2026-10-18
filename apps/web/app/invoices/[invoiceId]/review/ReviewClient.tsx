@@ -30,6 +30,7 @@ import {
   documentBlobUrl,
   exportInvoice,
   getInvoice,
+  getUsage,
   type RuleViolation,
 } from "../../../../lib/invoices";
 import { formatMoney } from "../../../../lib/money";
@@ -93,6 +94,7 @@ export default function ReviewClient() {
   const [settings, setSettings] = useState<OrganizationSettings>(FALLBACK_SETTINGS);
   const [chosenFormat, setChosenFormat] = useState<string | null>(null);
   const [relations, setRelations] = useState<Relation[]>([]);
+  const [trial, setTrial] = useState(false);
 
   /* A known customer with its own format opens on that one (piece 4); the
      buyer is matched as the server does it, so editing the VAT number counts. */
@@ -225,6 +227,13 @@ export default function ReviewClient() {
       .catch(() => {
         // The fallback lists PEPPOL BIS 3.0, which is the system default anyway.
       });
+    if (isApiConfigured) {
+      getUsage()
+        .then((usage) => {
+          if (!cancelled) setTrial(usage.trial);
+        })
+        .catch(() => undefined);
+    }
     listRelations()
       .then((loaded) => {
         if (!cancelled) setRelations(loaded);
@@ -538,6 +547,7 @@ export default function ReviewClient() {
                   ? "Gekozen omdat de afnemer dit via PEPPOL ontvangt."
                   : null
             }
+            trial={trial}
             receiverWarning={
               isRuleset && receiver?.status === "found" && !receiver.acceptedRulesetIds.includes(format)
                 ? receiver.acceptedRulesetIds.length > 0

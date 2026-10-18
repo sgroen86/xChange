@@ -194,7 +194,7 @@ public sealed class SignupService(
         }
 
         // The limit before the organisation exists in the list, so it is never briefly unlimited.
-        await usage.SetLimitAsync(organization.OrganizationId, TrialConversions, cancellationToken).ConfigureAwait(false);
+        await usage.SetLimitAsync(organization.OrganizationId, TrialConversions, trial: true, cancellationToken).ConfigureAwait(false);
         await platform.SaveOrganizationAsync(organization, cancellationToken).ConfigureAwait(false);
 
         return await auth.SignInAsync(user, clientKey, cancellationToken).ConfigureAwait(false);

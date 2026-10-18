@@ -76,6 +76,6 @@ public static class SignupEndpoints
     {
         var user = context.GetAuthenticatedUser()!;
         var summary = await usage.GetAsync(user.OrganizationId, cancellationToken).ConfigureAwait(false);
-        return Results.Ok(new { used = summary.Used, limit = summary.Limit, remaining = summary.Remaining });
+        return Results.Ok(new { used = summary.Used, limit = summary.Limit, remaining = summary.Remaining, trial = summary.Trial });
     }
 }

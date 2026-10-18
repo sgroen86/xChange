@@ -77,6 +77,10 @@ public static class ExportEndpoints
                 title: "Controle niet beschikbaar",
                 statusCode: StatusCodes.Status503ServiceUnavailable),
             ExportOutcomeKind.Incomplete => Results.Json(ToResponse(outcome.Violations!), statusCode: StatusCodes.Status422UnprocessableEntity),
+            ExportOutcomeKind.PlanRequired => Results.Problem(
+                detail: "In de proefperiode kun je alles controleren, maar het bestand downloaden kan met een abonnement.",
+                title: "Abonnement nodig",
+                statusCode: StatusCodes.Status402PaymentRequired),
             ExportOutcomeKind.UnknownRuleset => Results.Problem(
                 detail: $"Regelset '{ruleset}' bestaat niet.", title: "Onbekende regelset", statusCode: StatusCodes.Status400BadRequest),
             _ => Results.NotFound(),
