@@ -102,15 +102,6 @@ Resources:
               }
             }
             var uri = request.uri;
-            // Next.js prefetches a page segment as __next.<a>.<b>.__PAGE__.txt,
-            // while the static export stores it as __next.<a>/<b>/__PAGE__.txt.
-            var slash = uri.lastIndexOf('/');
-            var name = uri.substring(slash + 1);
-            if (name.indexOf('__next.') === 0 && name.endsWith('.__PAGE__.txt')) {
-              var parts = name.substring(7, name.length - 13).split('.');
-              request.uri = uri.substring(0, slash + 1) + '__next.' + parts.join('/') + '/__PAGE__.txt';
-              return request;
-            }
             if (uri.endsWith('/')) {
               request.uri = uri + 'index.html';
             } else if (uri.lastIndexOf('.') < uri.lastIndexOf('/')) {
