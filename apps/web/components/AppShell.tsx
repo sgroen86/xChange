@@ -19,6 +19,7 @@ import {
   subscribeToUser,
 } from "../lib/auth";
 import { Icon } from "./Icon";
+import { LanguageSwitch } from "./LanguageSwitch";
 import { isSection, navStructure, pageTitles, type NavItem } from "./nav";
 
 function currentInvoiceId(pathname: string): string | null {
@@ -198,6 +199,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
           </div>
           <div className="header__right">
             <span className="header__date">Prototype — mockverwerking</span>
+            <LanguageSwitch />
           </div>
         </header>
 

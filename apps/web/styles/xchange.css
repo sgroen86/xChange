@@ -313,3 +313,24 @@
 .lines-table td:nth-child(3) .cell-input,
 .lines-table td:nth-child(5) .cell-input { min-width: 84px; }
 .lines-table td:nth-child(7) { white-space: nowrap; }
+
+/* NL | EN switch: in the header, and above the login and sign-up forms. */
+.lang-switch {
+  display: inline-flex;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-sm);
+  overflow: hidden;
+}
+.lang-switch__option {
+  border: 0;
+  background: var(--color-surface);
+  color: var(--color-ink-soft);
+  font: inherit;
+  font-size: var(--text-xs);
+  font-weight: 600;
+  padding: 2px var(--space-1);
+  cursor: pointer;
+}
+.lang-switch__option + .lang-switch__option { border-left: 1px solid var(--color-border); }
+.lang-switch__option:hover { background: var(--color-surface-hover); }
+.lang-switch__option--active { background: var(--color-primary-bg); color: var(--color-primary); }

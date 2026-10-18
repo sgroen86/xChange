@@ -8,6 +8,7 @@
  */
 
 import { API_BASE_URL, ApiError, isApiConfigured } from "./api";
+import { currentLanguage } from "./i18n/language";
 
 const TOKEN_KEY = "xchange.session.token";
 const USER_KEY = "xchange.session.user";
@@ -112,10 +113,11 @@ export function clearSession(): void {
   }
 }
 
-/** Header for an authenticated call, or nothing when signed out. */
+/** Headers for a call: the language, and the session when signed in. */
 export function authHeaders(): Record<string, string> {
   const token = getToken();
-  return token ? { Authorization: `Bearer ${token}` } : {};
+  const language = { "Accept-Language": currentLanguage() };
+  return token ? { ...language, Authorization: `Bearer ${token}` } : language;
 }
 
 async function post<T>(path: string, body: unknown): Promise<T> {
