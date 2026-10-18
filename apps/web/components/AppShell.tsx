@@ -29,6 +29,7 @@ function currentInvoiceId(pathname: string): string | null {
 function activeNavId(pathname: string): string {
   if (/\/invoices\/[^/]+\/review/.test(pathname)) return "review";
   if (pathname.includes("/invoices")) return "invoices";
+  if (pathname.includes("/settings")) return "instellingen";
   return "upload";
 }
 
