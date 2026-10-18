@@ -49,6 +49,20 @@ async function call<T>(path: string, init?: RequestInit): Promise<T> {
   return payload as T;
 }
 
+export interface PlatformSettings {
+  /** Null: the configured default. */
+  extractionModel: string | null;
+  models: { id: string; name: string }[];
+}
+
+export function getPlatformSettings(): Promise<PlatformSettings> {
+  return call<PlatformSettings>("/api/v1/platform/settings");
+}
+
+export function updatePlatformSettings(extractionModel: string | null): Promise<PlatformSettings> {
+  return call<PlatformSettings>("/api/v1/platform/settings", { method: "PUT", body: JSON.stringify({ extractionModel }) });
+}
+
 export function listOrganizations(): Promise<PlatformOrganization[]> {
   return call<PlatformOrganization[]>("/api/v1/platform/organizations");
 }

@@ -24,6 +24,7 @@ public class LearningFlowTests
     private readonly FakeSettingsStore _settings = new();
     private readonly TestClock _clock = new(DateTimeOffset.Parse("2026-10-19T09:00:00Z"));
     private readonly ScriptedInterpreter _interpreter = new();
+    private readonly FakePlatformStore _platform = new();
     private readonly ExtractInvoiceService _extract;
     private readonly BookInvoiceService _book;
 
@@ -32,7 +33,7 @@ public class LearningFlowTests
         var learning = new LearningService(_store, _clock);
         var relations = new RelationService(new FakeRelationStore(), _clock, new InvoiceRulesetRegistry());
         _extract = new ExtractInvoiceService(
-            _interpreter, new InvoiceEnrichment(_settings, relations), new InvoiceCalculationValidator(), new CanonicalInvoiceXmlSerializer(), learning);
+            _interpreter, new InvoiceEnrichment(_settings, relations), new InvoiceCalculationValidator(), new CanonicalInvoiceXmlSerializer(), learning, _platform);
         _book = new BookInvoiceService(_invoices, _invoices, _clock, relations, learning);
     }
 
@@ -121,16 +122,32 @@ public class LearningFlowTests
         Assert.DoesNotContain(await learning.ListAsync(OrgA), c => c.Id == id);
     }
 
+    [Fact]
+    public async Task The_platform_administrators_model_reads_the_pdf()
+    {
+        _interpreter.Next = ModelReading();
+        await _extract.ExtractAsync(OrgA, new byte[] { 1 });
+        Assert.Null(_interpreter.LastModel);
+
+        await _platform.SaveSettingsAsync(new InvoicePlatform.Application.Organizations.PlatformSettings { ExtractionModel = "claude-opus-5-5" });
+        await _extract.ExtractAsync(OrgA, new byte[] { 1 });
+
+        Assert.Equal("claude-opus-5-5", _interpreter.LastModel);
+    }
+
     private sealed class ScriptedInterpreter : IInvoiceInterpreter
     {
         public CanonicalInvoiceDraft Next { get; set; } = new();
 
         public IReadOnlyList<ReadingHint>? LastHints { get; private set; }
 
+        public string? LastModel { get; private set; }
+
         public Task<InvoiceInterpretationResult> InterpretAsync(
-            ReadOnlyMemory<byte> pdf, IReadOnlyList<ReadingHint>? hints = null, CancellationToken cancellationToken = default)
+            ReadOnlyMemory<byte> pdf, IReadOnlyList<ReadingHint>? hints = null, string? model = null, CancellationToken cancellationToken = default)
         {
             LastHints = hints;
+            LastModel = model;
             return Task.FromResult(new InvoiceInterpretationResult(Next, new ProviderExecution("test", "m", 0)));
         }
     }

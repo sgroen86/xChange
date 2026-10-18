@@ -31,7 +31,7 @@ public class ImportServiceTests
             new InvoiceEnrichment(new FakeSettingsStore(), relations),
             new InvoiceCalculationValidator(),
             new CanonicalInvoiceXmlSerializer(),
-            new LearningService(new FakeLearningStore(), _clock));
+            new LearningService(new FakeLearningStore(), _clock), new FakePlatformStore());
         _service = new ImportService(_imports, _imports, _documents, extraction, _clock);
     }
 
@@ -105,12 +105,41 @@ public class ImportServiceTests
         Assert.NotNull(await _documents.GetAsync(record.DocumentKey));
     }
 
+    [Fact]
+    public async Task A_mailed_pdf_waits_for_approval_and_is_only_read_after_it()
+    {
+        var record = await _service.SubmitAsync(OrgA, ImportSource.Email, "mail.pdf", Pdf, sender: "x@y.z");
+
+        Assert.Equal(ImportStatus.AwaitingApproval, record.Status);
+        Assert.Empty(_imports.Queued);
+
+        // Even a stray queue message does not get it read.
+        await _service.ProcessAsync(OrgA, record.ImportId);
+        Assert.Equal(ImportStatus.AwaitingApproval, (await _service.GetAsync(OrgA, record.ImportId))!.Status);
+        Assert.False(await _service.RetryAsync(OrgA, record.ImportId));
+
+        Assert.False(await _service.ApproveAsync(OrgB, record.ImportId));
+        Assert.True(await _service.ApproveAsync(OrgA, record.ImportId));
+        Assert.Equal((OrgA, record.ImportId), Assert.Single(_imports.Queued));
+
+        await _service.ProcessAsync(OrgA, record.ImportId);
+        Assert.Equal(ImportStatus.Ready, (await _service.GetAsync(OrgA, record.ImportId))!.Status);
+    }
+
+    [Fact]
+    public async Task Only_a_waiting_import_can_be_approved()
+    {
+        var upload = await _service.SubmitAsync(OrgA, ImportSource.Upload, "f.pdf", Pdf, "u");
+
+        Assert.False(await _service.ApproveAsync(OrgA, upload.ImportId));
+    }
+
     private sealed class Interpreter : IInvoiceInterpreter
     {
         public bool Fail { get; set; }
 
         public Task<InvoiceInterpretationResult> InterpretAsync(
-            ReadOnlyMemory<byte> pdf, IReadOnlyList<ReadingHint>? hints = null, CancellationToken cancellationToken = default)
+            ReadOnlyMemory<byte> pdf, IReadOnlyList<ReadingHint>? hints = null, string? model = null, CancellationToken cancellationToken = default)
             => Fail
                 ? throw new InvalidOperationException("The document is unreadable.")
                 : Task.FromResult(new InvoiceInterpretationResult(

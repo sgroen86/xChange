@@ -30,7 +30,7 @@ public class InboxServiceTests
         var relations = new RelationService(new FakeRelationStore(), clock, new InvoiceRulesetRegistry());
         var extraction = new ExtractInvoiceService(
             new NeverCalled(), new InvoiceEnrichment(new FakeSettingsStore(), relations), new InvoiceCalculationValidator(),
-            new CanonicalInvoiceXmlSerializer(), new LearningService(new FakeLearningStore(), clock));
+            new CanonicalInvoiceXmlSerializer(), new LearningService(new FakeLearningStore(), clock), new FakePlatformStore());
         var imports = new ImportService(_imports, _imports, new FakeInvoiceStore(), extraction, clock);
         _inbox = new InboxService(_directory, _mail, imports, new InboxSettings(Domain));
     }
@@ -69,7 +69,9 @@ public class InboxServiceTests
         {
             Assert.Equal((OrgA, ImportSource.Email, "boekhouding@klant.nl", "Facturen oktober"), (r.OrganizationId, r.Source, r.Sender, r.Subject));
         });
-        Assert.Equal(2, _imports.Queued.Count);
+        // Waiting for a user's approval: nothing is read, so nothing is spent, until then.
+        Assert.All(_imports.Saved.Values, r => Assert.Equal(ImportStatus.AwaitingApproval, r.Status));
+        Assert.Empty(_imports.Queued);
     }
 
     [Fact]
@@ -167,7 +169,7 @@ public class InboxServiceTests
     private sealed class NeverCalled : IInvoiceInterpreter
     {
         public Task<InvoiceInterpretationResult> InterpretAsync(
-            ReadOnlyMemory<byte> pdf, IReadOnlyList<ReadingHint>? hints = null, CancellationToken cancellationToken = default)
+            ReadOnlyMemory<byte> pdf, IReadOnlyList<ReadingHint>? hints = null, string? model = null, CancellationToken cancellationToken = default)
             => throw new InvalidOperationException("Receiving mail only queues; the worker reads later.");
     }
 }

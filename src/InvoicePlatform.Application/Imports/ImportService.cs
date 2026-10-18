@@ -35,7 +35,11 @@ public sealed class ImportService(
     ExtractInvoiceService extraction,
     IClock clock)
 {
-    /// <summary>Stores the PDF, records the import and puts it on the queue.</summary>
+    /// <summary>
+    /// Stores the PDF and records the import. An upload goes on the queue at
+    /// once; a mailed PDF waits for a user's approval (anyone who knows the
+    /// address can send one, and reading spends model credit).
+    /// </summary>
     public async Task<ImportRecord> SubmitAsync(
         string organizationId,
         ImportSource source,
@@ -57,7 +61,7 @@ public sealed class ImportService(
             ImportId = id,
             OrganizationId = organizationId,
             Source = source,
-            Status = ImportStatus.Queued,
+            Status = source == ImportSource.Email ? ImportStatus.AwaitingApproval : ImportStatus.Queued,
             FileName = fileName,
             ByteSize = pdf.Length,
             DocumentKey = key,
@@ -69,8 +73,27 @@ public sealed class ImportService(
         };
 
         await imports.SaveAsync(record, cancellationToken).ConfigureAwait(false);
-        await queue.EnqueueAsync(organizationId, id, cancellationToken).ConfigureAwait(false);
+        if (record.Status == ImportStatus.Queued)
+        {
+            await queue.EnqueueAsync(organizationId, id, cancellationToken).ConfigureAwait(false);
+        }
+
         return record;
+    }
+
+    /// <summary>A user approves a mailed PDF: now it is read.</summary>
+    /// <returns>False when there is no such import waiting for approval in this organisation.</returns>
+    public async Task<bool> ApproveAsync(string organizationId, string importId, CancellationToken cancellationToken = default)
+    {
+        var record = await imports.GetAsync(organizationId, importId, cancellationToken).ConfigureAwait(false);
+        if (record is not { Status: ImportStatus.AwaitingApproval })
+        {
+            return false;
+        }
+
+        await imports.SaveAsync(record with { Status = ImportStatus.Queued, UpdatedAt = clock.UtcNow }, cancellationToken).ConfigureAwait(false);
+        await queue.EnqueueAsync(organizationId, importId, cancellationToken).ConfigureAwait(false);
+        return true;
     }
 
     /// <summary>
@@ -81,7 +104,10 @@ public sealed class ImportService(
     public async Task ProcessAsync(string organizationId, string importId, CancellationToken cancellationToken = default)
     {
         var record = await imports.GetAsync(organizationId, importId, cancellationToken).ConfigureAwait(false);
-        if (record is null || record.Status is ImportStatus.Ready)
+
+        // Never read what is already read, nor a mailed PDF nobody approved -
+        // whatever put the message on the queue.
+        if (record is null || record.Status is ImportStatus.Ready or ImportStatus.AwaitingApproval)
         {
             return;
         }
@@ -135,7 +161,9 @@ public sealed class ImportService(
     public async Task<bool> RetryAsync(string organizationId, string importId, CancellationToken cancellationToken = default)
     {
         var record = await imports.GetAsync(organizationId, importId, cancellationToken).ConfigureAwait(false);
-        if (record is null)
+
+        // Retrying is not a way around approval.
+        if (record is null || record.Status == ImportStatus.AwaitingApproval)
         {
             return false;
         }

@@ -28,4 +28,8 @@ public interface IPlatformStore
     /// one gets true.
     /// </returns>
     Task<bool> TryDeleteInvitationAsync(string codeHash, CancellationToken cancellationToken = default);
+
+    Task<PlatformSettings> GetSettingsAsync(CancellationToken cancellationToken = default);
+
+    Task SaveSettingsAsync(PlatformSettings settings, CancellationToken cancellationToken = default);
 }

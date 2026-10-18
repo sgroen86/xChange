@@ -14,7 +14,7 @@ public sealed record ImportResponse
     [JsonPropertyName("source")]
     public required string Source { get; init; }
 
-    /// <summary>"queued", "processing", "ready" or "failed".</summary>
+    /// <summary>"awaitingApproval" (mailed, not read until approved), "queued", "processing", "ready" or "failed".</summary>
     [JsonPropertyName("status")]
     public required string Status { get; init; }
 

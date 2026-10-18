@@ -3,6 +3,7 @@
 import { useEffect, useState, useSyncExternalStore } from "react";
 
 import { Icon } from "../../components/Icon";
+import { ModelSetting } from "./ModelSetting";
 import { useToast } from "../../components/Toast";
 import { getServerUserSnapshot, getUserSnapshot, listCountries, subscribeToUser, type CountryOption } from "../../lib/auth";
 import {
@@ -273,6 +274,8 @@ export default function PlatformClient() {
           </div>
         </div>
       )}
+
+      <ModelSetting />
     </>
   );
 }

@@ -17,9 +17,11 @@ public interface IInvoiceInterpreter
     /// What this organisation's reviewers corrected before, to read the
     /// document the same way. Data, not instructions; never a value to copy.
     /// </param>
+    /// <param name="model">The model the platform administrator chose; null for the configured default.</param>
     /// <param name="cancellationToken">Cancellation for the provider call.</param>
     Task<InvoiceInterpretationResult> InterpretAsync(
         ReadOnlyMemory<byte> pdf,
         IReadOnlyList<ReadingHint>? hints = null,
+        string? model = null,
         CancellationToken cancellationToken = default);
 }

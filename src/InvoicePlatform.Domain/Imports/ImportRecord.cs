@@ -5,6 +5,12 @@ namespace InvoicePlatform.Domain.Imports;
 
 public enum ImportStatus
 {
+    /// <summary>
+    /// Received by email and waiting for a user to approve it. Not on the
+    /// queue: nothing is spent on a document nobody asked for.
+    /// </summary>
+    AwaitingApproval,
+
     /// <summary>Stored and on the queue, not yet read.</summary>
     Queued,
 

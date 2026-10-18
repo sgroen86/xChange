@@ -221,8 +221,11 @@ public sealed class AnthropicInvoiceInterpreter : IInvoiceInterpreter
     public async Task<InvoiceInterpretationResult> InterpretAsync(
         ReadOnlyMemory<byte> pdf,
         IReadOnlyList<ReadingHint>? hints = null,
+        string? model = null,
         CancellationToken cancellationToken = default)
     {
+        model = string.IsNullOrWhiteSpace(model) ? _options.Model : model;
+
         if (pdf.IsEmpty)
         {
             throw new ArgumentException("The PDF is empty.", nameof(pdf));
@@ -230,7 +233,7 @@ public sealed class AnthropicInvoiceInterpreter : IInvoiceInterpreter
 
         var request = new MessageCreateParams
         {
-            Model = _options.Model,
+            Model = model,
             MaxTokens = _options.MaxTokens,
             System = SystemPrompt,
             OutputConfig = new OutputConfig
@@ -292,7 +295,7 @@ public sealed class AnthropicInvoiceInterpreter : IInvoiceInterpreter
         // Token counts, not content: what an extraction costs is read from these.
         _logger.LogInformation(
             "Interpreted invoice with {Model} in {DurationMs}ms: {InputTokens} input tokens, {OutputTokens} output tokens, {PdfBytes} PDF bytes, {Hints} hints",
-            _options.Model,
+            model,
             stopwatch.ElapsedMilliseconds,
             response.Usage.InputTokens,
             response.Usage.OutputTokens,
@@ -301,7 +304,7 @@ public sealed class AnthropicInvoiceInterpreter : IInvoiceInterpreter
 
         return new InvoiceInterpretationResult(
             extracted.ToDomain(),
-            new ProviderExecution(ProviderName, _options.Model, stopwatch.ElapsedMilliseconds));
+            new ProviderExecution(ProviderName, model, stopwatch.ElapsedMilliseconds));
     }
 }
 

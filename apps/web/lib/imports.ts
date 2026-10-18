@@ -10,7 +10,7 @@ import { normalizeInvoice, type ReviewDraft } from "./canonical";
 import { putPdf } from "./pdfStore";
 import { saveDraft, saveServerResult } from "./store";
 
-export type ImportStatus = "queued" | "processing" | "ready" | "failed";
+export type ImportStatus = "awaitingApproval" | "queued" | "processing" | "ready" | "failed";
 
 export interface ImportItem {
   importId: string;
@@ -58,6 +58,21 @@ export async function submitImport(file: File): Promise<ImportItem> {
 export async function listImports(): Promise<ImportItem[]> {
   if (!isApiConfigured) return [];
   return (await (await call("/api/v1/imports")).json()) as ImportItem[];
+}
+
+/** A mailed PDF is only read after a user approves it. */
+export async function approveImport(importId: string): Promise<void> {
+  await call(`/api/v1/imports/${encodeURIComponent(importId)}/approve`, { method: "POST" });
+}
+
+/** Opens the PDF in a new tab, to look at a mailed one before approving it. */
+export async function viewImportDocument(importId: string): Promise<void> {
+  const target = window.open("", "_blank");
+  const blob = await (await call(`/api/v1/imports/${encodeURIComponent(importId)}/document`)).blob();
+  const url = URL.createObjectURL(new Blob([blob], { type: "application/pdf" }));
+  if (target) target.location.href = url;
+  else window.location.href = url;
+  window.setTimeout(() => URL.revokeObjectURL(url), 60_000);
 }
 
 export async function retryImport(importId: string): Promise<void> {

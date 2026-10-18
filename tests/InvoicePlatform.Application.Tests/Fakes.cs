@@ -81,6 +81,16 @@ internal sealed class FakeRelationStore : IRelationRepository
 
 internal sealed class FakePlatformStore : IPlatformStore
 {
+    private PlatformSettings _settings = new();
+
+    public Task<PlatformSettings> GetSettingsAsync(CancellationToken cancellationToken = default) => Task.FromResult(_settings);
+
+    public Task SaveSettingsAsync(PlatformSettings settings, CancellationToken cancellationToken = default)
+    {
+        _settings = settings;
+        return Task.CompletedTask;
+    }
+
     private readonly Dictionary<string, Organization> _organizations = [];
     private readonly Dictionary<string, Invitation> _invitations = [];
 

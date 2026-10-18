@@ -161,6 +161,25 @@ internal sealed class DynamoDbPlatformStore(
         return (items, count);
     }
 
+    /// <summary>PLATFORM / SETTINGS: one item for the whole platform.</summary>
+    public async Task<PlatformSettings> GetSettingsAsync(CancellationToken cancellationToken = default)
+    {
+        var item = await GetItemAsync(PlatformKey, "SETTINGS", cancellationToken).ConfigureAwait(false);
+        return new PlatformSettings { ExtractionModel = item is null ? null : Optional(item, "extractionModel") };
+    }
+
+    public Task SaveSettingsAsync(PlatformSettings settings, CancellationToken cancellationToken = default)
+        => dynamo.PutItemAsync(
+            new PutItemRequest
+            {
+                TableName = _table,
+                Item = new Dictionary<string, AttributeValue>(Key(PlatformKey, "SETTINGS"))
+                {
+                    ["extractionModel"] = Nullable(settings.ExtractionModel),
+                },
+            },
+            cancellationToken);
+
     private async Task<Dictionary<string, AttributeValue>?> GetItemAsync(string pk, string sk, CancellationToken cancellationToken)
     {
         var response = await dynamo.GetItemAsync(

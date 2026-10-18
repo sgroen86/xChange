@@ -8,13 +8,22 @@ import { Icon } from "../../components/Icon";
 import { useToast } from "../../components/Toast";
 import { isApiConfigured } from "../../lib/api";
 import { getServerUserSnapshot, getUserSnapshot, subscribeToUser } from "../../lib/auth";
-import { dismissImport, listImports, openImport, retryImport, type ImportItem } from "../../lib/imports";
+import {
+  approveImport,
+  dismissImport,
+  listImports,
+  openImport,
+  retryImport,
+  viewImportDocument,
+  type ImportItem,
+} from "../../lib/imports";
 import { formatBytes } from "../../lib/pdf";
 
 /** How often the list refreshes while something is still being read. */
 const POLL_MS = 4000;
 
 const STATUS: Record<ImportItem["status"], { label: string; badge: string }> = {
+  awaitingApproval: { label: "Wacht op goedkeuring", badge: "badge--warning" },
   queued: { label: "In de wachtrij", badge: "badge--neutral" },
   processing: { label: "Wordt gelezen", badge: "badge--info" },
   ready: { label: "Klaar om te beoordelen", badge: "badge--success" },
@@ -69,6 +78,14 @@ export default function ImportsClient() {
     }
   };
 
+  const waiting = items?.filter((item) => item.status === "awaitingApproval") ?? [];
+
+  const approve = (ids: string[]) =>
+    act(ids.length === 1 ? ids[0] : "all", async () => {
+      for (const id of ids) await approveImport(id);
+      await refresh();
+    }, ids.length === 1 ? "Wordt nu gelezen." : `${ids.length} facturen worden nu gelezen.`);
+
   const open = (item: ImportItem) =>
     act(item.importId, async () => {
       await openImport(item.importId);
@@ -87,6 +104,11 @@ export default function ImportsClient() {
           </p>
         </div>
         <div className="page-header__actions">
+          {canEdit && waiting.length > 1 && (
+            <button type="button" className="btn btn--secondary" disabled={busy !== null} onClick={() => void approve(waiting.map((i) => i.importId))}>
+              <Icon name="check" /> Alles verwerken ({waiting.length})
+            </button>
+          )}
           <Link className="btn btn--primary" href="/upload">
             <Icon name="fileUp" /> Facturen uploaden
           </Link>
@@ -97,6 +119,16 @@ export default function ImportsClient() {
         <div className="alert alert--info">
           <Icon name="info" />
           <div>Er is geen API geconfigureerd: importeren in de achtergrond is niet beschikbaar.</div>
+        </div>
+      )}
+
+      {waiting.length > 0 && (
+        <div className="alert alert--warning">
+          <Icon name="info" />
+          <div>
+            Per e-mail ontvangen PDF&apos;s worden pas gelezen als u ze goedkeurt. Bekijk ze eerst;
+            verwijder wat geen factuur van u is.
+          </div>
         </div>
       )}
 
@@ -134,6 +166,7 @@ export default function ImportsClient() {
                           {formatBytes(item.byteSize)}
                           {item.source === "email" && item.sender ? ` · van ${item.sender}` : ""}
                         </div>
+                        {item.subject && <div className="text-xs text-muted">{item.subject}</div>}
                       </td>
                       <td>
                         {item.invoiceNumber ?? "—"}
@@ -145,6 +178,28 @@ export default function ImportsClient() {
                       </td>
                       <td>{new Date(item.createdAt).toLocaleString("nl-NL", { dateStyle: "short", timeStyle: "short" })}</td>
                       <td style={{ whiteSpace: "nowrap" }}>
+                        {item.status === "awaitingApproval" && (
+                          <>
+                            <button
+                              type="button"
+                              className="btn btn--ghost btn--sm"
+                              disabled={busy === item.importId}
+                              onClick={() => void act(item.importId, () => viewImportDocument(item.importId))}
+                            >
+                              <Icon name="eye" /> Bekijken
+                            </button>
+                            {canEdit && (
+                              <button
+                                type="button"
+                                className="btn btn--primary btn--sm"
+                                disabled={busy !== null}
+                                onClick={() => void approve([item.importId])}
+                              >
+                                <Icon name="check" /> Verwerken
+                              </button>
+                            )}
+                          </>
+                        )}
                         {item.status === "ready" && (
                           <button
                             type="button"

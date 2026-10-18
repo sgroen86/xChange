@@ -1,3 +1,4 @@
+using InvoicePlatform.Application.Organizations;
 using InvoicePlatform.Application.Interpretation;
 using InvoicePlatform.Application.Learning;
 using InvoicePlatform.Domain.Canonical;
@@ -19,7 +20,8 @@ public sealed class ExtractInvoiceService(
     InvoiceEnrichment enrichment,
     InvoiceCalculationValidator validator,
     CanonicalInvoiceXmlSerializer serializer,
-    LearningService learning)
+    LearningService learning,
+    IPlatformStore platform)
 {
     public async Task<ExtractInvoiceResult> ExtractAsync(
         string organizationId,
@@ -29,7 +31,10 @@ public sealed class ExtractInvoiceService(
         var extractionId = Guid.NewGuid().ToString("n");
         var hints = await learning.HintsAsync(organizationId, cancellationToken).ConfigureAwait(false);
 
-        var interpretation = await interpreter.InterpretAsync(pdf, hints, cancellationToken)
+        // The platform administrator's choice of model; none set means the configured default.
+        var model = (await platform.GetSettingsAsync(cancellationToken).ConfigureAwait(false)).ExtractionModel;
+
+        var interpretation = await interpreter.InterpretAsync(pdf, hints, model, cancellationToken)
             .ConfigureAwait(false);
 
         // What reviewers corrected before goes back in first; the enrichment

@@ -102,6 +102,7 @@ api.MapExportEndpoints();
 api.MapOrganizationEndpoints();
 api.MapRelationEndpoints();
 api.MapPlatformEndpoints();
+api.MapPlatformSettingsEndpoints();
 api.MapReceiverEndpoints();
 api.MapLearningEndpoints();
 api.MapImportEndpoints();

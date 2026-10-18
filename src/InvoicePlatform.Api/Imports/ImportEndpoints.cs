@@ -36,6 +36,11 @@ public static class ImportEndpoints
             .WithName("GetImportDocument")
             .RequireAuthenticatedUser();
 
+        group.MapPost("/imports/{importId}/approve", ApproveAsync)
+            .WithName("ApproveImport")
+            .RequireAuthenticatedUser()
+            .RequireRole(UserRoleName.Admin, UserRoleName.User);
+
         group.MapPost("/imports/{importId}/retry", RetryAsync)
             .WithName("RetryImport")
             .RequireAuthenticatedUser()
@@ -85,6 +90,14 @@ public static class ImportEndpoints
         return pdf is null ? Results.NotFound() : Results.File(pdf, "application/pdf");
     }
 
+    private static async Task<IResult> ApproveAsync(string importId, HttpContext context, ImportService imports, CancellationToken cancellationToken)
+    {
+        var user = context.GetAuthenticatedUser()!;
+        return await imports.ApproveAsync(user.OrganizationId, importId, cancellationToken).ConfigureAwait(false)
+            ? Results.Accepted()
+            : Results.NotFound();
+    }
+
     private static async Task<IResult> RetryAsync(string importId, HttpContext context, ImportService imports, CancellationToken cancellationToken)
     {
         var user = context.GetAuthenticatedUser()!;
@@ -105,7 +118,7 @@ public static class ImportEndpoints
     {
         ImportId = record.ImportId,
         Source = record.Source == ImportSource.Email ? "email" : "upload",
-        Status = record.Status.ToString().ToLowerInvariant(),
+        Status = record.Status == ImportStatus.AwaitingApproval ? "awaitingApproval" : record.Status.ToString().ToLowerInvariant(),
         FileName = record.FileName,
         ByteSize = record.ByteSize,
         Sender = record.Sender,

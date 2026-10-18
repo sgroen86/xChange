@@ -77,6 +77,24 @@ public sealed class PlatformService(IPlatformStore store, IUserStore users, IClo
         return new PlatformResult(PlatformOutcome.Succeeded, Organization: updated);
     }
 
+    public Task<PlatformSettings> GetSettingsAsync(CancellationToken cancellationToken = default)
+        => store.GetSettingsAsync(cancellationToken);
+
+    /// <param name="extractionModel">One of <see cref="ExtractionModels.All"/>, or null for the configured default.</param>
+    /// <returns>Null when saved; otherwise why not.</returns>
+    public async Task<string?> UpdateSettingsAsync(string? extractionModel, CancellationToken cancellationToken = default)
+    {
+        var model = string.IsNullOrWhiteSpace(extractionModel) ? null : extractionModel.Trim();
+        if (model is not null && !ExtractionModels.IsAllowed(model))
+        {
+            return "Kies een van de aangeboden modellen.";
+        }
+
+        var current = await store.GetSettingsAsync(cancellationToken).ConfigureAwait(false);
+        await store.SaveSettingsAsync(current with { ExtractionModel = model }, cancellationToken).ConfigureAwait(false);
+        return null;
+    }
+
     /// <summary>A new invitation for the organisation; the previous one stops working.</summary>
     public async Task<PlatformResult> ReissueInvitationAsync(
         string organizationId,
