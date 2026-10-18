@@ -8,6 +8,7 @@ import { isApiConfigured } from "../../lib/api";
 import { getServerUserSnapshot, getUserSnapshot, listCountries, subscribeToUser, type CountryOption } from "../../lib/auth";
 import { FALLBACK_SETTINGS, getSettings, updateSettings, type OrganizationSettings } from "../../lib/settings";
 import { ENDPOINT_SCHEMES } from "../invoices/[invoiceId]/review/fields";
+import { InboxAddress } from "./InboxAddress";
 import { LearnedCorrections } from "./LearnedCorrections";
 
 /**
@@ -187,6 +188,8 @@ export default function SettingsClient() {
           </div>
         </form>
       )}
+
+      <InboxAddress canEdit={canEdit} />
 
       {isApiConfigured && <LearnedCorrections canForget={user?.role === "Admin" || user?.role === "User"} />}
     </div>

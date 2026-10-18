@@ -235,6 +235,11 @@ jobs:
             --query "StackEvents[?ResourceStatus=='CREATE_FAILED' || ResourceStatus=='UPDATE_FAILED'].[LogicalResourceId,ResourceStatusReason]" \
             --output table | head -40 || true
 
+      # SES only applies the active receipt rule set, and CloudFormation cannot
+      # make one active. Idempotent: setting it again changes nothing.
+      - name: Activate the inbox receipt rules
+        run: aws ses set-active-receipt-rule-set --rule-set-name xchange-inbox
+
       - name: Smoke-test the deployed API
         run: |
           set -e

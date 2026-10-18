@@ -40,14 +40,24 @@ mechanisme ontvangt later de PDF's die per e-mail binnenkomen.
   - Boeken haalt de import van de lijst. De PDF blijft, want de geboekte factuur
     gebruikt hetzelfde document.
 
-## Stap 2 (volgt): e-mail
+## Stap 2: e-mail
 
 - Elke organisatie krijgt een moeilijk te raden adres `<code>@inbox.greenitsolutions.net`.
 - SES ontvangt de mail in Frankfurt (`inbound-smtp.eu-central-1.amazonaws.com`) en legt
   hem in S3. De worker haalt de PDF-bijlagen eruit en zet ze als imports met afzender en
   onderwerp in dezelfde lijst. Een bijlage is niet aan de 4 MB van de API gebonden.
 - De gebruiker zet één MX-record en de DKIM-records voor het subdomein bij zijn
-  hostingpartij.
+  hostingpartij (Strato). De DKIM-records staan in de outputs van de service-stack
+  (`InboxDkim1` tot en met `InboxDkim3`).
+- **Hoe het gebouwd is.**
+  - SES (regelset `xchange-inbox`, door de deploy-workflow geactiveerd) zet de mail in
+    `xchange-mail-<account>/inbound/` (30 dagen) en roept `xchange-mail` aan. Die zit in
+    hetzelfde pakket als de worker.
+  - Mail met een virus- of spamoordeel FAIL wordt genegeerd.
+  - Het adres is 12 tekens uit een alfabet zonder verwarrende tekens. Het staat in de
+    identity-tabel in twee richtingen (`INBOX#<code>` en `ORG#<org>/INBOX`).
+  - Alleen een beheerder maakt een (nieuw) adres; het oude werkt dan niet meer.
+  - Per mail tellen hoogstens 20 PDF's van elk hoogstens 25 MB.
 
 ## Niet in dit stuk
 

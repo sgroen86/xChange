@@ -35,6 +35,14 @@ Parameters:
     Type: String
     Description: Key of the background worker zip (src/InvoicePlatform.Worker) for this commit.
 
+  InboxDomain:
+    Type: String
+    Default: inbox.greenitsolutions.net
+    Description: >
+      The subdomain organisations' invoice inboxes live on. Its MX record points
+      at inbound-smtp.eu-central-1.amazonaws.com, and the DKIM records from
+      this stack's outputs verify it - both set by hand at the DNS host.
+
   AnthropicModel:
     Type: String
     Default: claude-opus-5
@@ -247,6 +255,7 @@ Resources:
           Cors__AllowedOrigins__1: !Ref AllowedOriginWww
           OfficialValidation__FunctionName: !Ref ValidatorAlias
           Imports__QueueUrl: !Ref ImportQueue
+          Inbox__Domain: !Ref InboxDomain
       Tags:
         - Key: Project
           Value: xchange
@@ -489,6 +498,165 @@ Resources:
       ScalingConfig:
         MaximumConcurrency: 2
 
+  # ---------------------------------------------------------------------------
+  # Email import. SES receives mail for the inbox domain, stores it in the mail
+  # bucket and calls the mail function, which turns every PDF attachment into
+  # an import for the organisation the address belongs to.
+  # ---------------------------------------------------------------------------
+
+  # Raw mail is kept only as long as it takes to read it.
+  MailBucket:
+    Type: AWS::S3::Bucket
+    Properties:
+      BucketName: !Sub xchange-mail-${AWS::AccountId}
+      PublicAccessBlockConfiguration:
+        BlockPublicAcls: true
+        BlockPublicPolicy: true
+        IgnorePublicAcls: true
+        RestrictPublicBuckets: true
+      BucketEncryption:
+        ServerSideEncryptionConfiguration:
+          - ServerSideEncryptionByDefault:
+              SSEAlgorithm: AES256
+      LifecycleConfiguration:
+        Rules:
+          - Id: delete-received-mail
+            Status: Enabled
+            ExpirationInDays: 30
+      Tags:
+        - Key: Project
+          Value: xchange
+
+  MailBucketPolicy:
+    Type: AWS::S3::BucketPolicy
+    Properties:
+      Bucket: !Ref MailBucket
+      PolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: ses.amazonaws.com
+            Action: s3:PutObject
+            Resource: !Sub ${MailBucket.Arn}/inbound/*
+            Condition:
+              StringEquals:
+                AWS:SourceAccount: !Ref AWS::AccountId
+
+  # The domain SES receives for. Verified by the DKIM records in the outputs.
+  InboxIdentity:
+    Type: AWS::SES::EmailIdentity
+    Properties:
+      EmailIdentity: !Ref InboxDomain
+
+  MailFunctionRole:
+    Type: AWS::IAM::Role
+    Properties:
+      RoleName: xchange-mail-lambda
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: lambda.amazonaws.com
+            Action: sts:AssumeRole
+      ManagedPolicyArns:
+        - arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole
+      Policies:
+        - PolicyName: mail
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action: s3:GetObject
+                Resource: !Sub ${MailBucket.Arn}/inbound/*
+              # Which organisation an inbox address belongs to.
+              - Effect: Allow
+                Action: dynamodb:GetItem
+                Resource: !GetAtt IdentityTable.Arn
+              # The import record and its PDF, then the queue.
+              - Effect: Allow
+                Action: dynamodb:PutItem
+                Resource: !GetAtt InvoiceTable.Arn
+              - Effect: Allow
+                Action: s3:PutObject
+                Resource: !Sub ${DocumentBucket.Arn}/*
+              - Effect: Allow
+                Action: sqs:SendMessage
+                Resource: !GetAtt ImportQueue.Arn
+      Tags:
+        - Key: Project
+          Value: xchange
+
+  MailFunction:
+    Type: AWS::Lambda::Function
+    Properties:
+      FunctionName: xchange-mail
+      Runtime: dotnet8
+      # The same package as the worker: one assembly, two handlers.
+      Handler: InvoicePlatform.Worker::InvoicePlatform.Worker.MailFunction::HandleAsync
+      Role: !GetAtt MailFunctionRole.Arn
+      MemorySize: 512
+      Timeout: 120
+      Code:
+        S3Bucket: !Ref ArtifactBucket
+        S3Key: !Ref WorkerArtifactKey
+      Environment:
+        Variables:
+          Identity__TableName: !Ref IdentityTable
+          InvoiceStorage__TableName: !Ref InvoiceTable
+          InvoiceStorage__BucketName: !Ref DocumentBucket
+          Imports__QueueUrl: !Ref ImportQueue
+          Inbox__Domain: !Ref InboxDomain
+          Inbox__MailBucketName: !Ref MailBucket
+      Tags:
+        - Key: Project
+          Value: xchange
+
+  MailFunctionLogs:
+    Type: AWS::Logs::LogGroup
+    Properties:
+      LogGroupName: !Sub /aws/lambda/${MailFunction}
+      RetentionInDays: 14
+
+  MailInvokePermission:
+    Type: AWS::Lambda::Permission
+    Properties:
+      FunctionName: !Ref MailFunction
+      Action: lambda:InvokeFunction
+      Principal: ses.amazonaws.com
+      SourceAccount: !Ref AWS::AccountId
+
+  # A rule set is only used once it is the active one; the deploy workflow
+  # activates it (CloudFormation cannot).
+  InboxRuleSet:
+    Type: AWS::SES::ReceiptRuleSet
+    Properties:
+      RuleSetName: xchange-inbox
+
+  InboxRule:
+    Type: AWS::SES::ReceiptRule
+    DependsOn:
+      - MailBucketPolicy
+      - MailInvokePermission
+    Properties:
+      RuleSetName: !Ref InboxRuleSet
+      Rule:
+        Name: xchange-inbox-pdfs
+        Enabled: true
+        Recipients:
+          - !Ref InboxDomain
+        # Spam and virus verdicts reach the mail function, which drops a FAIL.
+        ScanEnabled: true
+        TlsPolicy: Optional
+        Actions:
+          - S3Action:
+              BucketName: !Ref MailBucket
+              ObjectKeyPrefix: inbound/
+          - LambdaAction:
+              FunctionArn: !GetAtt MailFunction.Arn
+              InvocationType: Event
+
 Outputs:
   ServiceUrl:
     Description: >
@@ -499,3 +667,12 @@ Outputs:
 
   FunctionName:
     Value: !Ref Function
+
+  # The three CNAME records that verify the inbox domain for SES, to be set at
+  # the DNS host together with the MX record.
+  InboxDkim1:
+    Value: !Sub "${InboxIdentity.DkimDNSTokenName1} CNAME ${InboxIdentity.DkimDNSTokenValue1}"
+  InboxDkim2:
+    Value: !Sub "${InboxIdentity.DkimDNSTokenName2} CNAME ${InboxIdentity.DkimDNSTokenValue2}"
+  InboxDkim3:
+    Value: !Sub "${InboxIdentity.DkimDNSTokenName3} CNAME ${InboxIdentity.DkimDNSTokenValue3}"

@@ -48,6 +48,8 @@ public sealed class SignedInFactory : WebApplicationFactory<Program>
 
     public InMemoryImports Imports { get; } = new();
 
+    public InMemoryInboxDirectory Inboxes { get; } = new();
+
     public HttpClient As(string token)
     {
         var client = CreateClient();
@@ -92,6 +94,7 @@ public sealed class SignedInFactory : WebApplicationFactory<Program>
             services.RemoveAll<ILearningStore>();
             services.RemoveAll<IImportRepository>();
             services.RemoveAll<IImportQueue>();
+            services.RemoveAll<IInboxDirectory>();
 
             var identity = new SignedInIdentity();
             services.AddSingleton<IUserStore>(identity);
@@ -107,6 +110,7 @@ public sealed class SignedInFactory : WebApplicationFactory<Program>
             services.AddSingleton<ILearningStore>(Learning);
             services.AddSingleton<IImportRepository>(Imports);
             services.AddSingleton<IImportQueue>(Imports);
+            services.AddSingleton<IInboxDirectory>(Inboxes);
         });
     }
 
@@ -318,6 +322,44 @@ public sealed class InMemoryPlatform : IPlatformStore
         {
             return Task.FromResult(_invitations.Remove(codeHash));
         }
+    }
+}
+
+/// <summary>Inbox addresses in memory, both ways, as the identity table keeps them.</summary>
+public sealed class InMemoryInboxDirectory : IInboxDirectory
+{
+    private readonly Dictionary<string, string> _byLocal = [];
+    private readonly Dictionary<string, string> _byOrg = [];
+
+    public Task<string?> FindOrganizationAsync(string localPart, CancellationToken cancellationToken = default)
+    {
+        lock (_byLocal)
+        {
+            return Task.FromResult(_byLocal.GetValueOrDefault(localPart));
+        }
+    }
+
+    public Task<string?> GetLocalPartAsync(string organizationId, CancellationToken cancellationToken = default)
+    {
+        lock (_byLocal)
+        {
+            return Task.FromResult(_byOrg.GetValueOrDefault(organizationId));
+        }
+    }
+
+    public Task AssignAsync(string organizationId, string localPart, string? previousLocalPart, CancellationToken cancellationToken = default)
+    {
+        lock (_byLocal)
+        {
+            _byLocal[localPart] = organizationId;
+            _byOrg[organizationId] = localPart;
+            if (previousLocalPart is not null)
+            {
+                _byLocal.Remove(previousLocalPart);
+            }
+        }
+
+        return Task.CompletedTask;
     }
 }
 

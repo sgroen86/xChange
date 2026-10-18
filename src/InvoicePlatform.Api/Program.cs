@@ -105,6 +105,7 @@ api.MapPlatformEndpoints();
 api.MapReceiverEndpoints();
 api.MapLearningEndpoints();
 api.MapImportEndpoints();
+api.MapInboxEndpoints();
 
 app.Run();
 

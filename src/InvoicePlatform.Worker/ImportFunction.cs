@@ -25,8 +25,8 @@ namespace InvoicePlatform.Worker;
 /// </summary>
 public sealed class ImportFunction
 {
-    /// <summary>Built once per Lambda instance, like the API's container.</summary>
-    private static readonly Lazy<IServiceProvider> Services = new(Build);
+    /// <summary>Built once per Lambda instance, like the API's container; shared with MailFunction.</summary>
+    internal static readonly Lazy<IServiceProvider> Services = new(Build);
 
     private static IServiceProvider Build()
     {
