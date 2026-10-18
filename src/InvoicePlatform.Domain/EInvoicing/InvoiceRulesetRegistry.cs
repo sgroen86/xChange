@@ -1,9 +1,17 @@
+using InvoicePlatform.Domain.EInvoicing.Peppol;
+
 namespace InvoicePlatform.Domain.EInvoicing;
 
 /// <summary>The rulesets xChange can produce. The first one is the system default.</summary>
 public sealed class InvoiceRulesetRegistry
 {
     private readonly IReadOnlyList<IInvoiceRuleset> _rulesets;
+
+    /// <summary>Every ruleset xChange ships, PEPPOL BIS Billing 3.0 first.</summary>
+    public InvoiceRulesetRegistry()
+        : this([new PeppolBisBilling30Ruleset()])
+    {
+    }
 
     public InvoiceRulesetRegistry(IReadOnlyList<IInvoiceRuleset> rulesets)
     {
