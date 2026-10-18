@@ -39,6 +39,22 @@ public class BookInvoiceServiceTests
     }
 
     [Fact]
+    public async Task Booking_stores_the_calculated_totals_so_the_record_matches_the_export()
+    {
+        var draft = new CanonicalInvoiceDraft
+        {
+            Lines = [new CanonicalInvoiceLine { Quantity = 2m, UnitPrice = 10.00m, NetAmount = 99m, VatCategoryCode = "S", VatPercentage = 21m }],
+            Totals = new CanonicalTotals { PayableAmount = 1m },
+        };
+
+        var stored = await _service.BookAsync(OrgA, "u", draft, new byte[] { 1 }, "a.pdf", "m");
+
+        Assert.Equal(20.00m, stored.Invoice.Lines[0].NetAmount);
+        Assert.Equal(24.20m, stored.Invoice.Totals!.PayableAmount);
+        Assert.Equal(4.20m, Assert.Single(stored.Invoice.VatBreakdown).TaxAmount);
+    }
+
+    [Fact]
     public async Task A_booked_invoice_is_outgoing()
     {
         var stored = await _service.BookAsync(OrgA, "u", ADraft(), new byte[] { 1 }, "a.pdf", "m");

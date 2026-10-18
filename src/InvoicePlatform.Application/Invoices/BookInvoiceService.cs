@@ -1,4 +1,5 @@
 using InvoicePlatform.Application.Identity;
+using InvoicePlatform.Domain.Calculation;
 using InvoicePlatform.Domain.Canonical;
 using InvoicePlatform.Domain.Invoices;
 
@@ -41,7 +42,10 @@ public sealed class BookInvoiceService(
             InvoiceId = id,
             OrganizationId = organizationId,
             Status = InvoiceStatus.Booked,
-            Invoice = draft,
+            // The record keeps the calculated figures, the same ones an export
+            // writes, so the list, the review screen and the file agree. The
+            // printed figures were compared at extraction (CALC-* warnings).
+            Invoice = InvoiceTotalsCalculator.Apply(draft),
             DocumentKey = documentKey,
             SourceFileName = sourceFileName,
             SourceByteSize = pdf.Length,
