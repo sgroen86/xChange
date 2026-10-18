@@ -43,6 +43,18 @@ internal sealed class FakeInvoiceStore : IInvoiceRepository, IDocumentStore
 
     public Task<byte[]?> GetAsync(string documentKey, CancellationToken cancellationToken = default)
         => Task.FromResult(Documents.GetValueOrDefault(documentKey));
+
+    public Task DeleteAsync(string organizationId, string invoiceId, CancellationToken cancellationToken = default)
+    {
+        _invoices.Remove((organizationId, invoiceId));
+        return Task.CompletedTask;
+    }
+
+    public Task DeleteAsync(string documentKey, CancellationToken cancellationToken = default)
+    {
+        Documents.Remove(documentKey);
+        return Task.CompletedTask;
+    }
 }
 
 internal sealed class FakeSettingsStore : IOrganizationSettingsStore

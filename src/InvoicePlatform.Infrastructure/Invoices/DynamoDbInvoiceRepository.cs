@@ -95,6 +95,22 @@ internal sealed class DynamoDbInvoiceRepository(
         return response.Items.Select(ToInvoice).ToList();
     }
 
+    public Task DeleteAsync(
+        string organizationId,
+        string invoiceId,
+        CancellationToken cancellationToken = default)
+        => dynamo.DeleteItemAsync(
+            new DeleteItemRequest
+            {
+                TableName = _table,
+                Key = new Dictionary<string, AttributeValue>
+                {
+                    ["pk"] = new($"ORG#{organizationId}"),
+                    ["sk"] = new($"INVOICE#{invoiceId}"),
+                },
+            },
+            cancellationToken);
+
     private static AttributeValue Nullable(string? value)
         => value is null ? new AttributeValue { NULL = true } : new AttributeValue(value);
 

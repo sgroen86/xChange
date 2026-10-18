@@ -5,6 +5,7 @@ using InvoicePlatform.Application.Organizations;
 using InvoicePlatform.Domain.Canonical;
 using InvoicePlatform.Domain.EInvoicing;
 using InvoicePlatform.Domain.EInvoicing.Ubl;
+using InvoicePlatform.Domain.Invoices;
 using InvoicePlatform.Domain.Organizations;
 
 namespace InvoicePlatform.Application.Invoices;
@@ -71,6 +72,12 @@ public sealed partial class ExportInvoiceService(
         if (stored is null)
         {
             return ExportOutcome.NotFound;
+        }
+
+        // A concept is work in progress: the file is made from what was booked.
+        if (stored.Status != InvoiceStatus.Booked)
+        {
+            return ExportOutcome.NotBooked;
         }
 
         var enriched = await enrichment.EnrichAsync(organizationId, stored.Invoice, cancellationToken).ConfigureAwait(false);
@@ -145,6 +152,9 @@ public enum ExportOutcomeKind
 
     /// <summary>The organisation is on a trial: checking is free, the file needs a plan.</summary>
     PlanRequired,
+
+    /// <summary>The invoice is a saved concept; it is exported once booked.</summary>
+    NotBooked,
 }
 
 /// <param name="Warnings">Official warnings for an exported file; they do not block it.</param>
@@ -162,4 +172,6 @@ public sealed record ExportOutcome(
     public static readonly ExportOutcome ValidationUnavailable = new(ExportOutcomeKind.ValidationUnavailable);
 
     public static readonly ExportOutcome PlanRequired = new(ExportOutcomeKind.PlanRequired);
+
+    public static readonly ExportOutcome NotBooked = new(ExportOutcomeKind.NotBooked);
 }

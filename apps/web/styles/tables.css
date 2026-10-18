@@ -36,3 +36,5 @@
   font-size: var(--text-sm);
   font-variant-numeric: tabular-nums;
 }
+
+.cell-actions { text-align: right; width: 1%; white-space: nowrap; }

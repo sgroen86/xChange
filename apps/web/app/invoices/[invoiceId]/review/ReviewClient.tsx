@@ -24,6 +24,7 @@ import {
 } from "../../../../lib/canonical";
 import {
   bookInvoice,
+  saveInvoiceDraft,
   checkInvoice,
   lookupReceiver,
   type ReceiverLookup,
@@ -90,6 +91,7 @@ export default function ReviewClient() {
   /** Fingerprint of the invoice as booked; null while it has never been booked. */
   const [bookedFingerprint, setBookedFingerprint] = useState<string | null>(null);
   const [booking, setBooking] = useState(false);
+  const [saving, setSaving] = useState(false);
 
   const [settings, setSettings] = useState<OrganizationSettings>(FALLBACK_SETTINGS);
   const [chosenFormat, setChosenFormat] = useState<string | null>(null);
@@ -194,7 +196,8 @@ export default function ReviewClient() {
       .then((stored) => {
         if (cancelled) return;
         const invoice = normalizeInvoice(stored.canonicalInvoice);
-        setBookedFingerprint(editableFingerprint(invoice));
+        // A saved concept is on the server but not booked.
+        if (stored.status === "Booked") setBookedFingerprint(editableFingerprint(invoice));
         setDraft(
           (current) =>
             current ?? {
@@ -361,10 +364,46 @@ export default function ReviewClient() {
     }, 0);
   };
 
-  const onSave = () => {
-    if (!draft) return;
+  const onSave = async () => {
+    if (!draft || saving) return;
     saveDraft(draft);
-    showToast("Concept opgeslagen in deze browser.", "success");
+
+    if (!isApiConfigured) {
+      showToast("Concept opgeslagen in deze browser.", "success");
+      return;
+    }
+
+    if (booked) {
+      // Saving a booked invoice as a concept would undo the booking; the server refuses it.
+      showToast("Deze factuur is al geboekt. Klik op Opnieuw boeken om je wijzigingen te bewaren.", "danger");
+      return;
+    }
+
+    if (pdf.status !== "ready") {
+      showToast("Concept opgeslagen in deze browser. De PDF is niet beschikbaar, dus niet op de server.", "danger");
+      return;
+    }
+
+    setSaving(true);
+    try {
+      const blob = await (await fetch(pdf.url)).blob();
+      await saveInvoiceDraft({
+        invoiceId,
+        canonicalInvoice: draft.invoice,
+        pdf: blob,
+        sourceFileName: draft.source.fileName,
+        providerModel: draft.source.engine,
+      });
+      if (draft.fromImport) {
+        // Saved under Facturen: it no longer needs to wait in the list.
+        void dismissImport(invoiceId).catch(() => undefined);
+      }
+      showToast("Concept opgeslagen. Je vindt het terug onder Facturen.", "success");
+    } catch (cause) {
+      showToast(cause instanceof Error ? cause.message : "Opslaan is mislukt.", "danger");
+    } finally {
+      setSaving(false);
+    }
   };
 
   const onBook = async () => {
@@ -494,8 +533,8 @@ export default function ReviewClient() {
         </div>
         {!readOnly && (
           <div className="page-header__actions">
-            <button type="button" className="btn btn--secondary" onClick={onSave}>
-              <Icon name="save" /> Opslaan
+            <button type="button" className="btn btn--secondary" onClick={() => void onSave()} disabled={saving}>
+              <Icon name="save" /> {saving ? "Bezig…" : "Opslaan"}
             </button>
             <button type="button" className="btn btn--primary" onClick={() => void onBook()} disabled={booking}>
               <Icon name="check" /> {booking ? "Bezig…" : booked && !dirty ? "Opnieuw boeken" : "Boeken"}

@@ -20,6 +20,11 @@ public interface IInvoiceRepository
         string organizationId,
         int limit = 100,
         CancellationToken cancellationToken = default);
+
+    Task DeleteAsync(
+        string organizationId,
+        string invoiceId,
+        CancellationToken cancellationToken = default);
 }
 
 /// <summary>Object storage for the source documents.</summary>
@@ -34,4 +39,6 @@ public interface IDocumentStore
         CancellationToken cancellationToken = default);
 
     Task<byte[]?> GetAsync(string documentKey, CancellationToken cancellationToken = default);
+
+    Task DeleteAsync(string documentKey, CancellationToken cancellationToken = default);
 }

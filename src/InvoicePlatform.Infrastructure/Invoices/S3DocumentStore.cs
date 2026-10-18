@@ -64,4 +64,7 @@ internal sealed class S3DocumentStore(
             return null;
         }
     }
+
+    public Task DeleteAsync(string documentKey, CancellationToken cancellationToken = default)
+        => s3.DeleteObjectAsync(_bucket, documentKey, cancellationToken);
 }

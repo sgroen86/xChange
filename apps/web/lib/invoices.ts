@@ -96,6 +96,36 @@ export async function bookInvoice(input: {
   });
 }
 
+/**
+ * Keeps the invoice as a concept on the server, with its PDF, so it can be
+ * picked up in another browser. Refused (409) once the invoice is booked.
+ */
+export async function saveInvoiceDraft(input: {
+  invoiceId?: string;
+  canonicalInvoice: CanonicalInvoice;
+  pdf: Blob;
+  sourceFileName: string;
+  providerModel?: string;
+}): Promise<StoredInvoice> {
+  return request<StoredInvoice>("/api/v1/invoices/drafts", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      invoiceId: input.invoiceId,
+      canonicalInvoice: input.canonicalInvoice,
+      documentBase64: await toBase64(input.pdf),
+      sourceFileName: input.sourceFileName,
+      providerModel: input.providerModel,
+    }),
+  });
+}
+
+/** Removes the invoice and its PDF. */
+export async function deleteInvoice(invoiceId: string): Promise<void> {
+  const response = await send(`/api/v1/invoices/${invoiceId}`, { method: "DELETE" });
+  if (!response.ok) throw await failure(response);
+}
+
 export function listInvoices(): Promise<StoredInvoice[]> {
   return request<StoredInvoice[]>("/api/v1/invoices");
 }

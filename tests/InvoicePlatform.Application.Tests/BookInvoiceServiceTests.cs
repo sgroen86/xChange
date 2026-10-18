@@ -115,4 +115,72 @@ public class BookInvoiceServiceTests
         Assert.Single(await _service.ListAsync(OrgA));
         Assert.Equal("gecorrigeerd", (await _service.GetAsync(OrgA, first.InvoiceId))!.Invoice.Note);
     }
+
+    private static CanonicalInvoiceDraft ADraftFor(string buyerVat) => ADraft() with
+    {
+        Buyer = new CanonicalParty { Name = "Klant B.V.", VatIdentifier = buyerVat },
+    };
+
+    [Fact]
+    public async Task A_concept_is_kept_with_its_document_but_teaches_nothing()
+    {
+        var saved = await _service.SaveDraftAsync(OrgA, "u", ADraftFor("NL001234567B01"), new byte[] { 1, 2 }, "a.pdf", "m");
+
+        Assert.NotNull(saved);
+        Assert.Equal(InvoiceStatus.Draft, saved.Status);
+        Assert.Null(saved.BookedAt);
+        Assert.Equal(2, _store.Documents[saved.DocumentKey!].Length);
+        Assert.Empty(_relations.All);
+    }
+
+    [Fact]
+    public async Task Booking_a_concept_remembers_the_buyer_and_keeps_when_it_was_first_saved()
+    {
+        var saved = await _service.SaveDraftAsync(OrgA, "first", ADraftFor("NL001234567B01"), new byte[] { 1 }, "a.pdf", "m");
+        _clock.UtcNow = _clock.UtcNow.AddHours(1);
+
+        var booked = await _service.BookAsync(OrgA, "second", ADraftFor("NL001234567B01"), new byte[] { 1 }, "a.pdf", "m", saved!.InvoiceId);
+
+        Assert.Equal(InvoiceStatus.Booked, booked.Status);
+        Assert.Equal(saved.CreatedAt, booked.CreatedAt);
+        Assert.Equal("first", booked.CreatedByUserId);
+        Assert.Equal("second", booked.BookedByUserId);
+        Assert.Single(await _service.ListAsync(OrgA));
+        Assert.Single(_relations.All);
+    }
+
+    [Fact]
+    public async Task A_booked_invoice_is_not_saved_back_to_a_concept()
+    {
+        var booked = await _service.BookAsync(OrgA, "u", ADraft("F-1"), new byte[] { 1 }, "a.pdf", "m");
+
+        var saved = await _service.SaveDraftAsync(OrgA, "u", ADraft("F-1") with { Note = "later" }, new byte[] { 1 }, "a.pdf", "m", booked.InvoiceId);
+
+        Assert.Null(saved);
+        var kept = await _service.GetAsync(OrgA, booked.InvoiceId);
+        Assert.Equal(InvoiceStatus.Booked, kept!.Status);
+        Assert.Null(kept.Invoice.Note);
+    }
+
+    [Fact]
+    public async Task Deleting_removes_the_invoice_and_its_document()
+    {
+        var booked = await _service.BookAsync(OrgA, "u", ADraft(), new byte[] { 1 }, "a.pdf", "m");
+
+        Assert.True(await _service.DeleteAsync(OrgA, booked.InvoiceId));
+
+        Assert.Null(await _service.GetAsync(OrgA, booked.InvoiceId));
+        Assert.Empty(_store.Documents);
+    }
+
+    [Fact]
+    public async Task Another_organisation_cannot_delete_an_invoice()
+    {
+        var booked = await _service.BookAsync(OrgA, "u", ADraft(), new byte[] { 1 }, "a.pdf", "m");
+
+        Assert.False(await _service.DeleteAsync(OrgB, booked.InvoiceId));
+
+        Assert.NotNull(await _service.GetAsync(OrgA, booked.InvoiceId));
+        Assert.Single(_store.Documents);
+    }
 }

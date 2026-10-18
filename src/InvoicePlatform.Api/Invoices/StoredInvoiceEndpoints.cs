@@ -22,6 +22,16 @@ public static class StoredInvoiceEndpoints
             .RequireAuthenticatedUser()
             .RequireRole(UserRoleName.Admin, UserRoleName.User);
 
+        group.MapPost("/invoices/drafts", SaveDraftAsync)
+            .WithName("SaveInvoiceDraft")
+            .RequireAuthenticatedUser()
+            .RequireRole(UserRoleName.Admin, UserRoleName.User);
+
+        group.MapDelete("/invoices/{invoiceId}", DeleteAsync)
+            .WithName("DeleteInvoice")
+            .RequireAuthenticatedUser()
+            .RequireRole(UserRoleName.Admin, UserRoleName.User);
+
         group.MapGet("/invoices", ListAsync)
             .WithName("ListInvoices")
             .RequireAuthenticatedUser();
@@ -43,11 +53,78 @@ public static class StoredInvoiceEndpoints
         CancellationToken cancellationToken)
     {
         var user = context.GetAuthenticatedUser()!;
+        var (request, pdf, problem) = await ReadAsync(context, cancellationToken).ConfigureAwait(false);
+        if (problem is not null)
+        {
+            return problem;
+        }
 
-        // The body is read here rather than bound as a parameter. Minimal APIs
-        // bind arguments before endpoint filters run, so a bound parameter
-        // would let an anonymous caller get body-validation feedback (400)
-        // before the login check ever rejected them (401).
+        var stored = await service.BookAsync(
+            user.OrganizationId,
+            user.Id,
+            request!.CanonicalInvoice,
+            pdf!,
+            request.SourceFileName,
+            request.ProviderModel ?? "onbekend",
+            request.InvoiceId,
+            request.ExtractionId,
+            cancellationToken).ConfigureAwait(false);
+
+        return Results.Ok(ToResponse(stored));
+    }
+
+    private static async Task<IResult> SaveDraftAsync(
+        HttpContext context,
+        BookInvoiceService service,
+        CancellationToken cancellationToken)
+    {
+        var user = context.GetAuthenticatedUser()!;
+        var (request, pdf, problem) = await ReadAsync(context, cancellationToken).ConfigureAwait(false);
+        if (problem is not null)
+        {
+            return problem;
+        }
+
+        var stored = await service.SaveDraftAsync(
+            user.OrganizationId,
+            user.Id,
+            request!.CanonicalInvoice,
+            pdf!,
+            request.SourceFileName,
+            request.ProviderModel ?? "onbekend",
+            request.InvoiceId,
+            cancellationToken).ConfigureAwait(false);
+
+        return stored is null
+            ? Results.Problem(
+                detail: "Deze factuur is al geboekt. Boek hem opnieuw om je wijzigingen te bewaren.",
+                title: "Al geboekt",
+                statusCode: StatusCodes.Status409Conflict)
+            : Results.Ok(ToResponse(stored));
+    }
+
+    private static async Task<IResult> DeleteAsync(
+        string invoiceId,
+        HttpContext context,
+        BookInvoiceService service,
+        CancellationToken cancellationToken)
+    {
+        var user = context.GetAuthenticatedUser()!;
+        return await service.DeleteAsync(user.OrganizationId, invoiceId, cancellationToken).ConfigureAwait(false)
+            ? Results.NoContent()
+            : Results.NotFound();
+    }
+
+    /// <summary>
+    /// The body is read here rather than bound as a parameter. Minimal APIs
+    /// bind arguments before endpoint filters run, so a bound parameter would
+    /// let an anonymous caller get body-validation feedback (400) before the
+    /// login check ever rejected them (401).
+    /// </summary>
+    private static async Task<(BookInvoiceRequest? Request, byte[]? Pdf, IResult? Problem)> ReadAsync(
+        HttpContext context,
+        CancellationToken cancellationToken)
+    {
         BookInvoiceRequest? request;
         try
         {
@@ -62,37 +139,23 @@ public static class StoredInvoiceEndpoints
 
         if (request is null)
         {
-            return Results.Problem(
+            return (null, null, Results.Problem(
                 detail: "De aanvraag mist verplichte velden.",
                 title: "Ongeldige aanvraag",
-                statusCode: StatusCodes.Status400BadRequest);
+                statusCode: StatusCodes.Status400BadRequest));
         }
 
-        byte[] pdf;
         try
         {
-            pdf = Convert.FromBase64String(request.DocumentBase64);
+            return (request, Convert.FromBase64String(request.DocumentBase64), null);
         }
         catch (FormatException)
         {
-            return Results.Problem(
+            return (null, null, Results.Problem(
                 detail: "Het document is geen geldige base64.",
                 title: "Ongeldig document",
-                statusCode: StatusCodes.Status400BadRequest);
+                statusCode: StatusCodes.Status400BadRequest));
         }
-
-        var stored = await service.BookAsync(
-            user.OrganizationId,
-            user.Id,
-            request.CanonicalInvoice,
-            pdf,
-            request.SourceFileName,
-            request.ProviderModel ?? "onbekend",
-            request.InvoiceId,
-            request.ExtractionId,
-            cancellationToken).ConfigureAwait(false);
-
-        return Results.Ok(ToResponse(stored));
     }
 
     private static async Task<IResult> ListAsync(

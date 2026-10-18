@@ -135,6 +135,8 @@ Resources:
                 Action:
                   - s3:GetObject
                   - s3:PutObject
+                  # Deleting an invoice takes its PDF with it.
+                  - s3:DeleteObject
                 Resource: !Sub ${DocumentBucket.Arn}/*
               # Batch import: the API stores the PDF and queues it; the worker reads it.
               - Effect: Allow

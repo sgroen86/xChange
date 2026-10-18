@@ -81,6 +81,10 @@ public static class ExportEndpoints
                 detail: "In de proefperiode kun je alles controleren, maar het bestand downloaden kan met een abonnement.",
                 title: "Abonnement nodig",
                 statusCode: StatusCodes.Status402PaymentRequired),
+            ExportOutcomeKind.NotBooked => Results.Problem(
+                detail: "Dit is een concept. Boek de factuur om het bestand te maken.",
+                title: "Nog niet geboekt",
+                statusCode: StatusCodes.Status409Conflict),
             ExportOutcomeKind.UnknownRuleset => Results.Problem(
                 detail: $"Regelset '{ruleset}' bestaat niet.", title: "Onbekende regelset", statusCode: StatusCodes.Status400BadRequest),
             _ => Results.NotFound(),

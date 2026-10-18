@@ -220,6 +220,26 @@ public sealed class InMemoryInvoices : IInvoiceRepository, IDocumentStore
             return Task.FromResult(_documents.GetValueOrDefault(documentKey));
         }
     }
+
+    public Task DeleteAsync(string organizationId, string invoiceId, CancellationToken cancellationToken = default)
+    {
+        lock (_invoices)
+        {
+            _invoices.Remove((organizationId, invoiceId));
+        }
+
+        return Task.CompletedTask;
+    }
+
+    public Task DeleteAsync(string documentKey, CancellationToken cancellationToken = default)
+    {
+        lock (_documents)
+        {
+            _documents.Remove(documentKey);
+        }
+
+        return Task.CompletedTask;
+    }
 }
 
 public sealed class InMemorySettings : IOrganizationSettingsStore
