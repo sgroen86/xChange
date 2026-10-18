@@ -22,6 +22,12 @@ namespace InvoicePlatform.Infrastructure.Anthropic;
 public interface IAnthropicApiKeyProvider
 {
     Task<string> GetApiKeyAsync(CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// Forgets the cached key, so the next call reads it again. Used when
+    /// Anthropic rejects the key: it may have been rotated since it was cached.
+    /// </summary>
+    void Invalidate();
 }
 
 internal sealed class AnthropicApiKeyProvider : IAnthropicApiKeyProvider, IDisposable
@@ -93,6 +99,8 @@ internal sealed class AnthropicApiKeyProvider : IAnthropicApiKeyProvider, IDispo
             _gate.Release();
         }
     }
+
+    public void Invalidate() => _cached = null;
 
     public void Dispose() => _gate.Dispose();
 }
