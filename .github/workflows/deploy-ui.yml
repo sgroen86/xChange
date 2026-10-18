@@ -6,7 +6,7 @@ name: Deploy xChange UI
 #
 # Targets, both on the same Strato webspace (its home directory is the web root):
 #
-#   https://www.xchangeinvoice.com/        ~/xchangeinvoice  base path ""   (the app's own domain)
+#   https://app.xchangeinvoice.com/        ~/xchangeinvoice  base path ""   (the app's own domain)
 #   https://greenitsolutions.net/xchange/  ~/xchange         base path "/xchange"
 #
 # The second is the old address. It is published as well until the new domain
@@ -47,10 +47,10 @@ jobs:
         target:
           # Directory under the web root, and the URL prefix baked into the
           # build. These two must agree or the assets 404.
-          - name: xchangeinvoice.com
+          - name: app.xchangeinvoice.com
             deploy_dir: xchangeinvoice
             base_path: ""
-            site_origin: https://www.xchangeinvoice.com
+            site_origin: https://app.xchangeinvoice.com
           - name: greenitsolutions.net
             deploy_dir: xchange
             base_path: /xchange
@@ -176,7 +176,7 @@ jobs:
             ls -la "$DEPLOY_DIR" | head -20
 
       - name: Smoke-test the live site
-        # Until www.xchangeinvoice.com resolves and has a certificate, its check
+        # Until app.xchangeinvoice.com resolves and has a certificate, its check
         # cannot pass; the files are published regardless. Remove this line
         # once the domain is live.
         continue-on-error: ${{ matrix.target.deploy_dir == 'xchangeinvoice' }}

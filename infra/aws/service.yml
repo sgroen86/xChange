@@ -55,15 +55,11 @@ Parameters:
     Type: String
     Default: https://www.greenitsolutions.net
 
-  # The app's own domain (from 2026-10-18). Its bare form redirects to www, but
-  # both are allowed so a stray bare URL still works.
+  # The app's own address. www.xchangeinvoice.com is the public website,
+  # which never calls the API.
   AppOrigin:
     Type: String
-    Default: https://www.xchangeinvoice.com
-
-  AppOriginBare:
-    Type: String
-    Default: https://xchangeinvoice.com
+    Default: https://app.xchangeinvoice.com
 
   MemorySize:
     Type: Number
@@ -264,7 +260,6 @@ Resources:
           Cors__AllowedOrigins__0: !Ref AllowedOrigin
           Cors__AllowedOrigins__1: !Ref AllowedOriginWww
           Cors__AllowedOrigins__2: !Ref AppOrigin
-          Cors__AllowedOrigins__3: !Ref AppOriginBare
           OfficialValidation__FunctionName: !Ref ValidatorAlias
           Imports__QueueUrl: !Ref ImportQueue
           Inbox__Domain: !Ref InboxDomain

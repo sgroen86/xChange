@@ -13,11 +13,6 @@
 <IfModule mod_rewrite.c>
   RewriteEngine On
 
-  # The app's canonical address is www.xchangeinvoice.com. Only that host is
-  # matched, so the same file stays harmless under greenitsolutions.net/xchange.
-  RewriteCond %{HTTP_HOST} ^xchangeinvoice\.com$ [NC]
-  RewriteRule ^(.*)$ https://www.xchangeinvoice.com/$1 [R=301,L]
-
   RewriteCond %{REQUEST_FILENAME} !-f
   RewriteCond %{REQUEST_FILENAME} !-d
   RewriteRule ^invoices/[^/]+/review/?$ invoices/demo/review/index.html [L]
