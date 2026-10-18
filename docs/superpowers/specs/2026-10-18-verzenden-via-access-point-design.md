@@ -3,6 +3,10 @@
 **Datum:** 2026-10-18
 **Status:** plan; wacht op de keuze van een access point (zie "Beslissingen")
 
+> **Bijgesteld 2026-10-18:** xChange gaat eerst de markt op in **België en Nederland**.
+> Singapore blijft alleen een demo; daarvoor wordt geen access point aangesloten. Het
+> eerste access point is daarom een Europees (zie "Volgorde" en "Beslissingen").
+
 ## Doel
 
 Een geboekte, gevalideerde factuur met één klik bij de afnemer afleveren via PEPPOL (en
@@ -51,9 +55,10 @@ xChange werkt met **meer dan één access point** en kiest per verzending de bes
 - **Code:** `IAccessPoint` per partner, een register zoals `InvoiceRulesetRegistry`, en
   de verzending onthoudt via welk access point hij ging, zodat de status bij het juiste
   access point wordt opgevraagd.
-- **Volgorde:** eerst één access point voor Singapore (de eigen organisatie zit daar),
-  daarna een goedkopere Europese erbij zodra er organisaties in NL of BE zijn. De
-  architectuur staat beide vanaf het begin toe.
+- **Volgorde:** eerst één Europees access point voor afzenders in **België en
+  Nederland**. Een access point voor Singapore komt er alleen als die markt ooit
+  serieus wordt; een Singaporese demo-organisatie kan wel exporteren, maar verstuurt
+  niet. De architectuur blijft meerdere access points toestaan.
 
 | Afzender in | Kandidaten |
 |---|---|
@@ -61,8 +66,10 @@ xChange werkt met **meer dan één access point** en kiest per verzending de bes
 | Nederland, België | Recommand (vanaf €0,07), e-invoice.be (vanaf €0,18), Ademico, Storecove |
 | Verenigd Koninkrijk | Ademico, Storecove, e-invoice.be |
 
-**Voorstel:** sandbox-accounts aanvragen bij **Storecove** en **Ademico** voor Singapore,
-en bij **Recommand** voor Europa. Alle API's proberen met onze referentiebestanden
+**Voorstel (BE/NL):** beginnen met **Recommand** (Belgisch, open source, ons UBL gaat
+ongewijzigd door, webhooks, 25 documenten per maand gratis, daarna €0,30 tot €0,07 per
+document). Als tweede kandidaat **e-invoice.be** (gratis sandbox, €0,18–0,25 per
+document). Storecove en Ademico blijven alternatieven. Alle API's proberen met onze referentiebestanden
 (BIS 3.0, PINT-SG, NLCIUS), en per land kiezen op:
 1. ondersteuning van PINT-SG en NLCIUS als ruw document;
 2. de kwaliteit van de API en webhooks;
@@ -144,8 +151,9 @@ blijven aanpasbaar.
    via polling.
 2. **Afmaken:** webhooks, definitief na verzending, de schermen en aanmelden in
    Instellingen.
-3. **Live met de eigen organisatie:** Green IT Solutions verstuurt een echte factuur naar
-   een echte afnemer (VK via BIS 3.0, en een Singaporese via PINT-SG).
+3. **Live met een Belgische of Nederlandse organisatie:** een echte factuur naar een echte
+   afnemer, via BIS 3.0 (en NLCIUS waar een Nederlandse afnemer dat vraagt). De
+   Singaporese demo-organisatie verstuurt niet.
 4. **Later:** ontvangen (inkomende facturen naar PDF) via dezelfde partner.
 
 ## Kosten (indicatie)
@@ -157,8 +165,11 @@ Per verzonden factuur:
 
 ## Beslissingen voor de gebruiker
 
-1. **Welke partners:** meerdere, de beste per land van de afzender (besloten). Voorstel:
-   sandbox-accounts aanvragen bij Storecove en Ademico (Singapore) en Recommand (Europa).
+1. **Welke partners:** meerdere, de beste per land van de afzender (besloten); eerst
+   België en Nederland (besloten). Voorstel: beginnen met Recommand, met e-invoice.be als
+   tweede kandidaat.
+4. **Welke organisatie test live:** een Belgische of Nederlandse rechtspersoon, met eigen
+   KvK- of KBO-nummer, die als eerste afzender wordt aangemeld.
 2. **Definitief na verzending:** akkoord dat een verzonden factuur alleen met een
    creditnota wordt gecorrigeerd (voorstel: ja).
 3. **Aanmelden per organisatie:** elke organisatie wordt als eigen afzender aangemeld bij
