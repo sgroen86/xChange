@@ -16,6 +16,8 @@ export interface Relation {
   electronicAddress: string | null;
   electronicAddressScheme: string | null;
   countryCode: string | null;
+  /** The export format for invoices to this customer; null means the organisation's. */
+  defaultRulesetId: string | null;
   updatedAt: string;
 }
 

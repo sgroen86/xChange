@@ -32,6 +32,8 @@ import {
 } from "../../../../lib/invoices";
 import { formatMoney } from "../../../../lib/money";
 import { getPdf } from "../../../../lib/pdfStore";
+import { matchRelation } from "../../../../lib/relationKeys";
+import { listRelations, type Relation } from "../../../../lib/relations";
 import { defaultRulesetOf, FALLBACK_SETTINGS, getSettings, type OrganizationSettings } from "../../../../lib/settings";
 import { loadDraft, loadServerResult, saveDraft } from "../../../../lib/store";
 import { CANONICAL_FORMAT, ExportPanel } from "./ExportPanel";
@@ -83,7 +85,14 @@ export default function ReviewClient() {
 
   const [settings, setSettings] = useState<OrganizationSettings>(FALLBACK_SETTINGS);
   const [chosenFormat, setChosenFormat] = useState<string | null>(null);
-  const format = chosenFormat ?? defaultRulesetOf(settings).id;
+  const [relations, setRelations] = useState<Relation[]>([]);
+
+  /* A known customer with its own format opens on that one (piece 4); the
+     buyer is matched as the server does it, so editing the VAT number counts. */
+  const buyer = draft?.invoice.buyer ?? null;
+  const customer = useMemo(() => matchRelation(relations, buyer), [relations, buyer]);
+  const customerFormat = settings.rulesets.find((r) => r.id === customer?.defaultRulesetId) ?? null;
+  const format = chosenFormat ?? customerFormat?.id ?? defaultRulesetOf(settings).id;
   /** Tax categories, tax name and tax currency follow the chosen format; the canonical XML uses the default's. */
   const taxRuleset = settings.rulesets.find((r) => r.id === format) ?? defaultRulesetOf(settings);
   const taxName = taxRuleset.taxName === "btw" ? "Btw" : taxRuleset.taxName;
@@ -181,6 +190,13 @@ export default function ReviewClient() {
       })
       .catch(() => {
         // The fallback lists PEPPOL BIS 3.0, which is the system default anyway.
+      });
+    listRelations()
+      .then((loaded) => {
+        if (!cancelled) setRelations(loaded);
+      })
+      .catch(() => {
+        // Without relations the organisation's format is the default; nothing else depends on them.
       });
     return () => {
       cancelled = true;
@@ -427,6 +443,11 @@ export default function ReviewClient() {
             rulesets={settings.rulesets}
             format={format}
             onFormat={setChosenFormat}
+            defaultNote={
+              chosenFormat === null && customerFormat
+                ? `Standaardformaat van ${customer?.name ?? "deze afnemer"}.`
+                : null
+            }
             localIssues={local}
             violations={isRuleset ? violations : []}
             officialWarnings={isRuleset ? officialWarnings : []}
