@@ -1,6 +1,7 @@
 using System.Text;
 using InvoicePlatform.Application.Invoices;
 using InvoicePlatform.Application.Organizations;
+using InvoicePlatform.Application.Relations;
 using InvoicePlatform.Domain.Canonical;
 using InvoicePlatform.Domain.EInvoicing;
 using InvoicePlatform.Domain.EInvoicing.Peppol;
@@ -21,7 +22,7 @@ public class ExportInvoiceServiceTests
     public ExportInvoiceServiceTests()
     {
         var registry = new InvoiceRulesetRegistry([new PeppolBisBilling30Ruleset(), new RenamedPeppol()]);
-        _service = new ExportInvoiceService(_invoices, _settings, registry, new InvoiceEnrichment(_settings), new UblInvoiceWriter());
+        _service = new ExportInvoiceService(_invoices, _settings, registry, new InvoiceEnrichment(_settings, new RelationService(new FakeRelationStore(), new TestClock(DateTimeOffset.UnixEpoch))), new UblInvoiceWriter());
     }
 
     private async Task<string> Book(CanonicalInvoiceDraft draft, string organizationId = OrgA)

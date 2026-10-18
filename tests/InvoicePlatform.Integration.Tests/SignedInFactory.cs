@@ -1,9 +1,11 @@
 using InvoicePlatform.Application.Identity;
 using InvoicePlatform.Application.Invoices;
 using InvoicePlatform.Application.Organizations;
+using InvoicePlatform.Application.Relations;
 using InvoicePlatform.Domain.Canonical;
 using InvoicePlatform.Domain.Identity;
 using InvoicePlatform.Domain.Invoices;
+using InvoicePlatform.Domain.Relations;
 using Microsoft.AspNetCore.Mvc.Testing;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
@@ -24,6 +26,8 @@ public sealed class SignedInFactory : WebApplicationFactory<Program>
     public InMemoryInvoices Invoices { get; } = new();
 
     public InMemorySettings Settings { get; } = new();
+
+    public InMemoryRelations Relations { get; } = new();
 
     public HttpClient As(string token)
     {
@@ -60,6 +64,7 @@ public sealed class SignedInFactory : WebApplicationFactory<Program>
             services.RemoveAll<IOrganizationSettingsStore>();
             services.RemoveAll<IInvoiceRepository>();
             services.RemoveAll<IDocumentStore>();
+            services.RemoveAll<IRelationRepository>();
 
             var identity = new SignedInIdentity();
             services.AddSingleton<IUserStore>(identity);
@@ -68,6 +73,7 @@ public sealed class SignedInFactory : WebApplicationFactory<Program>
             services.AddSingleton<IOrganizationSettingsStore>(Settings);
             services.AddSingleton<IInvoiceRepository>(Invoices);
             services.AddSingleton<IDocumentStore>(Invoices);
+            services.AddSingleton<IRelationRepository>(Relations);
         });
     }
 
@@ -182,6 +188,38 @@ public sealed class InMemorySettings : IOrganizationSettingsStore
         lock (_settings)
         {
             _settings[settings.OrganizationId] = settings;
+        }
+
+        return Task.CompletedTask;
+    }
+}
+
+public sealed class InMemoryRelations : IRelationRepository
+{
+    private readonly Dictionary<(string Org, string Id), Relation> _relations = [];
+
+    public Task<IReadOnlyList<Relation>> ListAsync(string organizationId, CancellationToken cancellationToken = default)
+    {
+        lock (_relations)
+        {
+            return Task.FromResult<IReadOnlyList<Relation>>(
+                _relations.Where(kv => kv.Key.Org == organizationId).Select(kv => kv.Value).ToList());
+        }
+    }
+
+    public Task<Relation?> GetAsync(string organizationId, string relationId, CancellationToken cancellationToken = default)
+    {
+        lock (_relations)
+        {
+            return Task.FromResult(_relations.GetValueOrDefault((organizationId, relationId)));
+        }
+    }
+
+    public Task SaveAsync(Relation relation, CancellationToken cancellationToken = default)
+    {
+        lock (_relations)
+        {
+            _relations[(relation.OrganizationId, relation.RelationId)] = relation;
         }
 
         return Task.CompletedTask;

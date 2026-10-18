@@ -1,5 +1,6 @@
 using InvoicePlatform.Application.Identity;
 using InvoicePlatform.Application.Invoices;
+using InvoicePlatform.Application.Relations;
 using InvoicePlatform.Domain.Canonical;
 using InvoicePlatform.Domain.Invoices;
 
@@ -11,11 +12,12 @@ public class BookInvoiceServiceTests
     private const string OrgB = "org-b";
 
     private readonly FakeInvoiceStore _store = new();
+    private readonly FakeRelationStore _relations = new();
     private readonly TestClock _clock = new(DateTimeOffset.Parse("2026-09-08T12:00:00Z"));
     private readonly BookInvoiceService _service;
 
     public BookInvoiceServiceTests()
-        => _service = new BookInvoiceService(_store, _store, _clock);
+        => _service = new BookInvoiceService(_store, _store, _clock, new RelationService(_relations, _clock));
 
     private static CanonicalInvoiceDraft ADraft(string number = "F-1") => new()
     {

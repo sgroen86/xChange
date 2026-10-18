@@ -1,6 +1,7 @@
 using InvoicePlatform.Application.Interpretation;
 using InvoicePlatform.Application.Invoices;
 using InvoicePlatform.Application.Organizations;
+using InvoicePlatform.Application.Relations;
 using InvoicePlatform.Domain.EInvoicing;
 using InvoicePlatform.Domain.EInvoicing.Ubl;
 using InvoicePlatform.Domain.Serialization;
@@ -9,6 +10,7 @@ using Amazon.DynamoDBv2;
 using Amazon.S3;
 using InvoicePlatform.Application.Identity;
 using InvoicePlatform.Infrastructure.Invoices;
+using InvoicePlatform.Infrastructure.Relations;
 using InvoicePlatform.Infrastructure.Anthropic;
 using InvoicePlatform.Infrastructure.Identity;
 using Microsoft.Extensions.Configuration;
@@ -81,7 +83,7 @@ public static class DependencyInjection
         return services;
     }
 
-    /// <summary>Invoice persistence: records in DynamoDB, documents in S3.</summary>
+    /// <summary>Invoice persistence: records and relations in DynamoDB, documents in S3.</summary>
     public static IServiceCollection AddInvoiceStorage(
         this IServiceCollection services,
         IConfiguration configuration)
@@ -93,6 +95,8 @@ public static class DependencyInjection
         services.AddSingleton<IAmazonS3>(_ => new AmazonS3Client());
         services.AddSingleton<IInvoiceRepository, DynamoDbInvoiceRepository>();
         services.AddSingleton<IDocumentStore, S3DocumentStore>();
+        services.AddSingleton<IRelationRepository, DynamoDbRelationRepository>();
+        services.AddScoped<RelationService>();
         services.AddScoped<BookInvoiceService>();
         services.AddScoped<ExportInvoiceService>();
 

@@ -1,7 +1,9 @@
 using InvoicePlatform.Application.Identity;
 using InvoicePlatform.Application.Invoices;
 using InvoicePlatform.Application.Organizations;
+using InvoicePlatform.Application.Relations;
 using InvoicePlatform.Domain.Invoices;
+using InvoicePlatform.Domain.Relations;
 
 namespace InvoicePlatform.Application.Tests;
 
@@ -51,6 +53,26 @@ internal sealed class FakeSettingsStore : IOrganizationSettingsStore
     public Task SaveAsync(OrganizationSettings settings, CancellationToken cancellationToken = default)
     {
         _settings[settings.OrganizationId] = settings;
+        return Task.CompletedTask;
+    }
+}
+
+internal sealed class FakeRelationStore : IRelationRepository
+{
+    private readonly Dictionary<(string Org, string Id), Relation> _relations = [];
+
+    public IReadOnlyCollection<Relation> All => _relations.Values;
+
+    public Task<IReadOnlyList<Relation>> ListAsync(string organizationId, CancellationToken cancellationToken = default)
+        => Task.FromResult<IReadOnlyList<Relation>>(
+            _relations.Where(kv => kv.Key.Org == organizationId).Select(kv => kv.Value).ToList());
+
+    public Task<Relation?> GetAsync(string organizationId, string relationId, CancellationToken cancellationToken = default)
+        => Task.FromResult(_relations.GetValueOrDefault((organizationId, relationId)));
+
+    public Task SaveAsync(Relation relation, CancellationToken cancellationToken = default)
+    {
+        _relations[(relation.OrganizationId, relation.RelationId)] = relation;
         return Task.CompletedTask;
     }
 }
