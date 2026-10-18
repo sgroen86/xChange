@@ -46,9 +46,15 @@ mechanisme ontvangt later de PDF's die per e-mail binnenkomen.
 - SES ontvangt de mail in Frankfurt (`inbound-smtp.eu-central-1.amazonaws.com`) en legt
   hem in S3. De worker haalt de PDF-bijlagen eruit en zet ze als imports met afzender en
   onderwerp in dezelfde lijst. Een bijlage is niet aan de 4 MB van de API gebonden.
-- De gebruiker zet één MX-record en de DKIM-records voor het subdomein bij zijn
-  hostingpartij (Strato). De DKIM-records staan in de outputs van de service-stack
-  (`InboxDkim1` tot en met `InboxDkim3`).
+- De gebruiker zet één MX-record voor het subdomein bij zijn hostingpartij (Strato) en
+  verifieert het domein voor SES.
+  - Strato staat maar één CNAME toe, dus de drie DKIM-records uit de outputs van de
+    service-stack (`InboxDkim1` tot en met `InboxDkim3`) worden niet gebruikt.
+  - In plaats daarvan staat er één TXT-record: `_amazonses.inbox.greenitsolutions.net`.
+    Het token kwam op 2026-10-18 met de hand uit `aws ses verify-domain-identity`; de
+    CloudFormation-resource kent alleen DKIM.
+  - Ontvangen heeft alleen die verificatie nodig. Wordt de identiteit ooit opnieuw
+    aangemaakt, dan opnieuw `verify-domain-identity` draaien en het TXT-record bijwerken.
 - **Hoe het gebouwd is.**
   - SES (regelset `xchange-inbox`, door de deploy-workflow geactiveerd) zet de mail in
     `xchange-mail-<account>/inbound/` (30 dagen) en roept `xchange-mail` aan. Die zit in
