@@ -1,0 +1,129 @@
+name: Deploy xChange website
+
+# The public website (apps/site): a static export in S3 behind CloudFront,
+# stack xchange-site (infra/aws/site.yml). Until launch it sits behind a
+# password and sends noindex; the password lives in the Secrets Manager
+# secret xchange/site-preview ({"username": ..., "password": ...}).
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'apps/site/**'
+      - 'infra/aws/site.yml'
+      - '.github/workflows/deploy-site.yml'
+  workflow_dispatch:
+
+concurrency:
+  group: deploy-xchange-site
+  cancel-in-progress: false
+
+permissions:
+  id-token: write
+  contents: read
+
+env:
+  AWS_REGION: eu-central-1
+  SITE_STACK: xchange-site
+
+jobs:
+  deploy:
+    name: Build and publish
+    runs-on: ubuntu-latest
+    environment: xchange-aws
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v5
+        with:
+          fetch-depth: 1
+
+      - name: Setup Node
+        uses: actions/setup-node@v5
+        with:
+          node-version: '24'
+          cache: npm
+          cache-dependency-path: apps/site/package-lock.json
+
+      - name: Install dependencies
+        working-directory: apps/site
+        run: npm ci
+
+      - name: Lint
+        working-directory: apps/site
+        run: npm run lint
+
+      - name: Test
+        working-directory: apps/site
+        run: npm test
+
+      - name: Build static export
+        working-directory: apps/site
+        run: npm run build
+
+      - name: Verify the export
+        working-directory: apps/site
+        run: |
+          set -e
+          for page in index.html nl/index.html en/index.html fr/index.html nl/pricing/index.html robots.txt; do
+            test -f "out/$page" || { echo "Missing out/$page"; exit 1; }
+          done
+          # Hidden until launch: every page says noindex, robots.txt refuses all.
+          grep -q 'noindex' out/nl/index.html || { echo "nl/index.html lacks noindex"; exit 1; }
+          grep -q 'Disallow: /' out/robots.txt || { echo "robots.txt does not disallow"; exit 1; }
+          test ! -f out/sitemap.xml || { echo "No sitemap before launch"; exit 1; }
+
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ secrets.AWS_DEPLOY_ROLE_ARN }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      - name: Deploy the site stack
+        id: stack
+        run: |
+          set -e
+          # The preview login, never echoed: base64("user:password").
+          SECRET=$(aws secretsmanager get-secret-value --secret-id xchange/site-preview --query SecretString --output text)
+          CREDENTIALS=$(printf '%s' "$SECRET" | python3 -c "import base64,json,sys; s=json.load(sys.stdin); print(base64.b64encode(f\"{s['username']}:{s['password']}\".encode()).decode())")
+          echo "::add-mask::$CREDENTIALS"
+
+          aws cloudformation deploy \
+            --stack-name "$SITE_STACK" \
+            --template-file infra/aws/site.yml \
+            --no-fail-on-empty-changeset \
+            --parameter-overrides PreviewCredentials="$CREDENTIALS" Indexable=false
+
+          out() { aws cloudformation describe-stacks --stack-name "$SITE_STACK" --query "Stacks[0].Outputs[?OutputKey=='$1'].OutputValue" --output text; }
+          echo "bucket=$(out BucketName)" >> "$GITHUB_OUTPUT"
+          echo "distribution=$(out DistributionId)" >> "$GITHUB_OUTPUT"
+          echo "url=$(out SiteUrl)" >> "$GITHUB_OUTPUT"
+          echo "credentials=$CREDENTIALS" >> "$GITHUB_OUTPUT"
+
+      - name: Upload the site
+        working-directory: apps/site
+        run: |
+          set -e
+          BUCKET="${{ steps.stack.outputs.bucket }}"
+          # Hashed assets forever, everything else revalidated, then remove what is gone.
+          aws s3 sync out/_next "s3://$BUCKET/_next" --cache-control "public, max-age=31536000, immutable"
+          aws s3 sync out "s3://$BUCKET" --exclude "_next/*" --cache-control "no-cache" --delete
+          aws cloudfront create-invalidation --distribution-id "${{ steps.stack.outputs.distribution }}" --paths "/*" --query Invalidation.Id --output text
+
+      - name: Smoke-test the preview
+        run: |
+          set -e
+          URL="${{ steps.stack.outputs.url }}"
+          # Without the password: refused, and still marked noindex.
+          code=$(curl -s -o /dev/null -w '%{http_code}' "${URL}nl/")
+          [ "$code" = "401" ] || { echo "Expected 401 without the password, got $code"; exit 1; }
+          # With it: the page, and noindex on the response.
+          for attempt in 1 2 3 4 5 6; do
+            code=$(curl -s -o /tmp/page.html -D /tmp/headers.txt -w '%{http_code}' -H "Authorization: Basic ${{ steps.stack.outputs.credentials }}" "${URL}nl/pricing/")
+            [ "$code" = "200" ] && break
+            sleep 10
+          done
+          [ "$code" = "200" ] || { echo "Expected 200 with the password, got $code"; exit 1; }
+          grep -qi '^x-robots-tag: noindex' /tmp/headers.txt || { echo "Response lacks X-Robots-Tag noindex"; exit 1; }
+          echo "Preview live at $URL"
+          echo "### xChange website (preview, password protected): $URL" >> "$GITHUB_STEP_SUMMARY"

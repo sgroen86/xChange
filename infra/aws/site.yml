@@ -1,0 +1,197 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: >
+  xChange public website (apps/site): a static export in a private S3 bucket
+  behind CloudFront. While it is being built it sits behind a password and
+  tells search engines to stay away; both are lifted at launch, not before.
+
+  Deployed by .github/workflows/deploy-site.yml as the stack xchange-site.
+
+Parameters:
+  PreviewCredentials:
+    Type: String
+    NoEcho: true
+    Description: >
+      base64("user:password") for the preview login, read by the workflow from
+      the Secrets Manager secret xchange/site-preview. Empty means no password
+      (only at launch).
+
+  Indexable:
+    Type: String
+    Default: 'false'
+    AllowedValues: ['true', 'false']
+    Description: >
+      'false' sends X-Robots-Tag noindex, nofollow on every response. Set to
+      'true' only when the site launches.
+
+Conditions:
+  HasPassword: !Not [!Equals [!Ref PreviewCredentials, '']]
+  Hidden: !Equals [!Ref Indexable, 'false']
+
+Resources:
+  SiteBucket:
+    Type: AWS::S3::Bucket
+    Properties:
+      BucketName: !Sub xchange-site-${AWS::AccountId}
+      PublicAccessBlockConfiguration:
+        BlockPublicAcls: true
+        BlockPublicPolicy: true
+        IgnorePublicAcls: true
+        RestrictPublicBuckets: true
+      BucketEncryption:
+        ServerSideEncryptionConfiguration:
+          - ServerSideEncryptionByDefault:
+              SSEAlgorithm: AES256
+      Tags:
+        - Key: Project
+          Value: xchange
+
+  # Only this distribution may read the bucket; the bucket itself is private.
+  SiteOriginAccess:
+    Type: AWS::CloudFront::OriginAccessControl
+    Properties:
+      OriginAccessControlConfig:
+        Name: xchange-site
+        OriginAccessControlOriginType: s3
+        SigningBehavior: always
+        SigningProtocol: sigv4
+
+  SiteBucketPolicy:
+    Type: AWS::S3::BucketPolicy
+    Properties:
+      Bucket: !Ref SiteBucket
+      PolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: cloudfront.amazonaws.com
+            Action: s3:GetObject
+            Resource: !Sub ${SiteBucket.Arn}/*
+            Condition:
+              StringEquals:
+                AWS:SourceArn: !Sub arn:aws:cloudfront::${AWS::AccountId}:distribution/${SiteDistribution}
+
+  # Runs on every request before the cache: the preview password, and the
+  # directory index a static export needs (/nl/pricing/ -> /nl/pricing/index.html)
+  # because an S3 origin behind OAC does not serve index documents itself.
+  SiteRequestFunction:
+    Type: AWS::CloudFront::Function
+    Properties:
+      Name: xchange-site-request
+      AutoPublish: true
+      FunctionConfig:
+        Comment: Preview password and directory index for the xChange website
+        Runtime: cloudfront-js-2.0
+      FunctionCode: !Sub
+        - |
+          var expected = '${Expected}';
+          function handler(event) {
+            var request = event.request;
+            if (expected !== '') {
+              var auth = request.headers.authorization;
+              if (!auth || auth.value !== 'Basic ' + expected) {
+                return {
+                  statusCode: 401,
+                  statusDescription: 'Unauthorized',
+                  headers: {
+                    'www-authenticate': { value: 'Basic realm="xChange preview"' },
+                    'x-robots-tag': { value: 'noindex, nofollow' },
+                    'cache-control': { value: 'no-store' }
+                  }
+                };
+              }
+            }
+            var uri = request.uri;
+            // Next.js prefetches a page segment as __next.<a>.<b>.__PAGE__.txt,
+            // while the static export stores it as __next.<a>/<b>/__PAGE__.txt.
+            var slash = uri.lastIndexOf('/');
+            var name = uri.substring(slash + 1);
+            if (name.indexOf('__next.') === 0 && name.endsWith('.__PAGE__.txt')) {
+              var parts = name.substring(7, name.length - 13).split('.');
+              request.uri = uri.substring(0, slash + 1) + '__next.' + parts.join('/') + '/__PAGE__.txt';
+              return request;
+            }
+            if (uri.endsWith('/')) {
+              request.uri = uri + 'index.html';
+            } else if (uri.lastIndexOf('.') < uri.lastIndexOf('/')) {
+              request.uri = uri + '/index.html';
+            }
+            return request;
+          }
+        - Expected: !If [HasPassword, !Ref PreviewCredentials, '']
+
+  SiteHeaders:
+    Type: AWS::CloudFront::ResponseHeadersPolicy
+    Properties:
+      ResponseHeadersPolicyConfig:
+        Name: xchange-site-headers
+        Comment: Security headers, and noindex until launch
+        SecurityHeadersConfig:
+          StrictTransportSecurity:
+            AccessControlMaxAgeSec: 31536000
+            IncludeSubdomains: false
+            Override: true
+          ContentTypeOptions:
+            Override: true
+          FrameOptions:
+            FrameOption: DENY
+            Override: true
+          ReferrerPolicy:
+            ReferrerPolicy: strict-origin-when-cross-origin
+            Override: true
+        CustomHeadersConfig: !If
+          - Hidden
+          - Items:
+              - Header: X-Robots-Tag
+                Value: noindex, nofollow
+                Override: true
+          - !Ref AWS::NoValue
+
+  SiteDistribution:
+    Type: AWS::CloudFront::Distribution
+    Properties:
+      DistributionConfig:
+        Comment: xChange website
+        Enabled: true
+        HttpVersion: http2and3
+        IPV6Enabled: true
+        PriceClass: PriceClass_100
+        DefaultRootObject: index.html
+        Origins:
+          - Id: site
+            DomainName: !GetAtt SiteBucket.RegionalDomainName
+            OriginAccessControlId: !GetAtt SiteOriginAccess.Id
+            S3OriginConfig:
+              OriginAccessIdentity: ''
+        DefaultCacheBehavior:
+          TargetOriginId: site
+          ViewerProtocolPolicy: redirect-to-https
+          Compress: true
+          # AWS managed policy "CachingOptimized".
+          CachePolicyId: 658327ea-f89d-4fab-a63d-7e88639e58f6
+          ResponseHeadersPolicyId: !Ref SiteHeaders
+          FunctionAssociations:
+            - EventType: viewer-request
+              FunctionARN: !GetAtt SiteRequestFunction.FunctionMetadata.FunctionARN
+        CustomErrorResponses:
+          # The bucket answers 403 for a missing key; show the site's own 404.
+          - ErrorCode: 403
+            ResponseCode: 404
+            ResponsePagePath: /404.html
+            ErrorCachingMinTTL: 60
+          - ErrorCode: 404
+            ResponseCode: 404
+            ResponsePagePath: /404.html
+            ErrorCachingMinTTL: 60
+      Tags:
+        - Key: Project
+          Value: xchange
+
+Outputs:
+  BucketName:
+    Value: !Ref SiteBucket
+  DistributionId:
+    Value: !Ref SiteDistribution
+  SiteUrl:
+    Description: The preview address until www.xchangeinvoice.com is connected.
+    Value: !Sub https://${SiteDistribution.DomainName}/
