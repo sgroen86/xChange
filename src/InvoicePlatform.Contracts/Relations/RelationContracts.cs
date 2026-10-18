@@ -28,6 +28,10 @@ public sealed record RelationResponse
     [JsonPropertyName("countryCode")]
     public string? CountryCode { get; init; }
 
+    /// <summary>The export format for this customer; null means the organisation's.</summary>
+    [JsonPropertyName("defaultRulesetId")]
+    public string? DefaultRulesetId { get; init; }
+
     [JsonPropertyName("updatedAt")]
     public required DateTimeOffset UpdatedAt { get; init; }
 }
@@ -54,4 +58,7 @@ public sealed record UpdateRelationRequest
 
     [JsonPropertyName("countryCode")]
     public string? CountryCode { get; init; }
+
+    [JsonPropertyName("defaultRulesetId")]
+    public string? DefaultRulesetId { get; init; }
 }

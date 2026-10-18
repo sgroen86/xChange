@@ -2,6 +2,7 @@ using InvoicePlatform.Application.Identity;
 using InvoicePlatform.Application.Invoices;
 using InvoicePlatform.Application.Relations;
 using InvoicePlatform.Domain.Canonical;
+using InvoicePlatform.Domain.EInvoicing;
 using InvoicePlatform.Domain.Invoices;
 
 namespace InvoicePlatform.Application.Tests;
@@ -17,7 +18,7 @@ public class BookInvoiceServiceTests
     private readonly BookInvoiceService _service;
 
     public BookInvoiceServiceTests()
-        => _service = new BookInvoiceService(_store, _store, _clock, new RelationService(_relations, _clock));
+        => _service = new BookInvoiceService(_store, _store, _clock, new RelationService(_relations, _clock, new InvoiceRulesetRegistry()));
 
     private static CanonicalInvoiceDraft ADraft(string number = "F-1") => new()
     {

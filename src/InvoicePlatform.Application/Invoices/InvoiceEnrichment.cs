@@ -25,9 +25,11 @@ public sealed class InvoiceEnrichment(IOrganizationSettingsStore settings, Relat
         var notices = new List<ValidationWarning>();
 
         draft = await FillSellerAsync(organizationId, draft, notices, cancellationToken).ConfigureAwait(false);
-        draft = await FillBuyerAsync(organizationId, draft, notices, cancellationToken).ConfigureAwait(false);
 
-        return new EnrichmentResult(draft, notices);
+        var relation = await relations.FindForAsync(organizationId, draft.Buyer, cancellationToken).ConfigureAwait(false);
+        draft = FillBuyer(draft, relation, notices);
+
+        return new EnrichmentResult(draft, notices, relation);
     }
 
     /// <summary>The organisation is the seller: its own electronic address belongs there.</summary>
@@ -49,11 +51,9 @@ public sealed class InvoiceEnrichment(IOrganizationSettingsStore settings, Relat
         return draft with { Seller = seller with { ElectronicAddress = endpoint, ElectronicAddressScheme = scheme } };
     }
 
-    private async Task<CanonicalInvoiceDraft> FillBuyerAsync(
-        string organizationId, CanonicalInvoiceDraft draft, List<ValidationWarning> notices, CancellationToken cancellationToken)
+    private static CanonicalInvoiceDraft FillBuyer(CanonicalInvoiceDraft draft, Relation? relation, List<ValidationWarning> notices)
     {
         var buyer = draft.Buyer;
-        var relation = await relations.FindForAsync(organizationId, buyer, cancellationToken).ConfigureAwait(false);
         if (buyer is null || relation is null)
         {
             return draft;
@@ -126,4 +126,5 @@ public sealed class InvoiceEnrichment(IOrganizationSettingsStore settings, Relat
 }
 
 /// <param name="Notices">An Info warning per filled field and a Warning per conflict, for the review screen.</param>
-public sealed record EnrichmentResult(CanonicalInvoiceDraft Draft, IReadOnlyList<ValidationWarning> Notices);
+/// <param name="Relation">The known customer the buyer was recognised as, if any.</param>
+public sealed record EnrichmentResult(CanonicalInvoiceDraft Draft, IReadOnlyList<ValidationWarning> Notices, Relation? Relation = null);

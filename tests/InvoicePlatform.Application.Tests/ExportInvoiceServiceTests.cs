@@ -19,12 +19,14 @@ public class ExportInvoiceServiceTests
     private readonly FakeSettingsStore _settings = new();
     private readonly FakeOfficialValidator _official = new();
     private readonly FakePlatformStore _platform = new();
+    private readonly FakeRelationStore _relations = new();
     private readonly ExportInvoiceService _service;
 
     public ExportInvoiceServiceTests()
     {
         var registry = new InvoiceRulesetRegistry([new PeppolBisBilling30Ruleset(), new RenamedPeppol()]);
-        _service = new ExportInvoiceService(_invoices, _settings, registry, new InvoiceEnrichment(_settings, new RelationService(new FakeRelationStore(), new TestClock(DateTimeOffset.UnixEpoch))), new UblInvoiceWriter(), _official, _platform);
+        var relations = new RelationService(_relations, new TestClock(DateTimeOffset.UnixEpoch), registry);
+        _service = new ExportInvoiceService(_invoices, _settings, registry, new InvoiceEnrichment(_settings, relations), new UblInvoiceWriter(), _official, _platform);
     }
 
     private async Task<string> Book(CanonicalInvoiceDraft draft, string organizationId = OrgA)
@@ -67,7 +69,7 @@ public class ExportInvoiceServiceTests
             CreatedAt = DateTimeOffset.UnixEpoch,
         });
         var service = new ExportInvoiceService(
-            _invoices, _settings, new InvoiceRulesetRegistry(), new InvoiceEnrichment(_settings, new RelationService(new FakeRelationStore(), new TestClock(DateTimeOffset.UnixEpoch))),
+            _invoices, _settings, new InvoiceRulesetRegistry(), new InvoiceEnrichment(_settings, new RelationService(new FakeRelationStore(), new TestClock(DateTimeOffset.UnixEpoch), new InvoiceRulesetRegistry())),
             new UblInvoiceWriter(), _official, _platform);
         var id = await Book(CompleteInvoice.Singapore());
 
@@ -174,6 +176,51 @@ public class ExportInvoiceServiceTests
         var outcome = await _service.ExportAsync(OrgA, id, PeppolBisBilling30Ruleset.RulesetId);
 
         Assert.EndsWith("-peppol-bis-billing-3.0.xml", outcome.FileName, StringComparison.Ordinal);
+    }
+
+    private Task Customer(string? defaultRulesetId)
+        => _relations.SaveAsync(new InvoicePlatform.Domain.Relations.Relation
+        {
+            RelationId = "r1",
+            OrganizationId = OrgA,
+            VatIdentifier = "NL814912345B01",
+            DefaultRulesetId = defaultRulesetId,
+            UpdatedAt = DateTimeOffset.UnixEpoch,
+        });
+
+    [Fact]
+    public async Task The_customers_format_wins_over_the_organisation_default()
+    {
+        await _settings.SaveAsync(new OrganizationSettings { OrganizationId = OrgA, DefaultRulesetId = PeppolBisBilling30Ruleset.RulesetId });
+        await Customer("renamed");
+        var id = await Book(CompleteInvoice.Create());
+
+        var outcome = await _service.ExportAsync(OrgA, id, null);
+
+        Assert.EndsWith("-renamed.xml", outcome.FileName, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task The_requested_ruleset_wins_over_the_customers_format()
+    {
+        await Customer("renamed");
+        var id = await Book(CompleteInvoice.Create());
+
+        var outcome = await _service.ExportAsync(OrgA, id, PeppolBisBilling30Ruleset.RulesetId);
+
+        Assert.EndsWith("-peppol-bis-billing-3.0.xml", outcome.FileName, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task A_customers_format_that_no_longer_exists_falls_back_to_the_organisation()
+    {
+        await _settings.SaveAsync(new OrganizationSettings { OrganizationId = OrgA, DefaultRulesetId = "renamed" });
+        await Customer("xrechnung-9");
+        var id = await Book(CompleteInvoice.Create());
+
+        var outcome = await _service.ExportAsync(OrgA, id, null);
+
+        Assert.EndsWith("-renamed.xml", outcome.FileName, StringComparison.Ordinal);
     }
 
     [Fact]

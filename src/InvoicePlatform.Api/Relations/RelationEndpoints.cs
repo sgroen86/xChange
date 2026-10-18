@@ -63,7 +63,8 @@ public static class RelationEndpoints
                 request.LegalRegistrationScheme,
                 request.ElectronicAddress,
                 request.ElectronicAddressScheme,
-                request.CountryCode),
+                request.CountryCode,
+                request.DefaultRulesetId),
             cancellationToken).ConfigureAwait(false);
 
         return result.Outcome switch
@@ -85,6 +86,7 @@ public static class RelationEndpoints
         ElectronicAddress = relation.ElectronicAddress,
         ElectronicAddressScheme = relation.ElectronicAddressScheme,
         CountryCode = relation.CountryCode,
+        DefaultRulesetId = relation.DefaultRulesetId,
         UpdatedAt = relation.UpdatedAt,
     };
 }

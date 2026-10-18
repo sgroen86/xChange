@@ -31,5 +31,12 @@ public sealed record Relation
 
     public string? CountryCode { get; init; }
 
+    /// <summary>
+    /// The export format for invoices to this customer, chosen by hand; null
+    /// means the organisation's. A Singapore organisation sets BIS 3.0 here for
+    /// its UK customers.
+    /// </summary>
+    public string? DefaultRulesetId { get; init; }
+
     public required DateTimeOffset UpdatedAt { get; init; }
 }

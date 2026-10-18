@@ -32,13 +32,15 @@ public sealed class InvoiceRulesetRegistry
         => _rulesets.FirstOrDefault(ruleset => string.Equals(ruleset.Id, id, StringComparison.Ordinal));
 
     /// <summary>
-    /// The user's choice, else the organisation's default, else its country's
-    /// default, else the system default. A requested id that does not exist
+    /// The user's choice, else the first of the defaults that exists - in
+    /// xChange the customer's, the organisation's and its country's, in that
+    /// order - else the system default. A requested id that does not exist
     /// returns null, so the caller can say so; a stored default that no longer
     /// exists falls back quietly.
     /// </summary>
-    public IInvoiceRuleset? Resolve(string? requested, string? organizationDefault, string? countryDefault = null)
+    public IInvoiceRuleset? Resolve(string? requested, params string?[] defaults)
         => requested is not null
             ? Find(requested)
-            : Find(organizationDefault) ?? Find(countryDefault) ?? Default;
+            // A single null argument arrives as a null array, not as [null].
+            : (defaults ?? []).Select(Find).FirstOrDefault(ruleset => ruleset is not null) ?? Default;
 }

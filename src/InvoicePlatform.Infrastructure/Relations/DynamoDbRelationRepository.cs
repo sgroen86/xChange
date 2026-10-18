@@ -90,6 +90,7 @@ internal sealed class DynamoDbRelationRepository(
                     ["electronicAddress"] = Nullable(relation.ElectronicAddress),
                     ["electronicAddressScheme"] = Nullable(relation.ElectronicAddressScheme),
                     ["countryCode"] = Nullable(relation.CountryCode),
+                    ["defaultRulesetId"] = Nullable(relation.DefaultRulesetId),
                     ["updatedAt"] = new(relation.UpdatedAt.ToString("O")),
                 },
             },
@@ -112,6 +113,7 @@ internal sealed class DynamoDbRelationRepository(
         ElectronicAddress = Optional(item, "electronicAddress"),
         ElectronicAddressScheme = Optional(item, "electronicAddressScheme"),
         CountryCode = Optional(item, "countryCode"),
+        DefaultRulesetId = Optional(item, "defaultRulesetId"),
         UpdatedAt = DateTimeOffset.Parse(item["updatedAt"].S, System.Globalization.CultureInfo.InvariantCulture),
     };
 }
