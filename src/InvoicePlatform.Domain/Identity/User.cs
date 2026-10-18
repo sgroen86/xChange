@@ -46,6 +46,13 @@ public sealed record User
     /// <summary>A deactivated account keeps its history but cannot log in.</summary>
     public bool IsActive { get; init; } = true;
 
+    /// <summary>
+    /// Manages organisations across the platform. It grants no access to any
+    /// organisation's invoices, relations or settings: those are read with the
+    /// user's own organisation only.
+    /// </summary>
+    public bool IsPlatformAdmin { get; init; }
+
     public DateTimeOffset CreatedAt { get; init; }
 
     public DateTimeOffset? LastLoginAt { get; init; }
