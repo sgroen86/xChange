@@ -26,6 +26,10 @@ public static class ExtractionModels
     [
         new("claude-opus-5", "Claude Opus 5"),
         new("claude-opus-5-5", "Claude Opus 5.5"),
+        // Both read the test invoice correctly on 2026-10-18, at about a third
+        // (Sonnet) and a thirtieth (Haiku) of the cost of Opus.
+        new("claude-sonnet-5-5", "Claude Sonnet 5.5"),
+        new("claude-haiku-5-5", "Claude Haiku 5.5"),
     ];
 
     public static bool IsAllowed(string? id) => All.Any(m => m.Id == id);
