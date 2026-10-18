@@ -109,6 +109,10 @@ Alle vier achter een login, `readonly`-accounts mogen alleen lezen.
 
 ## Deel 3 — PEPPOL-export
 
+> **Vervangen** door `2026-10-18-rulesets-peppol-relaties-design.md`: regelsets in plaats
+> van één outputformaat, de organisatie als verkoper, en relaties. Wat hieronder staat is
+> de oorspronkelijke versie.
+
 ### Formaten als adapters
 
 ```csharp
