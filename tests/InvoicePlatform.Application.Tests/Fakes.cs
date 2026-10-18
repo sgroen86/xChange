@@ -2,7 +2,9 @@ using InvoicePlatform.Application.Identity;
 using InvoicePlatform.Application.Invoices;
 using InvoicePlatform.Application.Organizations;
 using InvoicePlatform.Application.Relations;
+using InvoicePlatform.Domain.Identity;
 using InvoicePlatform.Domain.Invoices;
+using InvoicePlatform.Domain.Organizations;
 using InvoicePlatform.Domain.Relations;
 
 namespace InvoicePlatform.Application.Tests;
@@ -75,4 +77,41 @@ internal sealed class FakeRelationStore : IRelationRepository
         _relations[(relation.OrganizationId, relation.RelationId)] = relation;
         return Task.CompletedTask;
     }
+}
+
+internal sealed class FakePlatformStore : IPlatformStore
+{
+    private readonly Dictionary<string, Organization> _organizations = [];
+    private readonly Dictionary<string, Invitation> _invitations = [];
+
+    public IReadOnlyDictionary<string, Invitation> Invitations => _invitations;
+
+    public Func<string, int> UserCount { get; set; } = _ => 0;
+
+    public Task<Organization?> FindOrganizationAsync(string organizationId, CancellationToken cancellationToken = default)
+        => Task.FromResult(_organizations.GetValueOrDefault(organizationId));
+
+    public Task<IReadOnlyList<Organization>> ListOrganizationsAsync(CancellationToken cancellationToken = default)
+        => Task.FromResult<IReadOnlyList<Organization>>(_organizations.Values.ToList());
+
+    public Task SaveOrganizationAsync(Organization organization, CancellationToken cancellationToken = default)
+    {
+        _organizations[organization.OrganizationId] = organization;
+        return Task.CompletedTask;
+    }
+
+    public Task<int> CountUsersAsync(string organizationId, CancellationToken cancellationToken = default)
+        => Task.FromResult(UserCount(organizationId));
+
+    public Task SaveInvitationAsync(Invitation invitation, CancellationToken cancellationToken = default)
+    {
+        _invitations[invitation.CodeHash] = invitation;
+        return Task.CompletedTask;
+    }
+
+    public Task<Invitation?> FindInvitationAsync(string codeHash, CancellationToken cancellationToken = default)
+        => Task.FromResult(_invitations.GetValueOrDefault(codeHash));
+
+    public Task<bool> TryDeleteInvitationAsync(string codeHash, CancellationToken cancellationToken = default)
+        => Task.FromResult(_invitations.Remove(codeHash));
 }

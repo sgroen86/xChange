@@ -74,11 +74,13 @@ public static class DependencyInjection
         services.AddSingleton<ISessionStore>(sp => sp.GetRequiredService<DynamoDbIdentityStore>());
         services.AddSingleton<ILoginAttemptStore>(sp => sp.GetRequiredService<DynamoDbIdentityStore>());
         services.AddSingleton<IOrganizationSettingsStore>(sp => sp.GetRequiredService<DynamoDbIdentityStore>());
+        services.AddSingleton<IPlatformStore, DynamoDbPlatformStore>();
 
         services.AddSingleton<IPasswordHasher, BcryptPasswordHasher>();
         services.AddSingleton<IClock, SystemClock>();
         services.AddScoped<AuthService>();
         services.AddScoped<OrganizationSettingsService>();
+        services.AddScoped<PlatformService>();
 
         return services;
     }

@@ -81,6 +81,8 @@ Resources:
                   - dynamodb:PutItem
                   - dynamodb:DeleteItem
                   - dynamodb:Scan
+                  # Listing organisations and counting their users.
+                  - dynamodb:Query
                 Resource: !GetAtt IdentityTable.Arn
 
         - PolicyName: invoice-storage

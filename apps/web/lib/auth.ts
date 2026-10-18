@@ -20,6 +20,20 @@ export interface SessionUser {
   email: string;
   name: string;
   role: UserRole;
+  /** Manages organisations; grants no access to other organisations' data. */
+  isPlatformAdmin?: boolean;
+}
+
+export interface CountryOption {
+  code: string;
+  name: string;
+}
+
+export interface InvitationDetails {
+  organizationName: string;
+  countryCode: string;
+  email: string;
+  name: string;
 }
 
 export interface Session {
@@ -162,13 +176,50 @@ export async function setupFirstUser(
   password: string,
   name: string,
   organizationName: string,
+  countryCode: string,
 ): Promise<Session> {
   const session = await post<Session>("/api/v1/auth/setup", {
     email,
     password,
     name,
     organizationName,
+    countryCode,
   });
+  store(session);
+  return session;
+}
+
+/** The countries an organisation can be in. Public: the setup screen needs it before any login. */
+export async function listCountries(): Promise<CountryOption[]> {
+  if (!isApiConfigured) return [];
+  const response = await fetch(`${API_BASE_URL}/api/v1/countries`).catch(() => null);
+  return response?.ok ? ((await response.json()) as CountryOption[]) : [];
+}
+
+/** What an invitation link shows before the account exists. */
+export async function getInvitation(code: string): Promise<InvitationDetails> {
+  if (!isApiConfigured) throw new ApiError("Er is geen API geconfigureerd.", 0);
+
+  let response: Response;
+  try {
+    response = await fetch(`${API_BASE_URL}/api/v1/invitations/${encodeURIComponent(code)}`);
+  } catch {
+    throw new ApiError("De API is niet bereikbaar.", 0);
+  }
+
+  const payload = await response.json().catch(() => null);
+  if (!response.ok) {
+    throw new ApiError(
+      (payload as { detail?: string } | null)?.detail ?? "Deze uitnodiging is ongeldig of verlopen.",
+      response.status,
+    );
+  }
+  return payload as InvitationDetails;
+}
+
+/** Turns an invitation into an account and signs in with it. */
+export async function acceptInvitation(code: string, name: string, password: string): Promise<Session> {
+  const session = await post<Session>(`/api/v1/invitations/${encodeURIComponent(code)}/accept`, { name, password });
   store(session);
   return session;
 }

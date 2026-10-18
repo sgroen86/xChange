@@ -1,4 +1,5 @@
 using InvoicePlatform.Application.Identity;
+using InvoicePlatform.Domain.Organizations;
 
 namespace InvoicePlatform.Api.Identity;
 
@@ -29,6 +30,18 @@ public static class AuthEndpoints
         group.MapGet("/auth/me", MeAsync)
             .WithName("AuthMe");
 
+        // Public by necessity, like login: the person has no account yet. Both
+        // count towards the same per-address lockout as wrong passwords.
+        group.MapGet("/invitations/{code}", GetInvitationAsync)
+            .WithName("GetInvitation");
+
+        group.MapPost("/invitations/{code}/accept", AcceptInvitationAsync)
+            .WithName("AcceptInvitation");
+
+        // Public: the setup screen needs the list before anyone can log in.
+        group.MapGet("/countries", () => Results.Ok(Countries.All.Select(c => new { code = c.Code, name = c.Name })))
+            .WithName("ListCountries");
+
         return group;
     }
 
@@ -48,6 +61,7 @@ public static class AuthEndpoints
             request.Password ?? string.Empty,
             request.Name ?? string.Empty,
             request.OrganizationName ?? string.Empty,
+            request.CountryCode ?? string.Empty,
             cancellationToken).ConfigureAwait(false);
 
         return result.Succeeded
@@ -109,7 +123,46 @@ public static class AuthEndpoints
                 email = user.Email,
                 name = user.Name,
                 role = user.Role.ToString(),
+                isPlatformAdmin = user.IsPlatformAdmin,
             });
+    }
+
+    private static async Task<IResult> GetInvitationAsync(
+        string code,
+        HttpContext context,
+        AuthService auth,
+        CancellationToken cancellationToken)
+    {
+        var lookup = await auth.GetInvitationAsync(code, ClientKey(context), cancellationToken).ConfigureAwait(false);
+
+        return lookup.Invitation is { } invitation
+            ? Results.Ok(new
+            {
+                organizationName = invitation.OrganizationName,
+                countryCode = invitation.CountryCode,
+                email = invitation.Email,
+                name = invitation.Name,
+            })
+            : Results.Problem(detail: lookup.Error, title: "Uitnodiging ongeldig", statusCode: StatusCodes.Status404NotFound);
+    }
+
+    private static async Task<IResult> AcceptInvitationAsync(
+        string code,
+        AcceptInvitationRequest request,
+        HttpContext context,
+        AuthService auth,
+        CancellationToken cancellationToken)
+    {
+        var result = await auth.AcceptInvitationAsync(
+            code,
+            request.Name ?? string.Empty,
+            request.Password ?? string.Empty,
+            ClientKey(context),
+            cancellationToken).ConfigureAwait(false);
+
+        return result.Succeeded
+            ? Results.Ok(ToResponse(result))
+            : Results.Problem(detail: result.Error, title: "Account niet aangemaakt", statusCode: StatusCodes.Status400BadRequest);
     }
 
     /// <summary>
@@ -149,10 +202,13 @@ public static class AuthEndpoints
                 email = result.User.Email,
                 name = result.User.Name,
                 role = result.User.Role.ToString(),
+                isPlatformAdmin = result.User.IsPlatformAdmin,
             },
     };
 
-    public sealed record SetupRequest(string? Email, string? Password, string? Name, string? OrganizationName);
+    public sealed record SetupRequest(string? Email, string? Password, string? Name, string? OrganizationName, string? CountryCode);
+
+    public sealed record AcceptInvitationRequest(string? Name, string? Password);
 
     public sealed record LoginRequest(string? Email, string? Password);
 }

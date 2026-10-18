@@ -1,4 +1,5 @@
 using InvoicePlatform.Domain.EInvoicing;
+using InvoicePlatform.Domain.Organizations;
 
 namespace InvoicePlatform.Application.Organizations;
 
@@ -9,8 +10,13 @@ namespace InvoicePlatform.Application.Organizations;
 /// </summary>
 public sealed class OrganizationSettingsService(
     IOrganizationSettingsStore store,
-    InvoiceRulesetRegistry rulesets)
+    InvoiceRulesetRegistry rulesets,
+    IPlatformStore platform)
 {
+    /// <summary>The caller's own organisation record: name and country. Null for an organisation created before records existed.</summary>
+    public Task<Organization?> GetOrganizationAsync(string organizationId, CancellationToken cancellationToken = default)
+        => platform.FindOrganizationAsync(organizationId, cancellationToken);
+
     public IReadOnlyList<IInvoiceRuleset> Rulesets => rulesets.All;
 
     /// <summary>The stored settings, or empty ones when nothing was saved yet.</summary>

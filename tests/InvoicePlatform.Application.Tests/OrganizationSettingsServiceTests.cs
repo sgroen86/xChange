@@ -9,7 +9,7 @@ public class OrganizationSettingsServiceTests
     private readonly OrganizationSettingsService _service;
 
     public OrganizationSettingsServiceTests()
-        => _service = new OrganizationSettingsService(_store, new InvoiceRulesetRegistry());
+        => _service = new OrganizationSettingsService(_store, new InvoiceRulesetRegistry(), new FakePlatformStore());
 
     [Fact]
     public async Task Nothing_saved_yet_means_empty_settings_for_that_organisation()

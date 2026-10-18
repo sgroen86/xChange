@@ -1,4 +1,6 @@
+using InvoicePlatform.Application.Organizations;
 using InvoicePlatform.Domain.Identity;
+using InvoicePlatform.Domain.Organizations;
 
 namespace InvoicePlatform.Application.Identity;
 
@@ -19,7 +21,14 @@ public sealed record AuthenticatedUser(
     string OrganizationId,
     string Email,
     string Name,
-    UserRole Role);
+    UserRole Role,
+    bool IsPlatformAdmin = false);
+
+/// <summary>What an invitation link shows before the account exists. Never carries the code.</summary>
+public sealed record InvitationInfo(string OrganizationName, string CountryCode, string Email, string Name);
+
+/// <param name="Invitation">Null when the code cannot be used; Error says why.</param>
+public sealed record InvitationLookup(InvitationInfo? Invitation, string? Error);
 
 /// <summary>
 /// Login, logout and session validation.
@@ -35,20 +44,28 @@ public sealed class AuthService(
     ISessionStore sessions,
     ILoginAttemptStore attempts,
     IPasswordHasher passwords,
-    IClock clock)
+    IClock clock,
+    IPlatformStore platform)
 {
+    /// <summary>One message for every unusable invitation, so the API does not reveal which codes existed.</summary>
+    private const string InvalidInvitation = "Deze uitnodiging is ongeldig of verlopen.";
+
     /// <summary>
     /// Creates the first account and its organization.
     ///
     /// Mirrors Bookkeeping's setup.php: it works only while no user exists, so
     /// it closes itself permanently the moment the first account is made. The
     /// endpoint is public by necessity - there is nobody to authenticate as yet.
+    ///
+    /// The first account is also the platform administrator: on a new
+    /// installation there is nobody else to create organisations.
     /// </summary>
     public async Task<AuthResult> SetupFirstUserAsync(
         string email,
         string password,
         string name,
         string organizationName,
+        string countryCode,
         CancellationToken cancellationToken = default)
     {
         if (await users.AnyUsersExistAsync(cancellationToken).ConfigureAwait(false))
@@ -60,6 +77,16 @@ public sealed class AuthService(
         if (validation is not null)
         {
             return AuthResult.Fail(validation);
+        }
+
+        if (string.IsNullOrWhiteSpace(organizationName))
+        {
+            return AuthResult.Fail("Naam van de organisatie is verplicht.");
+        }
+
+        if (!Countries.IsSupported(countryCode))
+        {
+            return AuthResult.Fail("Kies een land uit de lijst.");
         }
 
         var now = clock.UtcNow;
@@ -74,6 +101,7 @@ public sealed class AuthService(
             Name = name.Trim(),
             Role = UserRole.Admin,
             IsActive = true,
+            IsPlatformAdmin = true,
             CreatedAt = now,
         };
 
@@ -89,7 +117,16 @@ public sealed class AuthService(
             return AuthResult.Fail("Er bestaat al een account. Gebruik inloggen.");
         }
 
-        _ = organizationName; // Reserved for the organisation record; not stored yet.
+        await platform.SaveOrganizationAsync(
+            new Organization
+            {
+                OrganizationId = user.OrganizationId,
+                Name = organizationName.Trim(),
+                CountryCode = Countries.Find(countryCode)!.Code,
+                CreatedAt = now,
+                CreatedByUserId = user.Id,
+            },
+            cancellationToken).ConfigureAwait(false);
 
         return await IssueSessionAsync(user, cancellationToken).ConfigureAwait(false);
     }
@@ -164,7 +201,129 @@ public sealed class AuthService(
             return null;
         }
 
-        return new AuthenticatedUser(user.Id, user.OrganizationId, user.Email, user.Name, user.Role);
+        return ToAuthenticated(user);
+    }
+
+    /// <summary>
+    /// What an invitation link shows: organisation and email. Unknown, used
+    /// and expired codes count as failed attempts for the caller's address,
+    /// like wrong passwords, so codes cannot be guessed at speed.
+    /// </summary>
+    public async Task<InvitationLookup> GetInvitationAsync(
+        string code,
+        string clientKey,
+        CancellationToken cancellationToken = default)
+    {
+        var now = clock.UtcNow;
+        var record = await attempts.GetAsync(clientKey, cancellationToken).ConfigureAwait(false);
+        if (record is not null && record.IsLocked(now))
+        {
+            return new InvitationLookup(null, "Te veel pogingen. Wacht 15 minuten.");
+        }
+
+        var invitation = await FindUsableInvitationAsync(code, now, cancellationToken).ConfigureAwait(false);
+        if (invitation is null)
+        {
+            await RecordFailureAsync(clientKey, record, now, cancellationToken).ConfigureAwait(false);
+            return new InvitationLookup(null, InvalidInvitation);
+        }
+
+        var organization = await platform.FindOrganizationAsync(invitation.OrganizationId, cancellationToken)
+            .ConfigureAwait(false);
+        return new InvitationLookup(
+            new InvitationInfo(organization?.Name ?? "", organization?.CountryCode ?? "", invitation.Email, invitation.Name),
+            null);
+    }
+
+    /// <summary>
+    /// Turns an invitation into an account: Admin of the invited organisation,
+    /// signed in at once. The invitation is consumed before the account is
+    /// made, so it cannot be used twice, even by two simultaneous requests.
+    /// </summary>
+    public async Task<AuthResult> AcceptInvitationAsync(
+        string code,
+        string name,
+        string password,
+        string clientKey,
+        CancellationToken cancellationToken = default)
+    {
+        var now = clock.UtcNow;
+        var record = await attempts.GetAsync(clientKey, cancellationToken).ConfigureAwait(false);
+        if (record is not null && record.IsLocked(now))
+        {
+            return AuthResult.Fail("Te veel pogingen. Wacht 15 minuten.");
+        }
+
+        var invitation = await FindUsableInvitationAsync(code, now, cancellationToken).ConfigureAwait(false);
+        if (invitation is null)
+        {
+            await RecordFailureAsync(clientKey, record, now, cancellationToken).ConfigureAwait(false);
+            return AuthResult.Fail(InvalidInvitation);
+        }
+
+        var validation = ValidateCredentials(invitation.Email, password, name);
+        if (validation is not null)
+        {
+            return AuthResult.Fail(validation);
+        }
+
+        if (await users.FindByEmailAsync(invitation.Email, cancellationToken).ConfigureAwait(false) is not null)
+        {
+            return AuthResult.Fail("Er bestaat al een account met dit e-mailadres. Gebruik inloggen.");
+        }
+
+        if (!await platform.TryDeleteInvitationAsync(invitation.CodeHash, cancellationToken).ConfigureAwait(false))
+        {
+            return AuthResult.Fail(InvalidInvitation);
+        }
+
+        var user = new User
+        {
+            Id = Guid.NewGuid().ToString("n"),
+            OrganizationId = invitation.OrganizationId,
+            Email = invitation.Email,
+            PasswordHash = passwords.Hash(password),
+            Name = name.Trim(),
+            Role = UserRole.Admin,
+            IsActive = true,
+            CreatedAt = now,
+        };
+
+        try
+        {
+            await users.AddAsync(user, cancellationToken).ConfigureAwait(false);
+        }
+        catch (InvalidOperationException)
+        {
+            return AuthResult.Fail("Er bestaat al een account met dit e-mailadres. Gebruik inloggen.");
+        }
+
+        var organization = await platform.FindOrganizationAsync(invitation.OrganizationId, cancellationToken)
+            .ConfigureAwait(false);
+        if (organization is not null && organization.PendingInvitationHash == invitation.CodeHash)
+        {
+            await platform.SaveOrganizationAsync(
+                organization with { PendingInvitationHash = null, PendingInvitationEmail = null, PendingInvitationExpiresAt = null },
+                cancellationToken).ConfigureAwait(false);
+        }
+
+        await attempts.ClearAsync(clientKey, cancellationToken).ConfigureAwait(false);
+        return await IssueSessionAsync(user, cancellationToken).ConfigureAwait(false);
+    }
+
+    private async Task<Invitation?> FindUsableInvitationAsync(
+        string code,
+        DateTimeOffset now,
+        CancellationToken cancellationToken)
+    {
+        if (string.IsNullOrWhiteSpace(code))
+        {
+            return null;
+        }
+
+        var invitation = await platform.FindInvitationAsync(Invitation.HashOf(code), cancellationToken)
+            .ConfigureAwait(false);
+        return invitation is null || invitation.IsExpired(now) ? null : invitation;
     }
 
     public Task LogoutAsync(string token, CancellationToken cancellationToken = default)
@@ -186,8 +345,11 @@ public sealed class AuthService(
             true,
             Token: session.Token,
             ExpiresAt: session.ExpiresAt,
-            User: new AuthenticatedUser(user.Id, user.OrganizationId, user.Email, user.Name, user.Role));
+            User: ToAuthenticated(user));
     }
+
+    private static AuthenticatedUser ToAuthenticated(User user)
+        => new(user.Id, user.OrganizationId, user.Email, user.Name, user.Role, user.IsPlatformAdmin);
 
     private async Task RecordFailureAsync(
         string clientKey,
