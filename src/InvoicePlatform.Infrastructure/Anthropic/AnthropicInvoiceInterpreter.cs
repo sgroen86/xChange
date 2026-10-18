@@ -289,10 +289,15 @@ public sealed class AnthropicInvoiceInterpreter : IInvoiceInterpreter
             throw new InvoiceInterpretationException("The model returned an empty result.");
         }
 
+        // Token counts, not content: what an extraction costs is read from these.
         _logger.LogInformation(
-            "Interpreted invoice with {Model} in {DurationMs}ms",
+            "Interpreted invoice with {Model} in {DurationMs}ms: {InputTokens} input tokens, {OutputTokens} output tokens, {PdfBytes} PDF bytes, {Hints} hints",
             _options.Model,
-            stopwatch.ElapsedMilliseconds);
+            stopwatch.ElapsedMilliseconds,
+            response.Usage.InputTokens,
+            response.Usage.OutputTokens,
+            pdf.Length,
+            hints?.Count ?? 0);
 
         return new InvoiceInterpretationResult(
             extracted.ToDomain(),
