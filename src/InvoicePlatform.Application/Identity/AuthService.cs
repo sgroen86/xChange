@@ -5,14 +5,18 @@ using InvoicePlatform.Domain.Organizations;
 namespace InvoicePlatform.Application.Identity;
 
 /// <summary>Outcome of a login or setup attempt. Never carries the hash.</summary>
+/// <param name="LockedOut">Refused because the address tried too often: the caller should wait, whatever the message says.</param>
 public sealed record AuthResult(
     bool Succeeded,
     string? Error = null,
     string? Token = null,
     DateTimeOffset? ExpiresAt = null,
-    AuthenticatedUser? User = null)
+    AuthenticatedUser? User = null,
+    bool LockedOut = false)
 {
     public static AuthResult Fail(string error) => new(false, error);
+
+    public static AuthResult Locked() => new(false, IdentityText.Current.TooManyAttempts, LockedOut: true);
 }
 
 /// <summary>What the API may safely tell the browser about the signed-in user.</summary>
@@ -47,9 +51,6 @@ public sealed class AuthService(
     IClock clock,
     IPlatformStore platform)
 {
-    /// <summary>One message for every unusable invitation, so the API does not reveal which codes existed.</summary>
-    private const string InvalidInvitation = "Deze uitnodiging is ongeldig of verlopen.";
-
     /// <summary>
     /// Creates the first account and its organization.
     ///
@@ -70,7 +71,7 @@ public sealed class AuthService(
     {
         if (await users.AnyUsersExistAsync(cancellationToken).ConfigureAwait(false))
         {
-            return AuthResult.Fail("Er bestaat al een account. Gebruik inloggen.");
+            return AuthResult.Fail(IdentityText.Current.AccountExists);
         }
 
         var validation = ValidateCredentials(email, password, name);
@@ -81,12 +82,12 @@ public sealed class AuthService(
 
         if (string.IsNullOrWhiteSpace(organizationName))
         {
-            return AuthResult.Fail("Naam van de organisatie is verplicht.");
+            return AuthResult.Fail(IdentityText.Current.OrganizationNameRequired);
         }
 
         if (!Countries.IsSupported(countryCode))
         {
-            return AuthResult.Fail("Kies een land uit de lijst.");
+            return AuthResult.Fail(IdentityText.Current.ChooseCountry);
         }
 
         var now = clock.UtcNow;
@@ -114,7 +115,7 @@ public sealed class AuthService(
             // The store refused a duplicate. Reaching here means the existence
             // check above was wrong, so say something useful rather than
             // letting an unhandled exception become a 500.
-            return AuthResult.Fail("Er bestaat al een account. Gebruik inloggen.");
+            return AuthResult.Fail(IdentityText.Current.AccountExists);
         }
 
         await platform.SaveOrganizationAsync(
@@ -147,7 +148,7 @@ public sealed class AuthService(
         var record = await attempts.GetAsync(clientKey, cancellationToken).ConfigureAwait(false);
         if (record is not null && record.IsLocked(now))
         {
-            return AuthResult.Fail("Te veel pogingen. Wacht 15 minuten.");
+            return AuthResult.Locked();
         }
 
         var user = await users.FindByEmailAsync(User.NormalizeEmail(email), cancellationToken)
@@ -158,14 +159,14 @@ public sealed class AuthService(
         if (user is null || !passwords.Verify(password, user.PasswordHash))
         {
             await RecordFailureAsync(clientKey, record, now, cancellationToken).ConfigureAwait(false);
-            return AuthResult.Fail("Ongeldige inloggegevens.");
+            return AuthResult.Fail(IdentityText.Current.InvalidCredentials);
         }
 
         if (!user.IsActive)
         {
             // Distinct from a wrong password on purpose: the credentials were
             // right, and the person needs to know it is an account problem.
-            return AuthResult.Fail("Account gedeactiveerd.");
+            return AuthResult.Fail(IdentityText.Current.AccountDeactivated);
         }
 
         await attempts.ClearAsync(clientKey, cancellationToken).ConfigureAwait(false);
@@ -218,14 +219,15 @@ public sealed class AuthService(
         var record = await attempts.GetAsync(clientKey, cancellationToken).ConfigureAwait(false);
         if (record is not null && record.IsLocked(now))
         {
-            return new InvitationLookup(null, "Te veel pogingen. Wacht 15 minuten.");
+            return new InvitationLookup(null, IdentityText.Current.TooManyAttempts);
         }
 
         var invitation = await FindUsableInvitationAsync(code, now, cancellationToken).ConfigureAwait(false);
         if (invitation is null)
         {
             await RecordFailureAsync(clientKey, record, now, cancellationToken).ConfigureAwait(false);
-            return new InvitationLookup(null, InvalidInvitation);
+            // One message for every unusable invitation, so the API does not reveal which codes existed.
+            return new InvitationLookup(null, IdentityText.Current.InvalidInvitation);
         }
 
         var organization = await platform.FindOrganizationAsync(invitation.OrganizationId, cancellationToken)
@@ -251,14 +253,14 @@ public sealed class AuthService(
         var record = await attempts.GetAsync(clientKey, cancellationToken).ConfigureAwait(false);
         if (record is not null && record.IsLocked(now))
         {
-            return AuthResult.Fail("Te veel pogingen. Wacht 15 minuten.");
+            return AuthResult.Locked();
         }
 
         var invitation = await FindUsableInvitationAsync(code, now, cancellationToken).ConfigureAwait(false);
         if (invitation is null)
         {
             await RecordFailureAsync(clientKey, record, now, cancellationToken).ConfigureAwait(false);
-            return AuthResult.Fail(InvalidInvitation);
+            return AuthResult.Fail(IdentityText.Current.InvalidInvitation);
         }
 
         var validation = ValidateCredentials(invitation.Email, password, name);
@@ -269,12 +271,12 @@ public sealed class AuthService(
 
         if (await users.FindByEmailAsync(invitation.Email, cancellationToken).ConfigureAwait(false) is not null)
         {
-            return AuthResult.Fail("Er bestaat al een account met dit e-mailadres. Gebruik inloggen.");
+            return AuthResult.Fail(IdentityText.Current.AccountWithEmailExistsLogIn);
         }
 
         if (!await platform.TryDeleteInvitationAsync(invitation.CodeHash, cancellationToken).ConfigureAwait(false))
         {
-            return AuthResult.Fail(InvalidInvitation);
+            return AuthResult.Fail(IdentityText.Current.InvalidInvitation);
         }
 
         var user = new User
@@ -295,7 +297,7 @@ public sealed class AuthService(
         }
         catch (InvalidOperationException)
         {
-            return AuthResult.Fail("Er bestaat al een account met dit e-mailadres. Gebruik inloggen.");
+            return AuthResult.Fail(IdentityText.Current.AccountWithEmailExistsLogIn);
         }
 
         var organization = await platform.FindOrganizationAsync(invitation.OrganizationId, cancellationToken)
@@ -382,18 +384,18 @@ public sealed class AuthService(
     {
         if (string.IsNullOrWhiteSpace(email) || !email.Contains('@', StringComparison.Ordinal))
         {
-            return "Ongeldig e-mailadres.";
+            return IdentityText.Current.InvalidEmail;
         }
 
         if (string.IsNullOrWhiteSpace(name))
         {
-            return "Naam is verplicht.";
+            return IdentityText.Current.NameRequired;
         }
 
         // Length is the property that actually matters; composition rules push
         // people towards predictable substitutions.
         return password.Length < 12
-            ? "Wachtwoord moet minimaal 12 tekens bevatten."
+            ? IdentityText.Current.PasswordTooShort
             : null;
     }
 }

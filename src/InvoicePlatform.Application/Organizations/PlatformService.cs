@@ -88,7 +88,7 @@ public sealed class PlatformService(IPlatformStore store, IUserStore users, IClo
         var model = string.IsNullOrWhiteSpace(extractionModel) ? null : extractionModel.Trim();
         if (model is not null && !ExtractionModels.IsAllowed(model))
         {
-            return "Kies een van de aangeboden modellen.";
+            return OrganizationText.Current.ChooseOfferedModel;
         }
 
         var current = await store.GetSettingsAsync(cancellationToken).ConfigureAwait(false);
@@ -153,26 +153,26 @@ public sealed class PlatformService(IPlatformStore store, IUserStore users, IClo
     {
         if (string.IsNullOrWhiteSpace(name))
         {
-            return "Naam van de organisatie is verplicht.";
+            return IdentityText.Current.OrganizationNameRequired;
         }
 
-        return Countries.IsSupported(countryCode) ? null : "Kies een land uit de lijst.";
+        return Countries.IsSupported(countryCode) ? null : IdentityText.Current.ChooseCountry;
     }
 
     private async Task<string?> ValidateInviteeAsync(string name, string email, CancellationToken cancellationToken)
     {
         if (string.IsNullOrWhiteSpace(name))
         {
-            return "Naam van de gebruiker is verplicht.";
+            return OrganizationText.Current.UserNameRequired;
         }
 
         if (string.IsNullOrWhiteSpace(email) || !email.Contains('@', StringComparison.Ordinal))
         {
-            return "Ongeldig e-mailadres.";
+            return IdentityText.Current.InvalidEmail;
         }
 
         var existing = await users.FindByEmailAsync(User.NormalizeEmail(email), cancellationToken).ConfigureAwait(false);
-        return existing is null ? null : "Er bestaat al een account met dit e-mailadres.";
+        return existing is null ? null : OrganizationText.Current.AccountWithEmailExists;
     }
 }
 

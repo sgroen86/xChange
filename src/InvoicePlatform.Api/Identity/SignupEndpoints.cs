@@ -58,9 +58,9 @@ public static class SignupEndpoints
         {
             // The same answer for a new and a known address: the mail differs, the response does not.
             SignupOutcome.MailSent => Results.Accepted(),
-            SignupOutcome.Closed => Results.Problem(detail: result.Error, title: "Aanmelden is gesloten", statusCode: StatusCodes.Status403Forbidden),
-            SignupOutcome.Locked => Results.Problem(detail: result.Error, title: "Te veel pogingen", statusCode: StatusCodes.Status429TooManyRequests),
-            _ => Results.Problem(detail: result.Error, title: "Aanmelding niet verstuurd", statusCode: StatusCodes.Status400BadRequest),
+            SignupOutcome.Closed => Results.Problem(detail: result.Error, title: IdentityApiText.Current.SignupClosed, statusCode: StatusCodes.Status403Forbidden),
+            SignupOutcome.Locked => Results.Problem(detail: result.Error, title: IdentityApiText.Current.TooManyAttempts, statusCode: StatusCodes.Status429TooManyRequests),
+            _ => Results.Problem(detail: result.Error, title: IdentityApiText.Current.SignupNotSent, statusCode: StatusCodes.Status400BadRequest),
         };
     }
 
@@ -69,7 +69,7 @@ public static class SignupEndpoints
         var result = await signup.ConfirmAsync(request.Code ?? string.Empty, AuthEndpoints.ClientKey(context), cancellationToken).ConfigureAwait(false);
         return result.Succeeded
             ? Results.Ok(AuthEndpoints.ToResponse(result))
-            : Results.Problem(detail: result.Error, title: "Account niet aangemaakt", statusCode: StatusCodes.Status400BadRequest);
+            : Results.Problem(detail: result.Error, title: IdentityApiText.Current.AccountNotCreated, statusCode: StatusCodes.Status400BadRequest);
     }
 
     private static async Task<IResult> UsageAsync(HttpContext context, IUsageMeter usage, CancellationToken cancellationToken)

@@ -8,6 +8,7 @@ using InvoicePlatform.Application.Usage;
 using InvoicePlatform.Domain.EInvoicing;
 using InvoicePlatform.Domain.Identity;
 using InvoicePlatform.Domain.Learning;
+using InvoicePlatform.Domain.Localization;
 using InvoicePlatform.Domain.Serialization;
 using InvoicePlatform.Domain.Validation;
 
@@ -101,6 +102,38 @@ public class SignupServiceTests
         Assert.Equal(SignupOutcome.MailSent, again.Outcome);
         Assert.Contains("al een xChange-account", _mail.Sent[^1].Subject, StringComparison.Ordinal);
         Assert.DoesNotContain("?code=", _mail.Sent[^1].Body, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task The_mail_is_in_the_language_of_the_signup_request()
+    {
+        await Open();
+
+        using (Texts.Use(Language.En))
+        {
+            await SignUp();
+        }
+
+        var mail = _mail.Sent[^1];
+        Assert.Equal("Confirm your xChange sign-up", mail.Subject);
+        Assert.StartsWith("Hello Anna Peeters,", mail.Body, StringComparison.Ordinal);
+        Assert.Contains("for Bakkerij Peeters", mail.Body, StringComparison.Ordinal);
+        Assert.Contains("You get 10 free conversions", mail.Body, StringComparison.Ordinal);
+        Assert.Contains("https://app.example.test/signup/confirm/?code=", mail.Body, StringComparison.Ordinal);
+        Assert.DoesNotContain("Bevestig", mail.Body, StringComparison.Ordinal);
+
+        // The link in an English mail works like any other.
+        Assert.True((await _signup.ConfirmAsync(CodeFromMail(), Client)).Succeeded);
+    }
+
+    [Fact]
+    public async Task Without_a_language_the_mail_stays_dutch()
+    {
+        await Open();
+        await SignUp();
+
+        Assert.Equal("Bevestig je aanmelding bij xChange", _mail.Sent[^1].Subject);
+        Assert.StartsWith("Hallo Anna Peeters,", _mail.Sent[^1].Body, StringComparison.Ordinal);
     }
 
     [Fact]

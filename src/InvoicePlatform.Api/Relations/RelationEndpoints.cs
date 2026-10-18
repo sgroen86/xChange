@@ -71,7 +71,7 @@ public static class RelationEndpoints
         {
             RelationUpdateOutcome.Updated => Results.Ok(ToResponse(result.Relation!)),
             RelationUpdateOutcome.Invalid => Results.Problem(
-                detail: result.Error, title: "Relatie niet opgeslagen", statusCode: StatusCodes.Status400BadRequest),
+                detail: result.Error, title: RelationApiText.Current.RelationNotSaved, statusCode: StatusCodes.Status400BadRequest),
             _ => Results.NotFound(),
         };
     }

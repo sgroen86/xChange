@@ -15,7 +15,7 @@ public sealed class PintSgBilling1Ruleset : IInvoiceRuleset
     public const string RulesetId = "pint-sg-billing-1";
 
     private static readonly TaxRegime Regime = new(
-        "GST",
+        TaxKind.Gst,
         SingaporeGstRules.Categories,
         // BR-CL-16-SG: UNCL 4461, plus GIRO (Z01) and PayNow (Z02).
         code => code is "Z01" or "Z02" || CodeLists.IsPaymentMeansCode(code),
@@ -33,25 +33,32 @@ public sealed class PintSgBilling1Ruleset : IInvoiceRuleset
 
     public string ProfileId => "urn:peppol:bis:billing";
 
-    public string TaxName => "GST";
+    public string TaxName => CommonRuleText.Current.TaxName(TaxKind.Gst);
 
-    public IReadOnlyList<TaxCategory> TaxCategories { get; } =
-    [
-        new("SR", "standaardtarief (9%)"),
-        new("ZR", "nultarief (export)"),
-        new("ES33", "vrijgesteld (reg. 33)"),
-        new("ESN33", "vrijgesteld (overig)"),
-        new("OS", "buiten de werkingssfeer"),
-        new("DS", "geachte levering"),
-        new("NG", "niet GST-geregistreerd"),
-        new("SRCA-S", "customer accounting (leverancier)"),
-        new("SRCA-C", "customer accounting (afnemer)"),
-        new("SRRC", "verlegd (ingevoerde diensten)"),
-        new("SROVR-RS", "remote services (OVR)"),
-        new("SROVR-LVG", "low-value goods (OVR)"),
-        new("SRLVG", "eigen low-value goods"),
-        new("NA", "geen GST verschuldigd (bijzondere regeling)"),
-    ];
+    public IReadOnlyList<TaxCategory> TaxCategories
+    {
+        get
+        {
+            var text = SingaporeGstRuleText.Current;
+            return
+            [
+                new("SR", text.StandardRate),
+                new("ZR", text.ZeroRate),
+                new("ES33", text.ExemptRegulation33),
+                new("ESN33", text.ExemptOther),
+                new("OS", text.OutOfScope),
+                new("DS", text.DeemedSupply),
+                new("NG", text.NotRegistered),
+                new("SRCA-S", text.CustomerAccountingSupplier),
+                new("SRCA-C", text.CustomerAccountingCustomer),
+                new("SRRC", text.ReverseChargeImportedServices),
+                new("SROVR-RS", text.RemoteServices),
+                new("SROVR-LVG", text.LowValueGoods),
+                new("SRLVG", text.OwnLowValueGoods),
+                new("NA", text.NoGstDue),
+            ];
+        }
+    }
 
     public string? TaxCurrency => SingaporeGstRules.TaxCurrency;
 

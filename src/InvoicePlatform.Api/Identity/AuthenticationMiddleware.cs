@@ -52,8 +52,8 @@ public static class AuthorizationExtensions
             if (context.HttpContext.GetAuthenticatedUser() is null)
             {
                 return Results.Problem(
-                    detail: "Log in om deze actie uit te voeren.",
-                    title: "Niet ingelogd",
+                    detail: ApiText.Current.NotSignedInDetail,
+                    title: ApiText.Current.NotSignedInTitle,
                     statusCode: StatusCodes.Status401Unauthorized);
             }
 
@@ -78,16 +78,16 @@ public static class AuthorizationExtensions
             if (user is null)
             {
                 return Results.Problem(
-                    detail: "Log in om deze actie uit te voeren.",
-                    title: "Niet ingelogd",
+                    detail: ApiText.Current.NotSignedInDetail,
+                    title: ApiText.Current.NotSignedInTitle,
                     statusCode: StatusCodes.Status401Unauthorized);
             }
 
             if (!allowed.Any(role => role.ToString() == user.Role.ToString()))
             {
                 return Results.Problem(
-                    detail: "Uw account heeft hiervoor geen rechten.",
-                    title: "Geen toegang",
+                    detail: ApiText.Current.RoleForbiddenDetail,
+                    title: ApiText.Current.ForbiddenTitle,
                     statusCode: StatusCodes.Status403Forbidden);
             }
 
@@ -111,16 +111,16 @@ public static class AuthorizationExtensions
             if (user is null)
             {
                 return Results.Problem(
-                    detail: "Log in om deze actie uit te voeren.",
-                    title: "Niet ingelogd",
+                    detail: ApiText.Current.NotSignedInDetail,
+                    title: ApiText.Current.NotSignedInTitle,
                     statusCode: StatusCodes.Status401Unauthorized);
             }
 
             if (!user.IsPlatformAdmin)
             {
                 return Results.Problem(
-                    detail: "Alleen de platformbeheerder kan dit.",
-                    title: "Geen toegang",
+                    detail: ApiText.Current.PlatformAdminOnlyDetail,
+                    title: ApiText.Current.ForbiddenTitle,
                     statusCode: StatusCodes.Status403Forbidden);
             }
 

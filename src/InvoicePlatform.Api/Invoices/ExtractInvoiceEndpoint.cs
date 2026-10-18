@@ -83,7 +83,7 @@ public static class ExtractInvoiceEndpoint
         }
         catch (ConversionLimitReachedException exception)
         {
-            return Problem(StatusCodes.Status402PaymentRequired, "Tegoed op", exception.Message);
+            return Problem(StatusCodes.Status402PaymentRequired, InvoiceApiText.Current.OutOfCreditTitle, exception.Message);
         }
         catch (InvoiceInterpretationException exception)
         {

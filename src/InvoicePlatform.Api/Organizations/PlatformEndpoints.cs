@@ -107,7 +107,7 @@ public static class PlatformEndpoints
             invitationCode = result.InvitationCode,
         }),
         PlatformOutcome.NotFound => Results.NotFound(),
-        _ => Results.Problem(detail: result.Error, title: "Niet opgeslagen", statusCode: StatusCodes.Status400BadRequest),
+        _ => Results.Problem(detail: result.Error, title: OrganizationApiText.Current.NotSaved, statusCode: StatusCodes.Status400BadRequest),
     };
 
     private static object ToResponse(Organization organization, int? userCount, bool invitationPending) => new

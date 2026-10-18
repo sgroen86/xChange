@@ -19,109 +19,106 @@ internal static class CommonRules
     public static IReadOnlyList<RuleViolation> Check(CanonicalInvoiceDraft invoice, TaxRegime regime)
     {
         var findings = new Findings();
+        var text = CommonRuleText.Current;
 
-        Header(invoice, findings);
-        Parties(invoice, regime, findings);
-        Lines(invoice, regime, findings);
-        DocumentAllowancesAndCharges(invoice, findings);
-        Payment(invoice, regime, findings);
-        Totals(invoice, findings);
+        Header(invoice, findings, text);
+        Parties(invoice, regime, findings, text);
+        Lines(invoice, regime, findings, text);
+        DocumentAllowancesAndCharges(invoice, findings, text);
+        Payment(invoice, regime, findings, text);
+        Totals(invoice, findings, text);
 
         return findings.Violations;
     }
 
-    private static void Header(CanonicalInvoiceDraft invoice, Findings findings)
+    private static void Header(CanonicalInvoiceDraft invoice, Findings findings, ICommonRuleText text)
     {
         if (Findings.Missing(invoice.InvoiceNumber))
         {
-            findings.Add("BR-02", "BT-1", "invoiceNumber", "Factuurnummer ontbreekt.");
+            findings.Add("BR-02", "BT-1", "invoiceNumber", text.InvoiceNumberMissing);
         }
 
         if (Findings.Missing(invoice.IssueDate))
         {
-            findings.Add("BR-03", "BT-2", "issueDate", "Factuurdatum ontbreekt.");
+            findings.Add("BR-03", "BT-2", "issueDate", text.IssueDateMissing);
         }
 
         if (Findings.Missing(invoice.TypeCode))
         {
-            findings.Add("BR-04", "BT-3", "typeCode", "Factuurtype ontbreekt.");
+            findings.Add("BR-04", "BT-3", "typeCode", text.TypeCodeMissing);
         }
 
         if (Findings.Missing(invoice.CurrencyCode))
         {
-            findings.Add("BR-05", "BT-5", "currencyCode", "Valuta ontbreekt.");
+            findings.Add("BR-05", "BT-5", "currencyCode", text.CurrencyMissing);
         }
         else if (!CodeLists.IsCurrencyCode(invoice.CurrencyCode))
         {
-            findings.Add("BR-CL-04", "BT-5", "currencyCode",
-                $"Valuta '{invoice.CurrencyCode}' is geen ISO 4217-code van drie hoofdletters, zoals EUR.");
+            findings.Add("BR-CL-04", "BT-5", "currencyCode", text.CurrencyInvalid(invoice.CurrencyCode));
         }
     }
 
-    private static void Parties(CanonicalInvoiceDraft invoice, TaxRegime regime, Findings findings)
+    private static void Parties(CanonicalInvoiceDraft invoice, TaxRegime regime, Findings findings, ICommonRuleText text)
     {
         var seller = invoice.Seller;
         var buyer = invoice.Buyer;
 
         if (Findings.Missing(seller?.Name))
         {
-            findings.Add("BR-06", "BT-27", "seller.name", "Naam van de verkoper ontbreekt.");
+            findings.Add("BR-06", "BT-27", "seller.name", text.SellerNameMissing);
         }
 
         if (Findings.Missing(buyer?.Name))
         {
-            findings.Add("BR-07", "BT-44", "buyer.name", "Naam van de afnemer ontbreekt.");
+            findings.Add("BR-07", "BT-44", "buyer.name", text.BuyerNameMissing);
         }
 
-        Country(seller, "seller", "BR-09", "BT-40", "verkoper", findings);
-        Country(buyer, "buyer", "BR-11", "BT-55", "afnemer", findings);
+        Country(seller, "seller", "BR-09", "BT-40", PartyRole.Seller, findings, text);
+        Country(buyer, "buyer", "BR-11", "BT-55", PartyRole.Buyer, findings, text);
 
         if (Findings.Missing(seller?.VatIdentifier) && Findings.Missing(seller?.LegalRegistrationId))
         {
-            findings.Add("BR-CO-26", "BT-31", "seller.vatIdentifier",
-                $"Vermeld het {regime.TaxName}-nummer of het registratienummer van de verkoper.");
+            findings.Add("BR-CO-26", "BT-31", "seller.vatIdentifier", text.TaxNumberOrRegistrationMissing(regime.Tax));
         }
 
         if (regime.TaxNumbersHaveCountryPrefix)
         {
-            VatPrefix(seller?.VatIdentifier, "seller.vatIdentifier", "BT-31", "verkoper", findings);
-            VatPrefix(buyer?.VatIdentifier, "buyer.vatIdentifier", "BT-48", "afnemer", findings);
+            VatPrefix(seller?.VatIdentifier, "seller.vatIdentifier", "BT-31", PartyRole.Seller, findings, text);
+            VatPrefix(buyer?.VatIdentifier, "buyer.vatIdentifier", "BT-48", PartyRole.Buyer, findings, text);
         }
 
-        EndpointScheme(seller, "seller", "BR-62", "BT-34", "verkoper", findings);
-        EndpointScheme(buyer, "buyer", "BR-63", "BT-49", "afnemer", findings);
+        EndpointScheme(seller, "seller", "BR-62", "BT-34", PartyRole.Seller, findings, text);
+        EndpointScheme(buyer, "buyer", "BR-63", "BT-49", PartyRole.Buyer, findings, text);
 
-        RegistrationScheme(seller, "seller", "BT-30", "verkoper", findings);
-        RegistrationScheme(buyer, "buyer", "BT-47", "afnemer", findings);
+        RegistrationScheme(seller, "seller", "BT-30", PartyRole.Seller, findings, text);
+        RegistrationScheme(buyer, "buyer", "BT-47", PartyRole.Buyer, findings, text);
     }
 
     private static void Country(
-        CanonicalParty? party, string side, string ruleId, string businessTerm, string label, Findings findings)
+        CanonicalParty? party, string side, string ruleId, string businessTerm, PartyRole role, Findings findings, ICommonRuleText text)
     {
         var code = party?.Address?.CountryCode;
 
         if (Findings.Missing(code))
         {
-            findings.Add(ruleId, businessTerm, $"{side}.address.countryCode", $"Landcode van de {label} ontbreekt.");
+            findings.Add(ruleId, businessTerm, $"{side}.address.countryCode", text.CountryMissing(role));
         }
         else if (!CodeLists.IsCountryCode(code))
         {
-            findings.Add("BR-CL-14", businessTerm, $"{side}.address.countryCode",
-                $"Landcode van de {label} '{code}' is geen ISO 3166-code van twee hoofdletters, zoals NL.");
+            findings.Add("BR-CL-14", businessTerm, $"{side}.address.countryCode", text.CountryInvalid(role, code));
         }
     }
 
-    private static void VatPrefix(string? vat, string path, string businessTerm, string label, Findings findings)
+    private static void VatPrefix(string? vat, string path, string businessTerm, PartyRole role, Findings findings, ICommonRuleText text)
     {
         if (!Findings.Missing(vat) && !(vat!.Length > 2 && char.IsAsciiLetterUpper(vat[0]) && char.IsAsciiLetterUpper(vat[1])))
         {
-            findings.Add("BR-CO-09", businessTerm, path,
-                $"Btw-nummer van de {label} moet beginnen met een landcode, zoals NL.");
+            findings.Add("BR-CO-09", businessTerm, path, text.VatPrefixMissing(role));
         }
     }
 
     private static void EndpointScheme(
-        CanonicalParty? party, string side, string ruleId, string businessTerm, string label, Findings findings)
+        CanonicalParty? party, string side, string ruleId, string businessTerm, PartyRole role, Findings findings, ICommonRuleText text)
     {
         if (Findings.Missing(party?.ElectronicAddress))
         {
@@ -130,33 +127,31 @@ internal static class CommonRules
 
         if (Findings.Missing(party!.ElectronicAddressScheme))
         {
-            findings.Add(ruleId, businessTerm, $"{side}.electronicAddressScheme",
-                $"Kies het schema van het elektronisch adres van de {label}.");
+            findings.Add(ruleId, businessTerm, $"{side}.electronicAddressScheme", text.EndpointSchemeMissing(role));
         }
         else if (!CodeLists.IsElectronicAddressScheme(party.ElectronicAddressScheme))
         {
             findings.Add("BR-CL-25", businessTerm, $"{side}.electronicAddressScheme",
-                $"'{party.ElectronicAddressScheme}' is geen geldig schema voor een elektronisch adres.");
+                text.EndpointSchemeInvalid(party.ElectronicAddressScheme));
         }
     }
 
     private static void RegistrationScheme(
-        CanonicalParty? party, string side, string businessTerm, string label, Findings findings)
+        CanonicalParty? party, string side, string businessTerm, PartyRole role, Findings findings, ICommonRuleText text)
     {
         if (!Findings.Missing(party?.LegalRegistrationId)
             && !Findings.Missing(party!.LegalRegistrationScheme)
             && !CodeLists.IsRegistrationScheme(party.LegalRegistrationScheme))
         {
-            findings.Add("BR-CL-11", businessTerm, $"{side}.legalRegistrationScheme",
-                $"Schema van het registratienummer van de {label} moet een code van vier cijfers zijn, zoals 0106 (KvK).");
+            findings.Add("BR-CL-11", businessTerm, $"{side}.legalRegistrationScheme", text.RegistrationSchemeInvalid(role));
         }
     }
 
-    private static void Lines(CanonicalInvoiceDraft invoice, TaxRegime regime, Findings findings)
+    private static void Lines(CanonicalInvoiceDraft invoice, TaxRegime regime, Findings findings, ICommonRuleText text)
     {
         if (invoice.Lines.Count == 0)
         {
-            findings.Add("BR-16", "BG-25", "lines", "De factuur heeft geen regels.");
+            findings.Add("BR-16", "BG-25", "lines", text.NoLines);
             return;
         }
 
@@ -168,132 +163,127 @@ internal static class CommonRules
 
             if (line.Quantity is null)
             {
-                findings.Add("BR-22", "BT-129", $"{path}.quantity", $"Regel {number}: aantal ontbreekt.");
+                findings.Add("BR-22", "BT-129", $"{path}.quantity", text.LineQuantityMissing(number));
             }
 
             if (Findings.Missing(line.UnitCode))
             {
-                findings.Add("BR-23", "BT-130", $"{path}.unitCode", $"Regel {number}: eenheid ontbreekt.");
+                findings.Add("BR-23", "BT-130", $"{path}.unitCode", text.LineUnitMissing(number));
             }
             else if (!CodeLists.IsUnitCode(line.UnitCode))
             {
-                findings.Add("BR-CL-23", "BT-130", $"{path}.unitCode",
-                    $"Regel {number}: eenheid '{line.UnitCode}' is geen UN/ECE-code, zoals C62 (stuk) of HUR (uur).");
+                findings.Add("BR-CL-23", "BT-130", $"{path}.unitCode", text.LineUnitInvalid(number, line.UnitCode));
             }
 
             // BT-153: the description is the item name (see the design).
             if (Findings.Missing(line.Description))
             {
-                findings.Add("BR-25", "BT-153", $"{path}.description",
-                    $"Regel {number}: omschrijving ontbreekt. Die wordt de artikelnaam.");
+                findings.Add("BR-25", "BT-153", $"{path}.description", text.LineDescriptionMissing(number));
             }
 
             if (line.UnitPrice is null)
             {
-                findings.Add("BR-26", "BT-146", $"{path}.unitPrice", $"Regel {number}: prijs ontbreekt.");
+                findings.Add("BR-26", "BT-146", $"{path}.unitPrice", text.LinePriceMissing(number));
             }
             else if (line.UnitPrice < 0m)
             {
-                findings.Add("BR-27", "BT-146", $"{path}.unitPrice",
-                    $"Regel {number}: de prijs mag niet negatief zijn. Gebruik een negatief aantal.");
+                findings.Add("BR-27", "BT-146", $"{path}.unitPrice", text.LinePriceNegative(number));
             }
 
             if (Findings.HasMoreThanTwoDecimals(line.NetAmount))
             {
-                findings.Add("BR-DEC-23", "BT-131", $"{path}.netAmount",
-                    $"Regel {number}: het nettobedrag mag hoogstens twee decimalen hebben.");
+                findings.Add("BR-DEC-23", "BT-131", $"{path}.netAmount", text.LineNetAmountDecimals(number));
             }
 
             if (Findings.Missing(line.VatCategoryCode))
             {
-                findings.Add("BR-CO-04", "BT-151", $"{path}.vatCategoryCode",
-                    $"Regel {number}: {regime.TaxName}-categorie ontbreekt.");
+                findings.Add("BR-CO-04", "BT-151", $"{path}.vatCategoryCode", text.LineTaxCategoryMissing(number, regime.Tax));
             }
             else if (!regime.Categories.Contains(line.VatCategoryCode!))
             {
                 findings.Add("BR-CL-18", "BT-151", $"{path}.vatCategoryCode",
-                    $"Regel {number}: '{line.VatCategoryCode}' is geen {regime.TaxName}-categorie.");
+                    text.LineTaxCategoryInvalid(number, line.VatCategoryCode, regime.Tax));
             }
 
             for (var adjustmentIndex = 0; adjustmentIndex < line.AllowancesAndCharges.Count; adjustmentIndex++)
             {
-                LineAdjustment(line.AllowancesAndCharges[adjustmentIndex], $"{path}.allowancesAndCharges[{adjustmentIndex}]", number, findings);
+                LineAdjustment(line.AllowancesAndCharges[adjustmentIndex], $"{path}.allowancesAndCharges[{adjustmentIndex}]", number, findings, text);
             }
         }
     }
 
-    private static void LineAdjustment(CanonicalAllowanceCharge adjustment, string path, string lineNumber, Findings findings)
+    private static void LineAdjustment(
+        CanonicalAllowanceCharge adjustment, string path, string lineNumber, Findings findings, ICommonRuleText text)
     {
-        var kind = adjustment.IsCharge ? "toeslag" : "korting";
+        var isCharge = adjustment.IsCharge;
 
         if (adjustment.Amount is null)
         {
-            findings.Add(adjustment.IsCharge ? "BR-43" : "BR-41", adjustment.IsCharge ? "BT-141" : "BT-136",
-                $"{path}.amount", $"Regel {lineNumber}: bedrag van de {kind} ontbreekt.");
+            findings.Add(isCharge ? "BR-43" : "BR-41", isCharge ? "BT-141" : "BT-136",
+                $"{path}.amount", text.LineAdjustmentAmountMissing(lineNumber, isCharge));
         }
 
         if (Findings.Missing(adjustment.Reason) && Findings.Missing(adjustment.ReasonCode))
         {
-            findings.Add(adjustment.IsCharge ? "BR-44" : "BR-42", adjustment.IsCharge ? "BT-144" : "BT-139",
-                $"{path}.reason", $"Regel {lineNumber}: reden van de {kind} ontbreekt.");
+            findings.Add(isCharge ? "BR-44" : "BR-42", isCharge ? "BT-144" : "BT-139",
+                $"{path}.reason", text.LineAdjustmentReasonMissing(lineNumber, isCharge));
         }
 
         if (Findings.HasMoreThanTwoDecimals(adjustment.Amount))
         {
-            findings.Add(adjustment.IsCharge ? "BR-DEC-27" : "BR-DEC-24", null, $"{path}.amount",
-                $"Regel {lineNumber}: bedrag van de {kind} mag hoogstens twee decimalen hebben.");
+            findings.Add(isCharge ? "BR-DEC-27" : "BR-DEC-24", null, $"{path}.amount",
+                text.LineAdjustmentAmountDecimals(lineNumber, isCharge));
         }
 
         if (Findings.HasMoreThanTwoDecimals(adjustment.BaseAmount))
         {
-            findings.Add(adjustment.IsCharge ? "BR-DEC-28" : "BR-DEC-25", null, $"{path}.baseAmount",
-                $"Regel {lineNumber}: grondslag van de {kind} mag hoogstens twee decimalen hebben.");
+            findings.Add(isCharge ? "BR-DEC-28" : "BR-DEC-25", null, $"{path}.baseAmount",
+                text.LineAdjustmentBaseDecimals(lineNumber, isCharge));
         }
     }
 
-    private static void DocumentAllowancesAndCharges(CanonicalInvoiceDraft invoice, Findings findings)
+    private static void DocumentAllowancesAndCharges(CanonicalInvoiceDraft invoice, Findings findings, ICommonRuleText text)
     {
         for (var index = 0; index < invoice.AllowancesAndCharges.Count; index++)
         {
             var adjustment = invoice.AllowancesAndCharges[index];
             var path = $"allowancesAndCharges[{index}]";
             var isCharge = adjustment.IsCharge;
-            var kind = isCharge ? "Toeslag" : "Korting";
-            var number = Findings.Number(index);
+            var label = text.DocumentAdjustmentLabel(isCharge, Findings.Number(index));
 
             if (adjustment.Amount is null)
             {
                 findings.Add(isCharge ? "BR-36" : "BR-31", isCharge ? "BT-99" : "BT-92", $"{path}.amount",
-                    $"{kind} {number} op factuurniveau: bedrag ontbreekt.");
+                    text.DocumentAdjustmentAmountMissing(label));
             }
 
             if (Findings.Missing(adjustment.VatCategoryCode))
             {
                 findings.Add(isCharge ? "BR-37" : "BR-32", isCharge ? "BT-102" : "BT-95", $"{path}.vatCategoryCode",
-                    $"{kind} {number} op factuurniveau: belastingcategorie ontbreekt.");
+                    text.DocumentAdjustmentTaxCategoryMissing(label));
             }
 
             if (Findings.Missing(adjustment.Reason) && Findings.Missing(adjustment.ReasonCode))
             {
                 findings.Add(isCharge ? "BR-38" : "BR-33", isCharge ? "BT-104" : "BT-97", $"{path}.reason",
-                    $"{kind} {number} op factuurniveau: reden ontbreekt.");
+                    text.DocumentAdjustmentReasonMissing(label));
             }
 
             if (Findings.HasMoreThanTwoDecimals(adjustment.Amount))
             {
                 findings.Add(isCharge ? "BR-DEC-05" : "BR-DEC-01", null, $"{path}.amount",
-                    $"{kind} {number} op factuurniveau: bedrag mag hoogstens twee decimalen hebben.");
+                    text.DocumentAdjustmentAmountDecimals(label));
             }
 
             if (Findings.HasMoreThanTwoDecimals(adjustment.BaseAmount))
             {
                 findings.Add(isCharge ? "BR-DEC-06" : "BR-DEC-02", null, $"{path}.baseAmount",
-                    $"{kind} {number} op factuurniveau: grondslag mag hoogstens twee decimalen hebben.");
+                    text.DocumentAdjustmentBaseDecimals(label));
             }
         }
     }
 
-    private static void Payment(CanonicalInvoiceDraft invoice, TaxRegime regime, Findings findings)
+    private static void Payment(CanonicalInvoiceDraft invoice, TaxRegime regime, Findings findings, ICommonRuleText text)
     {
         if (!InvoiceFacts.HasPayment(invoice))
         {
@@ -304,32 +294,31 @@ internal static class CommonRules
 
         if (Findings.Missing(payment.PaymentMeansCode))
         {
-            findings.Add("BR-49", "BT-81", "payment.paymentMeansCode", "Kies een betaalwijze.");
+            findings.Add("BR-49", "BT-81", "payment.paymentMeansCode", text.PaymentMeansMissing);
             return;
         }
 
         if (!regime.IsPaymentMeansCode(payment.PaymentMeansCode))
         {
-            findings.Add("BR-CL-16", "BT-81", "payment.paymentMeansCode",
-                $"'{payment.PaymentMeansCode}' is geen geldige betaalwijze.");
+            findings.Add("BR-CL-16", "BT-81", "payment.paymentMeansCode", text.PaymentMeansInvalid(payment.PaymentMeansCode));
         }
 
         if (CodeLists.IsCreditTransfer(payment.PaymentMeansCode) && Findings.Missing(payment.Iban))
         {
-            findings.Add("BR-61", "BT-84", "payment.iban", "IBAN is verplicht bij betaling per overschrijving.");
+            findings.Add("BR-61", "BT-84", "payment.iban", text.IbanRequired);
         }
     }
 
-    private static void Totals(CanonicalInvoiceDraft invoice, Findings findings)
+    private static void Totals(CanonicalInvoiceDraft invoice, Findings findings, ICommonRuleText text)
     {
         if (Findings.HasMoreThanTwoDecimals(invoice.Totals?.PrepaidAmount))
         {
-            findings.Add("BR-DEC-16", "BT-113", "totals.prepaidAmount", "Vooruitbetaald bedrag mag hoogstens twee decimalen hebben.");
+            findings.Add("BR-DEC-16", "BT-113", "totals.prepaidAmount", text.PrepaidAmountDecimals);
         }
 
         if (Findings.HasMoreThanTwoDecimals(invoice.Totals?.RoundingAmount))
         {
-            findings.Add("BR-DEC-17", "BT-114", "totals.roundingAmount", "Afrondingsbedrag mag hoogstens twee decimalen hebben.");
+            findings.Add("BR-DEC-17", "BT-114", "totals.roundingAmount", text.RoundingAmountDecimals);
         }
     }
 }

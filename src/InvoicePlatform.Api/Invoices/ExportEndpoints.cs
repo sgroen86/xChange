@@ -48,7 +48,10 @@ public static class ExportEndpoints
 
         return outcome.RulesetFound
             ? Results.Ok(ToResponse(outcome.Violations))
-            : Results.Problem(detail: $"Regelset '{rulesetId}' bestaat niet.", title: "Onbekende regelset", statusCode: StatusCodes.Status404NotFound);
+            : Results.Problem(
+                detail: InvoiceApiText.Current.UnknownRulesetDetail(rulesetId),
+                title: InvoiceApiText.Current.UnknownRulesetTitle,
+                statusCode: StatusCodes.Status404NotFound);
     }
 
     private static async Task<IResult> ExportAsync(
@@ -69,24 +72,25 @@ public static class ExportEndpoints
             context.Response.Headers[WarningsHeader] = Convert.ToBase64String(json);
         }
 
+        var text = InvoiceApiText.Current;
         return outcome.Kind switch
         {
             ExportOutcomeKind.Exported => Results.File(outcome.Content!, ExportInvoiceService.MediaType, outcome.FileName),
             ExportOutcomeKind.ValidationUnavailable => Results.Problem(
-                detail: "De officiële controle is nu niet beschikbaar. Probeer het zo opnieuw.",
-                title: "Controle niet beschikbaar",
+                detail: text.ValidationUnavailableDetail,
+                title: text.ValidationUnavailableTitle,
                 statusCode: StatusCodes.Status503ServiceUnavailable),
             ExportOutcomeKind.Incomplete => Results.Json(ToResponse(outcome.Violations!), statusCode: StatusCodes.Status422UnprocessableEntity),
             ExportOutcomeKind.PlanRequired => Results.Problem(
-                detail: "In de proefperiode kun je alles controleren, maar het bestand downloaden kan met een abonnement.",
-                title: "Abonnement nodig",
+                detail: text.PlanRequiredDetail,
+                title: text.PlanRequiredTitle,
                 statusCode: StatusCodes.Status402PaymentRequired),
             ExportOutcomeKind.NotBooked => Results.Problem(
-                detail: "Dit is een concept. Boek de factuur om het bestand te maken.",
-                title: "Nog niet geboekt",
+                detail: text.NotBookedDetail,
+                title: text.NotBookedTitle,
                 statusCode: StatusCodes.Status409Conflict),
             ExportOutcomeKind.UnknownRuleset => Results.Problem(
-                detail: $"Regelset '{ruleset}' bestaat niet.", title: "Onbekende regelset", statusCode: StatusCodes.Status400BadRequest),
+                detail: text.UnknownRulesetDetail(ruleset), title: text.UnknownRulesetTitle, statusCode: StatusCodes.Status400BadRequest),
             _ => Results.NotFound(),
         };
     }

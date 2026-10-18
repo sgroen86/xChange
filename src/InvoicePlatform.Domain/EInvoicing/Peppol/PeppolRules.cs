@@ -17,30 +17,29 @@ internal static class PeppolRules
     public static IReadOnlyList<RuleViolation> Check(CanonicalInvoiceDraft invoice)
     {
         var findings = new Findings();
+        var text = PeppolRuleText.Current;
+        var common = CommonRuleText.Current;
 
-        TypeCode(invoice, findings);
-        Dates(invoice, findings);
+        TypeCode(invoice, findings, text);
+        Dates(invoice, findings, text);
 
         if (Findings.Missing(invoice.BuyerReference) && Findings.Missing(invoice.PurchaseOrderReference))
         {
-            findings.Add("PEPPOL-EN16931-R003", "BT-10", "buyerReference",
-                "Vul de referentie van de afnemer of het inkoopordernummer in.");
+            findings.Add("PEPPOL-EN16931-R003", "BT-10", "buyerReference", text.BuyerReferenceMissing);
         }
 
         if (Findings.Missing(invoice.Buyer?.ElectronicAddress))
         {
-            findings.Add("PEPPOL-EN16931-R010", "BT-49", "buyer.electronicAddress",
-                "Elektronisch adres (PEPPOL-id) van de afnemer ontbreekt.");
+            findings.Add("PEPPOL-EN16931-R010", "BT-49", "buyer.electronicAddress", text.BuyerEndpointMissing);
         }
 
         if (Findings.Missing(invoice.Seller?.ElectronicAddress))
         {
-            findings.Add("PEPPOL-EN16931-R020", "BT-34", "seller.electronicAddress",
-                "Elektronisch adres (PEPPOL-id) van de verkoper ontbreekt.");
+            findings.Add("PEPPOL-EN16931-R020", "BT-34", "seller.electronicAddress", text.SellerEndpointMissing);
         }
 
-        Identifiers(invoice.Seller, "seller", findings);
-        Identifiers(invoice.Buyer, "buyer", findings);
+        Identifiers(invoice.Seller, "seller", findings, text);
+        Identifiers(invoice.Buyer, "buyer", findings, text);
 
         for (var index = 0; index < invoice.Lines.Count; index++)
         {
@@ -49,26 +48,25 @@ internal static class PeppolRules
             if (line.BaseQuantity is { } baseQuantity && baseQuantity <= 0m)
             {
                 findings.Add("PEPPOL-EN16931-R121", "BT-149", $"lines[{index}].baseQuantity",
-                    $"Regel {Findings.Number(index)}: de basishoeveelheid moet groter dan nul zijn.");
+                    text.BaseQuantityNotPositive(Findings.Number(index)));
             }
 
             for (var adjustmentIndex = 0; adjustmentIndex < line.AllowancesAndCharges.Count; adjustmentIndex++)
             {
                 Percentage(line.AllowancesAndCharges[adjustmentIndex],
-                    $"lines[{index}].allowancesAndCharges[{adjustmentIndex}]", $"Regel {Findings.Number(index)}", findings);
+                    $"lines[{index}].allowancesAndCharges[{adjustmentIndex}]", common.LineLabel(Findings.Number(index)), findings, text);
             }
         }
 
         for (var index = 0; index < invoice.AllowancesAndCharges.Count; index++)
         {
             Percentage(invoice.AllowancesAndCharges[index], $"allowancesAndCharges[{index}]",
-                $"Factuurniveau {Findings.Number(index)}", findings);
+                text.DocumentLevelLabel(Findings.Number(index)), findings, text);
         }
 
         if (InvoiceFacts.HasPayment(invoice) && CodeLists.IsDirectDebit(invoice.Payment!.PaymentMeansCode))
         {
-            findings.Add("PEPPOL-EN16931-R061", "BT-89", "payment.paymentMeansCode",
-                "Incasso vraagt een machtigingskenmerk, dat xChange nog niet vastlegt. Kies een andere betaalwijze.");
+            findings.Add("PEPPOL-EN16931-R061", "BT-89", "payment.paymentMeansCode", text.DirectDebitUnsupported);
         }
 
         return findings.Violations;
@@ -80,13 +78,13 @@ internal static class PeppolRules
     /// number (0208, PEPPOL-COMMON-R043), on both the endpoint and the legal
     /// registration.
     /// </summary>
-    private static void Identifiers(CanonicalParty? party, string side, Findings findings)
+    private static void Identifiers(CanonicalParty? party, string side, Findings findings, IPeppolRuleText text)
     {
-        Identifier(party?.ElectronicAddress, party?.ElectronicAddressScheme, $"{side}.electronicAddress", findings);
-        Identifier(party?.LegalRegistrationId, party?.LegalRegistrationScheme, $"{side}.legalRegistrationId", findings);
+        Identifier(party?.ElectronicAddress, party?.ElectronicAddressScheme, $"{side}.electronicAddress", findings, text);
+        Identifier(party?.LegalRegistrationId, party?.LegalRegistrationScheme, $"{side}.legalRegistrationId", findings, text);
     }
 
-    private static void Identifier(string? value, string? scheme, string path, Findings findings)
+    private static void Identifier(string? value, string? scheme, string path, Findings findings, IPeppolRuleText text)
     {
         if (Findings.Missing(value))
         {
@@ -97,12 +95,11 @@ internal static class PeppolRules
 
         if (scheme == "0088" && !IsGln(trimmed))
         {
-            findings.Add("PEPPOL-COMMON-R040", null, path, $"'{trimmed}' is geen geldig GLN-nummer (controlecijfer klopt niet).");
+            findings.Add("PEPPOL-COMMON-R040", null, path, text.GlnInvalid(trimmed));
         }
         else if (scheme == "0208" && !IsBelgianEnterpriseNumber(trimmed))
         {
-            findings.Add("PEPPOL-COMMON-R043", null, path,
-                $"'{trimmed}' is geen geldig Belgisch ondernemingsnummer (tien cijfers, controlegetal modulo 97).");
+            findings.Add("PEPPOL-COMMON-R043", null, path, text.BelgianEnterpriseNumberInvalid(trimmed));
         }
     }
 
@@ -129,7 +126,7 @@ internal static class PeppolRules
             && value.All(char.IsAsciiDigit)
             && int.Parse(value[8..], CultureInfo.InvariantCulture) == 97 - (int.Parse(value[..8], CultureInfo.InvariantCulture) % 97);
 
-    private static void TypeCode(CanonicalInvoiceDraft invoice, Findings findings)
+    private static void TypeCode(CanonicalInvoiceDraft invoice, Findings findings, IPeppolRuleText text)
     {
         var code = invoice.TypeCode;
         if (Findings.Missing(code))
@@ -139,46 +136,42 @@ internal static class PeppolRules
 
         if (!CodeLists.IsInvoiceType(code) && !CodeLists.IsCreditNoteType(code))
         {
-            findings.Add("PEPPOL-EN16931-P0100", "BT-3", "typeCode",
-                $"Factuurtype {code} is niet toegestaan in PEPPOL BIS 3.0.");
+            findings.Add("PEPPOL-EN16931-P0100", "BT-3", "typeCode", text.TypeCodeNotAllowed(code));
         }
         else if (CodeLists.GermanOnlyTypeCodes.Contains(code!)
             && !(invoice.Seller?.Address?.CountryCode == "DE" && invoice.Buyer?.Address?.CountryCode == "DE"))
         {
-            findings.Add("PEPPOL-EN16931-P0112", "BT-3", "typeCode",
-                $"Factuurtype {code} mag alleen tussen twee Duitse partijen.");
+            findings.Add("PEPPOL-EN16931-P0112", "BT-3", "typeCode", text.TypeCodeGermanOnly(code));
         }
     }
 
-    private static void Dates(CanonicalInvoiceDraft invoice, Findings findings)
+    private static void Dates(CanonicalInvoiceDraft invoice, Findings findings, IPeppolRuleText text)
     {
-        Date(invoice.IssueDate, "issueDate", "BT-2", "Factuurdatum", findings);
-        Date(invoice.DueDate, "dueDate", "BT-9", "Vervaldatum", findings);
+        Date(invoice.IssueDate, "issueDate", "BT-2", text.IssueDateFormat, findings);
+        Date(invoice.DueDate, "dueDate", "BT-9", text.DueDateFormat, findings);
     }
 
-    private static void Date(string? value, string path, string businessTerm, string label, Findings findings)
+    private static void Date(string? value, string path, string businessTerm, string message, Findings findings)
     {
         if (!Findings.Missing(value)
             && !DateOnly.TryParseExact(value, "yyyy-MM-dd", CultureInfo.InvariantCulture, DateTimeStyles.None, out _))
         {
-            findings.Add("PEPPOL-EN16931-F001", businessTerm, path, $"{label} moet de vorm JJJJ-MM-DD hebben.");
+            findings.Add("PEPPOL-EN16931-F001", businessTerm, path, message);
         }
     }
 
     /// <summary>R040, R041, R042: a percentage and its base go together and must agree with the amount.</summary>
-    private static void Percentage(CanonicalAllowanceCharge adjustment, string path, string label, Findings findings)
+    private static void Percentage(CanonicalAllowanceCharge adjustment, string path, string label, Findings findings, IPeppolRuleText text)
     {
-        var kind = adjustment.IsCharge ? "toeslag" : "korting";
+        var isCharge = adjustment.IsCharge;
 
         if (adjustment.Percentage is not null && adjustment.BaseAmount is null)
         {
-            findings.Add("PEPPOL-EN16931-R041", null, $"{path}.baseAmount",
-                $"{label}: bij een percentage hoort een grondslag voor de {kind}.");
+            findings.Add("PEPPOL-EN16931-R041", null, $"{path}.baseAmount", text.PercentageNeedsBase(label, isCharge));
         }
         else if (adjustment.Percentage is null && adjustment.BaseAmount is not null)
         {
-            findings.Add("PEPPOL-EN16931-R042", null, $"{path}.percentage",
-                $"{label}: bij een grondslag hoort een percentage voor de {kind}.");
+            findings.Add("PEPPOL-EN16931-R042", null, $"{path}.percentage", text.BaseNeedsPercentage(label, isCharge));
         }
         else if (adjustment.Percentage is { } percentage && adjustment.BaseAmount is { } baseAmount)
         {
@@ -186,8 +179,7 @@ internal static class PeppolRules
             if (Math.Abs((adjustment.Amount ?? 0m) - expected) > Slack)
             {
                 findings.Add("PEPPOL-EN16931-R040", null, $"{path}.amount",
-                    $"{label}: bedrag van de {kind} is niet gelijk aan grondslag x percentage "
-                    + $"({Findings.Format(baseAmount)} x {Findings.Format(percentage)}%).");
+                    text.AmountIsNotBaseTimesPercentage(label, isCharge, Findings.Format(baseAmount), Findings.Format(percentage)));
             }
         }
     }

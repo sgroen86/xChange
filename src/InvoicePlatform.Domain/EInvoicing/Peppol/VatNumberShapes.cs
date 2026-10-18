@@ -15,14 +15,15 @@ internal static partial class VatNumberShapes
     public static IReadOnlyList<RuleViolation> Check(CanonicalInvoiceDraft invoice)
     {
         var findings = new Findings();
+        var text = PeppolRuleText.Current;
 
-        Check(invoice.Seller?.VatIdentifier, "seller.vatIdentifier", "BT-31", "verkoper", findings);
-        Check(invoice.Buyer?.VatIdentifier, "buyer.vatIdentifier", "BT-48", "afnemer", findings);
+        Check(invoice.Seller?.VatIdentifier, "seller.vatIdentifier", "BT-31", PartyRole.Seller, findings, text);
+        Check(invoice.Buyer?.VatIdentifier, "buyer.vatIdentifier", "BT-48", PartyRole.Buyer, findings, text);
 
         return findings.Violations;
     }
 
-    private static void Check(string? vat, string path, string businessTerm, string label, Findings findings)
+    private static void Check(string? vat, string path, string businessTerm, PartyRole role, Findings findings, IPeppolRuleText text)
     {
         if (Findings.Missing(vat))
         {
@@ -33,18 +34,15 @@ internal static partial class VatNumberShapes
         switch (value[..Math.Min(2, value.Length)])
         {
             case "NL" when !Dutch().IsMatch(value):
-                findings.Add("XC-VAT-NL", businessTerm, path,
-                    $"Btw-nummer van de {label} '{value}' heeft niet de Nederlandse vorm NL + 9 cijfers + B + 2 cijfers, zonder spaties of punten.");
+                findings.Add("XC-VAT-NL", businessTerm, path, text.DutchVatShape(role, value));
                 break;
 
             case "BE" when !Belgian().IsMatch(value) || !Mod97(value[2..]):
-                findings.Add("XC-VAT-BE", businessTerm, path,
-                    $"Btw-nummer van de {label} '{value}' is geen geldig Belgisch nummer: BE + 10 cijfers (het ondernemingsnummer), zonder spaties of punten.");
+                findings.Add("XC-VAT-BE", businessTerm, path, text.BelgianVatShape(role, value));
                 break;
 
             case "GB" when !British().IsMatch(value):
-                findings.Add("XC-VAT-GB", businessTerm, path,
-                    $"Btw-nummer van de {label} '{value}' heeft niet de Britse vorm GB + 9 of 12 cijfers (of GBGD/GBHA + 3 cijfers), zonder spaties.");
+                findings.Add("XC-VAT-GB", businessTerm, path, text.BritishVatShape(role, value));
                 break;
         }
     }

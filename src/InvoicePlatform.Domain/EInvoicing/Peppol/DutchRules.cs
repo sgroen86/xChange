@@ -20,60 +20,61 @@ internal static class DutchRules
         }
 
         var buyerIsDutch = InvoiceFacts.BuyerIsDutch(invoice);
+        var text = PeppolRuleText.Current;
+        var common = CommonRuleText.Current;
 
         if (InvoiceFacts.IsCreditNote(invoice) && Findings.Missing(invoice.PrecedingInvoiceReference))
         {
-            findings.Add("NL-R-001", "BT-25", "precedingInvoiceReference",
-                "Een creditnota moet verwijzen naar de oorspronkelijke factuur.");
+            findings.Add("NL-R-001", "BT-25", "precedingInvoiceReference", text.CreditNoteNeedsPrecedingInvoice);
         }
 
-        Address(invoice.Seller, "seller", "NL-R-002", "verkoper", findings);
-        RegistrationScheme(invoice.Seller, "seller", "NL-R-003", "BT-30", "verkoper", findings);
+        Address(invoice.Seller, "seller", "NL-R-002", PartyRole.Seller, findings, common);
+        RegistrationScheme(invoice.Seller, "seller", "NL-R-003", "BT-30", PartyRole.Seller, findings, common);
 
         if (buyerIsDutch)
         {
-            Address(invoice.Buyer, "buyer", "NL-R-004", "afnemer", findings);
-            RegistrationScheme(invoice.Buyer, "buyer", "NL-R-005", "BT-47", "afnemer", findings);
+            Address(invoice.Buyer, "buyer", "NL-R-004", PartyRole.Buyer, findings, common);
+            RegistrationScheme(invoice.Buyer, "buyer", "NL-R-005", "BT-47", PartyRole.Buyer, findings, common);
         }
 
-        PaymentMeans(invoice, buyerIsDutch, findings);
+        PaymentMeans(invoice, buyerIsDutch, findings, text, common);
 
         return findings.Violations;
     }
 
-    private static void Address(CanonicalParty? party, string side, string ruleId, string label, Findings findings)
+    private static void Address(CanonicalParty? party, string side, string ruleId, PartyRole role, Findings findings, ICommonRuleText text)
     {
         var address = party?.Address;
 
         if (Findings.Missing(address?.StreetName))
         {
-            findings.Add(ruleId, null, $"{side}.address.streetName", $"Straat van de {label} ontbreekt.");
+            findings.Add(ruleId, null, $"{side}.address.streetName", text.StreetMissing(role));
         }
 
         if (Findings.Missing(address?.CityName))
         {
-            findings.Add(ruleId, null, $"{side}.address.cityName", $"Plaats van de {label} ontbreekt.");
+            findings.Add(ruleId, null, $"{side}.address.cityName", text.CityMissing(role));
         }
 
         if (Findings.Missing(address?.PostalZone))
         {
-            findings.Add(ruleId, null, $"{side}.address.postalZone", $"Postcode van de {label} ontbreekt.");
+            findings.Add(ruleId, null, $"{side}.address.postalZone", text.PostalZoneMissing(role));
         }
     }
 
     /// <summary>Only when a registration number is given: then it must be KvK or OIN.</summary>
     private static void RegistrationScheme(
-        CanonicalParty? party, string side, string ruleId, string businessTerm, string label, Findings findings)
+        CanonicalParty? party, string side, string ruleId, string businessTerm, PartyRole role, Findings findings, ICommonRuleText text)
     {
         if (!Findings.Missing(party?.LegalRegistrationId)
             && !CodeLists.DutchRegistrationSchemes.Contains(party!.LegalRegistrationScheme ?? string.Empty))
         {
-            findings.Add(ruleId, businessTerm, $"{side}.legalRegistrationScheme",
-                $"Kies KvK (0106) of OIN (0190) als schema van het registratienummer van de {label}.");
+            findings.Add(ruleId, businessTerm, $"{side}.legalRegistrationScheme", text.DutchRegistrationSchemeRequired(role));
         }
     }
 
-    private static void PaymentMeans(CanonicalInvoiceDraft invoice, bool buyerIsDutch, Findings findings)
+    private static void PaymentMeans(
+        CanonicalInvoiceDraft invoice, bool buyerIsDutch, Findings findings, IPeppolRuleText text, ICommonRuleText common)
     {
         var payable = invoice.Totals?.PayableAmount ?? 0m;
         var somethingToPay = InvoiceFacts.IsCreditNote(invoice) ? payable < 0m : payable > 0m;
@@ -81,15 +82,13 @@ internal static class DutchRules
         // With partial payment details BR-49 already asks for the code.
         if (somethingToPay && !InvoiceFacts.HasPayment(invoice))
         {
-            findings.Add("NL-R-007", "BT-81", "payment.paymentMeansCode",
-                "Geef een betaalwijze op: er staat een bedrag open.");
+            findings.Add("NL-R-007", "BT-81", "payment.paymentMeansCode", common.PaymentMeansNeeded);
         }
 
         var code = invoice.Payment?.PaymentMeansCode;
         if (buyerIsDutch && !Findings.Missing(code) && !CodeLists.DutchPaymentMeansCodes.Contains(code!))
         {
-            findings.Add("NL-R-008", "BT-81", "payment.paymentMeansCode",
-                "Tussen Nederlandse partijen is de betaalwijze 30, 48, 49, 57, 58 of 59.");
+            findings.Add("NL-R-008", "BT-81", "payment.paymentMeansCode", text.DutchPaymentMeansOnly);
         }
     }
 }

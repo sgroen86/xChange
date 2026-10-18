@@ -73,7 +73,7 @@ public static class OrganizationEndpoints
                 CountryCode = organization?.CountryCode,
                 EffectiveDefaultRulesetId = service.EffectiveDefault(result.Settings!, organization).Id,
             })
-            : Results.Problem(detail: result.Error, title: "Instellingen niet opgeslagen", statusCode: StatusCodes.Status400BadRequest);
+            : Results.Problem(detail: result.Error, title: OrganizationApiText.Current.SettingsNotSaved, statusCode: StatusCodes.Status400BadRequest);
     }
 
     private static OrganizationSettingsResponse ToResponse(OrganizationSettings settings, OrganizationSettingsService service) => new()

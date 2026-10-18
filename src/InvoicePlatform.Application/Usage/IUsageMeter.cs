@@ -35,6 +35,9 @@ public sealed record UsageSummary(int Used, int? Limit, bool Trial = false)
     public int? Remaining => Limit is { } limit ? Math.Max(0, limit - Used) : null;
 }
 
-/// <summary>Reading a PDF was refused because the organisation used all its conversions.</summary>
+/// <summary>
+/// Reading a PDF was refused because the organisation used all its conversions.
+/// The message is for the user, in the language of the moment it is thrown.
+/// </summary>
 public sealed class ConversionLimitReachedException()
-    : Exception("Je gratis conversies zijn op. Kies een abonnement of koop tegoed om verder te gaan.");
+    : Exception(UsageText.Current.ConversionLimitReached);

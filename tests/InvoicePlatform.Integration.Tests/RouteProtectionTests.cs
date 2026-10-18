@@ -57,6 +57,27 @@ public class RouteProtectionTests : IClassFixture<RouteProtectionTests.Factory>
         Assert.Equal(HttpStatusCode.Unauthorized, response.StatusCode);
     }
 
+    [Theory]
+    [InlineData("en", "Not signed in")]
+    [InlineData("en-GB,en;q=0.9,nl;q=0.8", "Not signed in")]
+    [InlineData("nl", "Niet ingelogd")]
+    [InlineData(null, "Niet ingelogd")]
+    public async Task The_refusal_is_in_the_language_the_caller_asks_for(string? acceptLanguage, string title)
+    {
+        var client = _factory.CreateClient();
+        var request = new HttpRequestMessage(HttpMethod.Get, "/api/v1/invoices");
+        if (acceptLanguage is not null)
+        {
+            request.Headers.TryAddWithoutValidation("Accept-Language", acceptLanguage);
+        }
+
+        var response = await client.SendAsync(request);
+
+        Assert.Equal(HttpStatusCode.Unauthorized, response.StatusCode);
+        using var problem = System.Text.Json.JsonDocument.Parse(await response.Content.ReadAsStringAsync());
+        Assert.Equal(title, problem.RootElement.GetProperty("title").GetString());
+    }
+
     [Fact]
     public async Task Public_auth_routes_are_reachable_without_a_login()
     {

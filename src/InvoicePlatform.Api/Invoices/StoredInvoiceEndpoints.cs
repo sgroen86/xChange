@@ -97,8 +97,8 @@ public static class StoredInvoiceEndpoints
 
         return stored is null
             ? Results.Problem(
-                detail: "Deze factuur is al geboekt. Boek hem opnieuw om je wijzigingen te bewaren.",
-                title: "Al geboekt",
+                detail: InvoiceApiText.Current.AlreadyBookedDetail,
+                title: InvoiceApiText.Current.AlreadyBookedTitle,
                 statusCode: StatusCodes.Status409Conflict)
             : Results.Ok(ToResponse(stored));
     }
@@ -140,8 +140,8 @@ public static class StoredInvoiceEndpoints
         if (request is null)
         {
             return (null, null, Results.Problem(
-                detail: "De aanvraag mist verplichte velden.",
-                title: "Ongeldige aanvraag",
+                detail: ApiText.Current.MissingFieldsDetail,
+                title: ApiText.Current.InvalidRequestTitle,
                 statusCode: StatusCodes.Status400BadRequest));
         }
 
@@ -152,8 +152,8 @@ public static class StoredInvoiceEndpoints
         catch (FormatException)
         {
             return (null, null, Results.Problem(
-                detail: "Het document is geen geldige base64.",
-                title: "Ongeldig document",
+                detail: InvoiceApiText.Current.InvalidDocumentDetail,
+                title: InvoiceApiText.Current.InvalidDocumentTitle,
                 statusCode: StatusCodes.Status400BadRequest));
         }
     }

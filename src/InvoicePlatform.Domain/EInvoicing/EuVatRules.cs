@@ -13,18 +13,18 @@ internal static class EuVatRules
     public static IReadOnlyList<RuleViolation> Check(CanonicalInvoiceDraft invoice)
     {
         var findings = new Findings();
-        VatCategories(invoice, findings);
+        VatCategories(invoice, findings, EuVatRuleText.Current, CommonRuleText.Current);
         return findings.Violations;
     }
 
-    private static void VatCategories(CanonicalInvoiceDraft invoice, Findings findings)
+    private static void VatCategories(CanonicalInvoiceDraft invoice, Findings findings, IEuVatRuleText text, ICommonRuleText common)
     {
         // Rates, per line and per document allowance or charge.
         for (var index = 0; index < invoice.Lines.Count; index++)
         {
             var line = invoice.Lines[index];
             Rate(line.VatCategoryCode, line.VatPercentage, CategorySource.Line,
-                $"lines[{index}]", $"Regel {Findings.Number(index)}", findings);
+                $"lines[{index}]", common.LineLabel(Findings.Number(index)), findings, text);
         }
 
         for (var index = 0; index < invoice.AllowancesAndCharges.Count; index++)
@@ -33,7 +33,7 @@ internal static class EuVatRules
             Rate(adjustment.VatCategoryCode, adjustment.VatPercentage,
                 adjustment.IsCharge ? CategorySource.Charge : CategorySource.Allowance,
                 $"allowancesAndCharges[{index}]",
-                $"{(adjustment.IsCharge ? "Toeslag" : "Korting")} {Findings.Number(index)} op factuurniveau", findings);
+                common.DocumentAdjustmentLabel(adjustment.IsCharge, Findings.Number(index)), findings, text);
         }
 
         // Identifiers each category requires (or, for O, forbids).
@@ -54,41 +54,35 @@ internal static class EuVatRules
             switch (category)
             {
                 case "S" or "Z" or "E" when !sellerHasVatOrTaxId:
-                    findings.Add($"BR-{category}-{suffix}", "BT-31", "seller.vatIdentifier",
-                        $"Btw-nummer van de verkoper is verplicht bij btw-categorie {category}.");
+                    findings.Add($"BR-{category}-{suffix}", "BT-31", "seller.vatIdentifier", text.SellerVatRequired(category));
                     break;
 
                 case "AE":
                     if (!sellerHasVatOrTaxId)
                     {
-                        findings.Add($"BR-AE-{suffix}", "BT-31", "seller.vatIdentifier",
-                            "Btw-nummer van de verkoper is verplicht bij verlegde btw (AE).");
+                        findings.Add($"BR-AE-{suffix}", "BT-31", "seller.vatIdentifier", text.SellerVatRequiredReverseCharge);
                     }
 
                     if (Findings.Missing(buyer?.VatIdentifier) && Findings.Missing(buyer?.LegalRegistrationId))
                     {
-                        findings.Add($"BR-AE-{suffix}", "BT-48", "buyer.vatIdentifier",
-                            "Btw-nummer of KvK-nummer van de afnemer is verplicht bij verlegde btw (AE).");
+                        findings.Add($"BR-AE-{suffix}", "BT-48", "buyer.vatIdentifier", text.BuyerVatOrRegistrationRequiredReverseCharge);
                     }
 
                     break;
 
                 case "G" when Findings.Missing(seller?.VatIdentifier):
-                    findings.Add($"BR-G-{suffix}", "BT-31", "seller.vatIdentifier",
-                        "Btw-nummer van de verkoper is verplicht bij export buiten de EU (G).");
+                    findings.Add($"BR-G-{suffix}", "BT-31", "seller.vatIdentifier", text.SellerVatRequiredExport);
                     break;
 
                 case "O":
                     if (!Findings.Missing(seller?.VatIdentifier))
                     {
-                        findings.Add($"BR-O-{suffix}", "BT-31", "seller.vatIdentifier",
-                            "Bij 'niet onderworpen aan btw' (O) mag het btw-nummer van de verkoper niet op de factuur staan.");
+                        findings.Add($"BR-O-{suffix}", "BT-31", "seller.vatIdentifier", text.SellerVatNotAllowedNotSubject);
                     }
 
                     if (!Findings.Missing(buyer?.VatIdentifier))
                     {
-                        findings.Add($"BR-O-{suffix}", "BT-48", "buyer.vatIdentifier",
-                            "Bij 'niet onderworpen aan btw' (O) mag het btw-nummer van de afnemer niet op de factuur staan.");
+                        findings.Add($"BR-O-{suffix}", "BT-48", "buyer.vatIdentifier", text.BuyerVatNotAllowedNotSubject);
                     }
 
                     break;
@@ -97,8 +91,7 @@ internal static class EuVatRules
 
         if (used.Any(u => u.Category == "O") && used.Any(u => u.Category != "O"))
         {
-            findings.Add("BR-O-12", "BT-151", "lines",
-                "Btw-categorie O (niet onderworpen aan btw) kan niet samen met andere btw-categorieën op één factuur.");
+            findings.Add("BR-O-12", "BT-151", "lines", text.NotSubjectCannotBeCombined);
         }
 
         // Exemption reasons in the calculated breakdown.
@@ -111,13 +104,11 @@ internal static class EuVatRules
             switch (bucket.VatCategoryCode)
             {
                 case "S" or "Z" when hasReason:
-                    findings.Add($"BR-{bucket.VatCategoryCode}-10", "BT-120", path,
-                        $"Bij btw-categorie {bucket.VatCategoryCode} hoort geen vrijstellingsreden.");
+                    findings.Add($"BR-{bucket.VatCategoryCode}-10", "BT-120", path, text.ExemptionReasonNotAllowed(bucket.VatCategoryCode));
                     break;
 
                 case "E" or "AE" or "G" or "O" when !hasReason:
-                    findings.Add($"BR-{bucket.VatCategoryCode}-10", "BT-120", path,
-                        $"Vrijstellingsreden ontbreekt voor btw-categorie {bucket.VatCategoryCode}.");
+                    findings.Add($"BR-{bucket.VatCategoryCode}-10", "BT-120", path, text.ExemptionReasonMissing(bucket.VatCategoryCode));
                     break;
             }
         }
@@ -128,7 +119,7 @@ internal static class EuVatRules
     /// it out, so it is not something the reviewer needs to fix.
     /// </summary>
     private static void Rate(
-        string? category, decimal? rate, CategorySource source, string path, string label, Findings findings)
+        string? category, decimal? rate, CategorySource source, string path, string label, Findings findings, IEuVatRuleText text)
     {
         var suffix = source switch
         {
@@ -140,24 +131,19 @@ internal static class EuVatRules
         switch (category)
         {
             case "S" when rate is not > 0m:
-                findings.Add($"BR-S-{suffix}", "BT-152", $"{path}.vatPercentage",
-                    $"{label}: btw-categorie S (standaardtarief) vraagt een btw-percentage boven nul.");
+                findings.Add($"BR-S-{suffix}", "BT-152", $"{path}.vatPercentage", text.StandardRateNeedsRate(label));
                 break;
 
             case "Z" or "E" or "AE" or "G" when rate is { } actual && actual != 0m:
-                findings.Add($"BR-{category}-{suffix}", "BT-152", $"{path}.vatPercentage",
-                    $"{label}: btw-categorie {category} vraagt btw-percentage 0.");
+                findings.Add($"BR-{category}-{suffix}", "BT-152", $"{path}.vatPercentage", text.ZeroRateRequired(label, category));
                 break;
 
             case "K":
-                findings.Add("XC-VAT-UNSUPPORTED", "BT-151", $"{path}.vatCategoryCode",
-                    $"{label}: btw-categorie K (intracommunautaire levering) vraagt een leverdatum en leveringsland, "
-                    + "die xChange nog niet vastlegt.");
+                findings.Add("XC-VAT-UNSUPPORTED", "BT-151", $"{path}.vatCategoryCode", text.IntraCommunitySupplyUnsupported(label));
                 break;
 
             case "L" or "M" or "B":
-                findings.Add("XC-VAT-UNSUPPORTED", "BT-151", $"{path}.vatCategoryCode",
-                    $"{label}: btw-categorie {category} wordt niet ondersteund.");
+                findings.Add("XC-VAT-UNSUPPORTED", "BT-151", $"{path}.vatCategoryCode", text.CategoryUnsupported(label, category));
                 break;
         }
     }

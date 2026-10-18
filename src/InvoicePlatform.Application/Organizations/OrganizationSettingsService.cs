@@ -46,17 +46,17 @@ public sealed class OrganizationSettingsService(
 
         if (ruleset is not null && rulesets.Find(ruleset) is null)
         {
-            return SettingsUpdateResult.Fail("Onbekende regelset.");
+            return SettingsUpdateResult.Fail(OrganizationText.Current.UnknownRuleset);
         }
 
         if (endpoint is not null && scheme is null)
         {
-            return SettingsUpdateResult.Fail("Kies het schema van het elektronisch adres.");
+            return SettingsUpdateResult.Fail(OrganizationText.Current.EndpointSchemeMissing);
         }
 
         if (scheme is not null && !CodeLists.IsElectronicAddressScheme(scheme))
         {
-            return SettingsUpdateResult.Fail($"'{scheme}' is geen geldig schema voor een elektronisch adres.");
+            return SettingsUpdateResult.Fail(OrganizationText.Current.EndpointSchemeInvalid(scheme));
         }
 
         var settings = new OrganizationSettings

@@ -173,6 +173,7 @@ public static class CorrectionMemory
         var applied = new List<LearnedCorrection>();
         var notices = new List<ValidationWarning>();
         var buyerScope = BuyerKey(draft.Buyer) is { } key ? LearnedCorrection.BuyerScope(key) : null;
+        var text = CorrectionMemoryText.Current;
 
         foreach (var correction in memory.Where(c => c.Use == CorrectionUse.Apply))
         {
@@ -182,7 +183,7 @@ public static class CorrectionMemory
             {
                 draft = own.Write(draft, correction.To);
                 applied.Add(correction);
-                notices.Add(Notice(correction.Field, $"Ingevuld zoals u bij een eerdere factuur corrigeerde: {correction.To}."));
+                notices.Add(Notice(correction.Field, text.FilledAsCorrectedBefore(correction.To)));
             }
             else if (correction.Scope == buyerScope && correction.Field == "lines.tax")
             {
@@ -203,7 +204,7 @@ public static class CorrectionMemory
                 {
                     draft = draft with { Lines = lines };
                     applied.Add(correction);
-                    notices.Add(Notice("lines", $"Btw van de regels aangepast zoals eerder voor deze afnemer: {Describe(correction.From)} → {Describe(correction.To)}."));
+                    notices.Add(Notice("lines", text.LineTaxChangedForBuyer(Describe(correction.From, text), Describe(correction.To, text))));
                 }
             }
             else if (correction.Scope == buyerScope && correction.Field.StartsWith("exemptionReason:", StringComparison.Ordinal))
@@ -216,7 +217,7 @@ public static class CorrectionMemory
                     var entry = (existing ?? new CanonicalVatBreakdownLine { VatCategoryCode = category }) with { ExemptionReason = correction.To };
                     draft = draft with { VatBreakdown = [.. others, entry] };
                     applied.Add(correction);
-                    notices.Add(Notice("vatBreakdown", $"Vrijstellingsreden voor {category} ingevuld zoals eerder voor deze afnemer: {correction.To}."));
+                    notices.Add(Notice("vatBreakdown", text.ExemptionReasonFilledForBuyer(category, correction.To)));
                 }
             }
         }
@@ -288,10 +289,10 @@ public static class CorrectionMemory
             decimal.TryParse(parts.ElementAtOrDefault(1), NumberStyles.Number, CultureInfo.InvariantCulture, out var rate) ? rate : null);
     }
 
-    private static string Describe(string? tax)
+    private static string Describe(string? tax, ICorrectionMemoryText text)
     {
         var (category, rate) = SplitTax(tax);
-        return rate is null ? category ?? "geen" : $"{category} {rate.Value.ToString("0.##", CultureInfo.InvariantCulture)}%";
+        return rate is null ? category ?? text.None : $"{category} {rate.Value.ToString("0.##", CultureInfo.InvariantCulture)}%";
     }
 
     private static ValidationWarning Notice(string path, string message) => new("LEARNED", path, message, ValidationSeverity.Info);

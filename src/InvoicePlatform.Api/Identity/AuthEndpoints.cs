@@ -66,7 +66,7 @@ public static class AuthEndpoints
 
         return result.Succeeded
             ? Results.Ok(ToResponse(result))
-            : Results.Problem(detail: result.Error, title: "Setup mislukt", statusCode: StatusCodes.Status400BadRequest);
+            : Results.Problem(detail: result.Error, title: IdentityApiText.Current.SetupFailed, statusCode: StatusCodes.Status400BadRequest);
     }
 
     private static async Task<IResult> LoginAsync(
@@ -85,11 +85,11 @@ public static class AuthEndpoints
         {
             // 429 for the lockout so a client can tell "wait" from "wrong",
             // without the message itself revealing which account exists.
-            var status = result.Error is not null && result.Error.StartsWith("Te veel", StringComparison.Ordinal)
+            var status = result.LockedOut
                 ? StatusCodes.Status429TooManyRequests
                 : StatusCodes.Status401Unauthorized;
 
-            return Results.Problem(detail: result.Error, title: "Inloggen mislukt", statusCode: status);
+            return Results.Problem(detail: result.Error, title: IdentityApiText.Current.LoginFailed, statusCode: status);
         }
 
         return Results.Ok(ToResponse(result));
@@ -143,7 +143,7 @@ public static class AuthEndpoints
                 email = invitation.Email,
                 name = invitation.Name,
             })
-            : Results.Problem(detail: lookup.Error, title: "Uitnodiging ongeldig", statusCode: StatusCodes.Status404NotFound);
+            : Results.Problem(detail: lookup.Error, title: IdentityApiText.Current.InvitationInvalid, statusCode: StatusCodes.Status404NotFound);
     }
 
     private static async Task<IResult> AcceptInvitationAsync(
@@ -162,7 +162,7 @@ public static class AuthEndpoints
 
         return result.Succeeded
             ? Results.Ok(ToResponse(result))
-            : Results.Problem(detail: result.Error, title: "Account niet aangemaakt", statusCode: StatusCodes.Status400BadRequest);
+            : Results.Problem(detail: result.Error, title: IdentityApiText.Current.AccountNotCreated, statusCode: StatusCodes.Status400BadRequest);
     }
 
     /// <summary>

@@ -77,3 +77,10 @@ internal enum CategorySource
     Allowance,
     Charge,
 }
+
+/// <summary>Which party a message is about; the catalogues word it per language.</summary>
+internal enum PartyRole
+{
+    Seller,
+    Buyer,
+}

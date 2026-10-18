@@ -47,7 +47,7 @@ public static class PlatformSettingsEndpoints
         var error = await platform.UpdateSettingsAsync(request.ExtractionModel, request.SignupOpen, cancellationToken).ConfigureAwait(false);
         return error is null
             ? Results.Ok(ToResponse(await platform.GetSettingsAsync(cancellationToken).ConfigureAwait(false)))
-            : Results.Problem(detail: error, title: "Instelling niet opgeslagen", statusCode: StatusCodes.Status400BadRequest);
+            : Results.Problem(detail: error, title: OrganizationApiText.Current.SettingNotSaved, statusCode: StatusCodes.Status400BadRequest);
     }
 
     private static PlatformSettingsResponse ToResponse(PlatformSettings settings)

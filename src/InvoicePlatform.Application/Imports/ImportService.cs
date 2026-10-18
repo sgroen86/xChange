@@ -118,7 +118,7 @@ public sealed class ImportService(
         try
         {
             var pdf = await documents.GetAsync(record.DocumentKey, cancellationToken).ConfigureAwait(false)
-                ?? throw new InvalidOperationException("Het PDF-bestand is niet meer gevonden.");
+                ?? throw new InvalidOperationException(ImportText.Current.PdfNotFound);
 
             var result = await extraction.ExtractAsync(organizationId, pdf, cancellationToken).ConfigureAwait(false);
 

@@ -85,26 +85,26 @@ public sealed class RelationService(IRelationRepository relations, IClock clock,
         var endpointScheme = Clean(update.ElectronicAddressScheme);
         if (endpoint is not null && !CodeLists.IsElectronicAddressScheme(endpointScheme))
         {
-            return RelationUpdateResult.Invalid("Kies een geldig schema voor het elektronisch adres.");
+            return RelationUpdateResult.Invalid(RelationText.Current.EndpointSchemeInvalid);
         }
 
         var registrationScheme = Clean(update.LegalRegistrationScheme);
         if (registrationScheme is not null && !CodeLists.IsRegistrationScheme(registrationScheme))
         {
-            return RelationUpdateResult.Invalid("Het schema van het registratienummer is een code van vier cijfers, zoals 0106.");
+            return RelationUpdateResult.Invalid(RelationText.Current.RegistrationSchemeInvalid);
         }
 
         var format = Clean(update.DefaultRulesetId);
         if (format is not null && rulesets.Find(format) is null)
         {
-            return RelationUpdateResult.Invalid("Kies een bestaand exportformaat, of geen.");
+            return RelationUpdateResult.Invalid(RelationText.Current.UnknownExportFormat);
         }
 
         var vat = RelationKeys.NormalizeVat(update.VatIdentifier);
         var registration = RelationKeys.NormalizeRegistration(update.LegalRegistrationId);
         if (vat is null && registration is null)
         {
-            return RelationUpdateResult.Invalid("Een relatie heeft een btw-nummer of KvK-nummer nodig om herkend te worden.");
+            return RelationUpdateResult.Invalid(RelationText.Current.IdentifierRequired);
         }
 
         var updated = existing with

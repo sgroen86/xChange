@@ -30,7 +30,7 @@ internal static class RequestBody
 
     public static IResult Invalid()
         => Results.Problem(
-            detail: "De aanvraag is geen geldige JSON of mist verplichte velden.",
-            title: "Ongeldige aanvraag",
+            detail: ApiText.Current.InvalidJsonDetail,
+            title: ApiText.Current.InvalidRequestTitle,
             statusCode: StatusCodes.Status400BadRequest);
 }

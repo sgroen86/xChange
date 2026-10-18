@@ -15,7 +15,7 @@ public sealed class NlciusSiUbl20Ruleset : IInvoiceRuleset
     public const string RulesetId = "nlcius-si-ubl-2.0";
 
     private static readonly TaxRegime Regime = new(
-        "btw",
+        TaxKind.Vat,
         CodeLists.VatCategories,
         CodeLists.IsPaymentMeansCode,
         TaxNumbersHaveCountryPrefix: true);
@@ -24,7 +24,7 @@ public sealed class NlciusSiUbl20Ruleset : IInvoiceRuleset
 
     public string Id => RulesetId;
 
-    public string DisplayName => "NLCIUS / SI-UBL 2.0 (Nederland)";
+    public string DisplayName => NlciusRuleText.Current.DisplayName;
 
     public string RulesRelease => "2.0.3.13";
 
@@ -35,7 +35,7 @@ public sealed class NlciusSiUbl20Ruleset : IInvoiceRuleset
     /// <summary>The PEPPOL billing process, under which SI-UBL 2.0 travels over PEPPOL.</summary>
     public string ProfileId => "urn:fdc:peppol.eu:2017:poacc:billing:01:1.0";
 
-    public string TaxName => "btw";
+    public string TaxName => Bis.TaxName;
 
     public IReadOnlyList<TaxCategory> TaxCategories => Bis.TaxCategories;
 

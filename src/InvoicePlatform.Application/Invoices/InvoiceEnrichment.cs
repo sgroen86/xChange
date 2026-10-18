@@ -46,8 +46,7 @@ public sealed class InvoiceEnrichment(IOrganizationSettingsStore settings, Relat
             return draft;
         }
 
-        notices.Add(Filled("ENRICH-ORGANIZATION", "seller.electronicAddress",
-            "Elektronisch adres van de verkoper ingevuld uit de organisatie-instellingen."));
+        notices.Add(Filled("ENRICH-ORGANIZATION", "seller.electronicAddress", EnrichmentText.Current.SellerEndpointFromSettings));
         return draft with { Seller = seller with { ElectronicAddress = endpoint, ElectronicAddressScheme = scheme } };
     }
 
@@ -59,28 +58,28 @@ public sealed class InvoiceEnrichment(IOrganizationSettingsStore settings, Relat
             return draft;
         }
 
+        var text = EnrichmentText.Current;
+
         // Electronic address and its scheme travel together.
         if (Empty(buyer.ElectronicAddress) && relation.ElectronicAddress is not null)
         {
             buyer = buyer with { ElectronicAddress = relation.ElectronicAddress, ElectronicAddressScheme = relation.ElectronicAddressScheme };
-            notices.Add(Filled("ENRICH-RELATION", "buyer.electronicAddress",
-                "Elektronisch adres van de afnemer ingevuld uit de relatiegegevens."));
+            notices.Add(Filled("ENRICH-RELATION", "buyer.electronicAddress", text.BuyerEndpointFromRelation));
         }
         else if (relation.ElectronicAddress is not null && buyer.ElectronicAddress!.Trim() != relation.ElectronicAddress)
         {
-            notices.Add(Conflict("buyer.electronicAddress", "Elektronisch adres", relation.ElectronicAddress));
+            notices.Add(Conflict("buyer.electronicAddress", text.Conflict(text.ElectronicAddress, relation.ElectronicAddress)));
         }
 
         if (Empty(buyer.LegalRegistrationId) && relation.LegalRegistrationId is not null)
         {
             buyer = buyer with { LegalRegistrationId = relation.LegalRegistrationId, LegalRegistrationScheme = relation.LegalRegistrationScheme };
-            notices.Add(Filled("ENRICH-RELATION", "buyer.legalRegistrationId",
-                "KvK-nummer van de afnemer ingevuld uit de relatiegegevens."));
+            notices.Add(Filled("ENRICH-RELATION", "buyer.legalRegistrationId", text.BuyerRegistrationFromRelation));
         }
         else if (relation.LegalRegistrationId is not null
             && RelationKeys.NormalizeRegistration(buyer.LegalRegistrationId) != relation.LegalRegistrationId)
         {
-            notices.Add(Conflict("buyer.legalRegistrationId", "KvK-nummer", relation.LegalRegistrationId));
+            notices.Add(Conflict("buyer.legalRegistrationId", text.Conflict(text.Registration, relation.LegalRegistrationId)));
         }
 
         if (Empty(buyer.LegalRegistrationScheme) && !Empty(buyer.LegalRegistrationId) && relation.LegalRegistrationScheme is not null)
@@ -91,24 +90,22 @@ public sealed class InvoiceEnrichment(IOrganizationSettingsStore settings, Relat
         if (Empty(buyer.VatIdentifier) && relation.VatIdentifier is not null)
         {
             buyer = buyer with { VatIdentifier = relation.VatIdentifier };
-            notices.Add(Filled("ENRICH-RELATION", "buyer.vatIdentifier",
-                "Btw-nummer van de afnemer ingevuld uit de relatiegegevens."));
+            notices.Add(Filled("ENRICH-RELATION", "buyer.vatIdentifier", text.BuyerVatFromRelation));
         }
         else if (relation.VatIdentifier is not null && RelationKeys.NormalizeVat(buyer.VatIdentifier) != relation.VatIdentifier)
         {
-            notices.Add(Conflict("buyer.vatIdentifier", "Btw-nummer", relation.VatIdentifier));
+            notices.Add(Conflict("buyer.vatIdentifier", text.Conflict(text.Vat, relation.VatIdentifier)));
         }
 
         var address = buyer.Address ?? new CanonicalAddress();
         if (Empty(address.CountryCode) && relation.CountryCode is not null)
         {
             buyer = buyer with { Address = address with { CountryCode = relation.CountryCode } };
-            notices.Add(Filled("ENRICH-RELATION", "buyer.address.countryCode",
-                "Landcode van de afnemer ingevuld uit de relatiegegevens."));
+            notices.Add(Filled("ENRICH-RELATION", "buyer.address.countryCode", text.BuyerCountryFromRelation));
         }
         else if (relation.CountryCode is not null && address.CountryCode!.Trim().ToUpperInvariant() != relation.CountryCode)
         {
-            notices.Add(Conflict("buyer.address.countryCode", "Landcode", relation.CountryCode));
+            notices.Add(Conflict("buyer.address.countryCode", text.Conflict(text.Country, relation.CountryCode)));
         }
 
         return draft with { Buyer = buyer };
@@ -119,10 +116,8 @@ public sealed class InvoiceEnrichment(IOrganizationSettingsStore settings, Relat
     private static ValidationWarning Filled(string code, string path, string message)
         => new(code, path, message, ValidationSeverity.Info);
 
-    private static ValidationWarning Conflict(string path, string label, string relationValue)
-        => new("RELATION-CONFLICT", path,
-            $"{label} van de afnemer wijkt af van de relatiegegevens ({relationValue}). De waarde uit de PDF is behouden.",
-            ValidationSeverity.Warning);
+    private static ValidationWarning Conflict(string path, string message)
+        => new("RELATION-CONFLICT", path, message, ValidationSeverity.Warning);
 }
 
 /// <param name="Notices">An Info warning per filled field and a Warning per conflict, for the review screen.</param>

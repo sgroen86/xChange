@@ -58,8 +58,6 @@ public sealed class SignupService(
 {
     public const int TrialConversions = 10;
 
-    private const string InvalidLink = "Deze bevestigingslink is ongeldig of verlopen. Meld je opnieuw aan.";
-
     public async Task<bool> IsOpenAsync(CancellationToken cancellationToken = default)
         => (await platform.GetSettingsAsync(cancellationToken).ConfigureAwait(false)).SignupOpen;
 
@@ -74,19 +72,19 @@ public sealed class SignupService(
     {
         if (!await IsOpenAsync(cancellationToken).ConfigureAwait(false))
         {
-            return new SignupResult(SignupOutcome.Closed, "Aanmelden is nog niet open.");
+            return new SignupResult(SignupOutcome.Closed, IdentityText.Current.SignupClosed);
         }
 
         var now = clock.UtcNow;
         var record = await attempts.GetAsync(clientKey, cancellationToken).ConfigureAwait(false);
         if (record is not null && record.IsLocked(now))
         {
-            return new SignupResult(SignupOutcome.Locked, "Te veel pogingen. Wacht 15 minuten.");
+            return new SignupResult(SignupOutcome.Locked, IdentityText.Current.TooManyAttempts);
         }
 
         var error = AuthService.ValidateCredentials(emailAddress, password, name)
-            ?? (string.IsNullOrWhiteSpace(organizationName) ? "Naam van het bedrijf is verplicht." : null)
-            ?? (Countries.IsSupported(countryCode) ? null : "Kies een land uit de lijst.");
+            ?? (string.IsNullOrWhiteSpace(organizationName) ? IdentityText.Current.CompanyNameRequired : null)
+            ?? (Countries.IsSupported(countryCode) ? null : IdentityText.Current.ChooseCountry);
         if (error is not null)
         {
             return new SignupResult(SignupOutcome.Invalid, error);
@@ -95,18 +93,13 @@ public sealed class SignupService(
         // Every sign-up counts, so the form cannot be used to send mail in bulk.
         await auth.RecordAttemptAsync(clientKey, record, now, cancellationToken).ConfigureAwait(false);
 
+        // The mail goes out within this request, so it is in the language the person signed up in.
+        var text = IdentityText.Current;
         var address = User.NormalizeEmail(emailAddress);
         if (await users.FindByEmailAsync(address, cancellationToken).ConfigureAwait(false) is not null)
         {
-            await email.SendAsync(address, "Je hebt al een xChange-account",
-                $"""
-                Hallo,
-
-                Iemand (waarschijnlijk jij) probeerde zich met dit e-mailadres aan te melden bij xChange.
-                Er bestaat al een account met dit adres. Log in via {settings.AppUrl}/login/
-
-                Was jij dit niet? Dan kun je deze e-mail negeren.
-                """, cancellationToken).ConfigureAwait(false);
+            await email.SendAsync(address, text.KnownAddressMailSubject, text.KnownAddressMailBody(settings.AppUrl), cancellationToken)
+                .ConfigureAwait(false);
             return new SignupResult(SignupOutcome.MailSent);
         }
 
@@ -123,18 +116,15 @@ public sealed class SignupService(
                 now + PendingSignup.Lifetime),
             cancellationToken).ConfigureAwait(false);
 
-        await email.SendAsync(address, "Bevestig je aanmelding bij xChange",
-            $"""
-            Hallo {name.Trim()},
-
-            Bevestig je e-mailadres om je xChange-account voor {organizationName.Trim()} te activeren:
-
-            {settings.AppUrl}/signup/confirm/?code={Uri.EscapeDataString(code)}
-
-            De link is 24 uur geldig. Je krijgt {TrialConversions} gratis conversies om xChange te proberen.
-
-            Heb jij je niet aangemeld? Dan kun je deze e-mail negeren; er wordt niets aangemaakt.
-            """, cancellationToken).ConfigureAwait(false);
+        await email.SendAsync(
+            address,
+            text.ConfirmationMailSubject,
+            text.ConfirmationMailBody(
+                name.Trim(),
+                organizationName.Trim(),
+                $"{settings.AppUrl}/signup/confirm/?code={Uri.EscapeDataString(code)}",
+                TrialConversions),
+            cancellationToken).ConfigureAwait(false);
 
         return new SignupResult(SignupOutcome.MailSent);
     }
@@ -149,7 +139,7 @@ public sealed class SignupService(
         var record = await attempts.GetAsync(clientKey, cancellationToken).ConfigureAwait(false);
         if (record is not null && record.IsLocked(now))
         {
-            return AuthResult.Fail("Te veel pogingen. Wacht 15 minuten.");
+            return AuthResult.Locked();
         }
 
         var signup = string.IsNullOrWhiteSpace(code)
@@ -158,7 +148,7 @@ public sealed class SignupService(
         if (signup is null || signup.IsExpired(now))
         {
             await auth.RecordAttemptAsync(clientKey, record, now, cancellationToken).ConfigureAwait(false);
-            return AuthResult.Fail(InvalidLink);
+            return AuthResult.Fail(IdentityText.Current.InvalidConfirmationLink);
         }
 
         var userId = Guid.NewGuid().ToString("n");
@@ -190,7 +180,7 @@ public sealed class SignupService(
         catch (InvalidOperationException)
         {
             // The address got an account between sign-up and confirmation.
-            return AuthResult.Fail("Er bestaat al een account met dit e-mailadres. Gebruik inloggen.");
+            return AuthResult.Fail(IdentityText.Current.AccountWithEmailExistsLogIn);
         }
 
         // The limit before the organisation exists in the list, so it is never briefly unlimited.

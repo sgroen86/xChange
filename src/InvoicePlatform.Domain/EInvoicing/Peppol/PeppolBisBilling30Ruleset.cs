@@ -17,14 +17,14 @@ public sealed class PeppolBisBilling30Ruleset : IInvoiceRuleset
     public const string RulesetId = "peppol-bis-billing-3.0";
 
     private static readonly TaxRegime Regime = new(
-        "btw",
+        TaxKind.Vat,
         CodeLists.VatCategories,
         CodeLists.IsPaymentMeansCode,
         TaxNumbersHaveCountryPrefix: true);
 
     public string Id => RulesetId;
 
-    public string DisplayName => "PEPPOL BIS Billing 3.0 (VK, België, Nederland)";
+    public string DisplayName => PeppolRuleText.Current.DisplayName;
 
     public string RulesRelease => "3.0.21";
 
@@ -34,18 +34,25 @@ public sealed class PeppolBisBilling30Ruleset : IInvoiceRuleset
 
     public string ProfileId => "urn:fdc:peppol.eu:2017:poacc:billing:01:1.0";
 
-    public string TaxName => "btw";
+    public string TaxName => CommonRuleText.Current.TaxName(TaxKind.Vat);
 
     /// <summary>K, L, M and B are left out: the model lacks the data they need.</summary>
-    public IReadOnlyList<TaxCategory> TaxCategories { get; } =
-    [
-        new("S", "standaardtarief"),
-        new("Z", "nultarief"),
-        new("E", "vrijgesteld"),
-        new("AE", "btw verlegd"),
-        new("G", "export buiten de EU"),
-        new("O", "niet onderworpen"),
-    ];
+    public IReadOnlyList<TaxCategory> TaxCategories
+    {
+        get
+        {
+            var text = PeppolRuleText.Current;
+            return
+            [
+                new("S", text.StandardRate),
+                new("Z", text.ZeroRate),
+                new("E", text.Exempt),
+                new("AE", text.ReverseCharge),
+                new("G", text.ExportOutsideEu),
+                new("O", text.NotSubject),
+            ];
+        }
+    }
 
     public string? TaxCurrency => null;
 
