@@ -9,7 +9,7 @@ namespace InvoicePlatform.Application.Relations;
 /// The organisation's customers: remembered when an invoice is booked, looked
 /// up when the next one is extracted, and correctable by hand.
 /// </summary>
-public sealed class RelationService(IRelationRepository relations, IClock clock)
+public sealed class RelationService(IRelationRepository relations, IClock clock, InvoiceRulesetRegistry rulesets)
 {
     public Task<IReadOnlyList<Relation>> ListAsync(string organizationId, CancellationToken cancellationToken = default)
         => relations.ListAsync(organizationId, cancellationToken);
@@ -94,6 +94,12 @@ public sealed class RelationService(IRelationRepository relations, IClock clock)
             return RelationUpdateResult.Invalid("Het schema van het registratienummer is een code van vier cijfers, zoals 0106.");
         }
 
+        var format = Clean(update.DefaultRulesetId);
+        if (format is not null && rulesets.Find(format) is null)
+        {
+            return RelationUpdateResult.Invalid("Kies een bestaand exportformaat, of geen.");
+        }
+
         var vat = RelationKeys.NormalizeVat(update.VatIdentifier);
         var registration = RelationKeys.NormalizeRegistration(update.LegalRegistrationId);
         if (vat is null && registration is null)
@@ -110,6 +116,7 @@ public sealed class RelationService(IRelationRepository relations, IClock clock)
             ElectronicAddress = endpoint,
             ElectronicAddressScheme = endpoint is null ? null : endpointScheme,
             CountryCode = Clean(update.CountryCode)?.ToUpperInvariant(),
+            DefaultRulesetId = format,
             UpdatedAt = clock.UtcNow,
         };
 
@@ -127,7 +134,8 @@ public sealed record RelationUpdate(
     string? LegalRegistrationScheme,
     string? ElectronicAddress,
     string? ElectronicAddressScheme,
-    string? CountryCode);
+    string? CountryCode,
+    string? DefaultRulesetId = null);
 
 public enum RelationUpdateOutcome
 {

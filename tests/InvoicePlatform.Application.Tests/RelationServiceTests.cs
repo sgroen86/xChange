@@ -1,6 +1,7 @@
 using InvoicePlatform.Application.Invoices;
 using InvoicePlatform.Application.Relations;
 using InvoicePlatform.Domain.Canonical;
+using InvoicePlatform.Domain.EInvoicing;
 using InvoicePlatform.Domain.Validation;
 
 namespace InvoicePlatform.Application.Tests;
@@ -17,7 +18,7 @@ public class RelationServiceTests
 
     public RelationServiceTests()
     {
-        _relations = new RelationService(_store, _clock);
+        _relations = new RelationService(_store, _clock, new InvoiceRulesetRegistry());
         var invoices = new FakeInvoiceStore();
         _booking = new BookInvoiceService(invoices, invoices, _clock, _relations);
     }
@@ -96,6 +97,32 @@ public class RelationServiceTests
 
         Assert.Equal(RelationUpdateOutcome.NotFound, result.Outcome);
         Assert.Equal("Van Dijk Techniek B.V.", Assert.Single(await _relations.ListAsync(OrgA)).Name);
+    }
+
+    [Fact]
+    public async Task A_customer_keeps_the_format_set_by_hand_when_booked_again()
+    {
+        await Book(VanDijk());
+        var relation = Assert.Single(await _relations.ListAsync(OrgA));
+
+        var result = await _relations.UpdateAsync(OrgA, relation.RelationId, new RelationUpdate(
+            relation.Name, relation.VatIdentifier, null, null, null, null, "GB", "pint-sg-billing-1"));
+        await Book(VanDijk());
+
+        Assert.Equal(RelationUpdateOutcome.Updated, result.Outcome);
+        Assert.Equal("pint-sg-billing-1", Assert.Single(await _relations.ListAsync(OrgA)).DefaultRulesetId);
+    }
+
+    [Fact]
+    public async Task An_unknown_format_is_refused()
+    {
+        await Book(VanDijk());
+        var relation = Assert.Single(await _relations.ListAsync(OrgA));
+
+        var result = await _relations.UpdateAsync(OrgA, relation.RelationId, new RelationUpdate(
+            relation.Name, relation.VatIdentifier, null, null, null, null, "NL", "xrechnung-9"));
+
+        Assert.Equal(RelationUpdateOutcome.Invalid, result.Outcome);
     }
 
     [Fact]

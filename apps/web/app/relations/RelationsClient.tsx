@@ -6,6 +6,7 @@ import { Icon } from "../../components/Icon";
 import { useToast } from "../../components/Toast";
 import { getServerUserSnapshot, getUserSnapshot, subscribeToUser } from "../../lib/auth";
 import { listRelations, updateRelation, type Relation, type RelationUpdate } from "../../lib/relations";
+import { FALLBACK_SETTINGS, getSettings, type RulesetInfo } from "../../lib/settings";
 import { ENDPOINT_SCHEMES, REGISTRATION_SCHEMES } from "../invoices/[invoiceId]/review/fields";
 
 type State =
@@ -13,7 +14,9 @@ type State =
   | { status: "ready"; relations: Relation[] }
   | { status: "error"; message: string };
 
-const FIELDS: { key: keyof RelationUpdate; label: string; options?: { value: string; label: string }[] }[] = [
+type FieldSpec = { key: keyof RelationUpdate; label: string; options?: { value: string; label: string }[]; emptyLabel?: string };
+
+const FIELDS: FieldSpec[] = [
   { key: "name", label: "Naam" },
   { key: "vatIdentifier", label: "Btw-nummer" },
   { key: "legalRegistrationId", label: "KvK-nummer" },
@@ -32,6 +35,7 @@ function toUpdate(relation: Relation): RelationUpdate {
     electronicAddress: relation.electronicAddress,
     electronicAddressScheme: relation.electronicAddressScheme,
     countryCode: relation.countryCode,
+    defaultRulesetId: relation.defaultRulesetId,
   };
 }
 
@@ -48,6 +52,29 @@ export default function RelationsClient() {
   const [state, setState] = useState<State>({ status: "loading" });
   const [editing, setEditing] = useState<{ id: string; values: RelationUpdate } | null>(null);
   const [saving, setSaving] = useState(false);
+  const [rulesets, setRulesets] = useState<RulesetInfo[]>(FALLBACK_SETTINGS.rulesets);
+
+  useEffect(() => {
+    let cancelled = false;
+    getSettings()
+      .then((settings) => {
+        if (!cancelled) setRulesets(settings.rulesets);
+      })
+      .catch(() => {
+        // The fallback lists BIS 3.0; saving still checks the choice on the server.
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  const formatField: FieldSpec = {
+    key: "defaultRulesetId",
+    label: "Exportformaat",
+    options: rulesets.map((r) => ({ value: r.id, label: r.displayName })),
+    emptyLabel: "Standaard van de organisatie",
+  };
+  const formatName = (id: string | null) => (id ? (rulesets.find((r) => r.id === id)?.displayName ?? id) : "—");
 
   useEffect(() => {
     let cancelled = false;
@@ -123,6 +150,13 @@ export default function RelationsClient() {
                 <Field key={field.key} field={field} value={editing.values[field.key]} onChange={setValue} />
               ))}
             </div>
+            <div className="form__row">
+              <Field field={formatField} value={editing.values.defaultRulesetId} onChange={setValue} />
+            </div>
+            <div className="form-help">
+              Facturen aan deze afnemer openen op dit formaat, bijvoorbeeld PEPPOL BIS 3.0 voor een
+              klant in het VK.
+            </div>
             <div className="form__actions">
               <button type="submit" className="btn btn--primary" disabled={saving}>
                 <Icon name="save" /> {saving ? "Bezig…" : "Opslaan"}
@@ -158,6 +192,7 @@ export default function RelationsClient() {
                     <th>KvK-nummer</th>
                     <th>Elektronisch adres</th>
                     <th>Land</th>
+                    <th>Formaat</th>
                     <th />
                   </tr>
                 </thead>
@@ -173,6 +208,7 @@ export default function RelationsClient() {
                           : "—"}
                       </td>
                       <td>{relation.countryCode ?? "—"}</td>
+                      <td>{formatName(relation.defaultRulesetId)}</td>
                       <td>
                         {canEdit && (
                           <button
@@ -201,7 +237,7 @@ function Field({
   value,
   onChange,
 }: {
-  field: (typeof FIELDS)[number];
+  field: FieldSpec;
   value: string | null;
   onChange: (key: keyof RelationUpdate, value: string) => void;
 }) {
@@ -211,7 +247,7 @@ function Field({
       <label htmlFor={id}>{field.label}</label>
       {field.options ? (
         <select id={id} value={value ?? ""} onChange={(event) => onChange(field.key, event.target.value)}>
-          <option value="">—</option>
+          <option value="">{field.emptyLabel ?? "—"}</option>
           {field.options.map((option) => (
             <option key={option.value} value={option.value}>
               {option.label}

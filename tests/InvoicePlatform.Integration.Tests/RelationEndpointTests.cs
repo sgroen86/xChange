@@ -72,6 +72,22 @@ public class RelationEndpointTests : IClassFixture<SignedInFactory>
     }
 
     [Fact]
+    public async Task A_customer_gets_its_own_export_format()
+    {
+        var id = await Seed(SignedInFactory.OrgA);
+
+        var response = await _factory.As("user-a").PutAsJsonAsync($"/api/v1/relations/{id}",
+            new { name = "Brit Ltd", vatIdentifier = "GB123456789", countryCode = "GB", defaultRulesetId = "peppol-bis-billing-3.0" });
+        var unknown = await _factory.As("user-a").PutAsJsonAsync($"/api/v1/relations/{id}",
+            new { name = "Brit Ltd", vatIdentifier = "GB123456789", defaultRulesetId = "xrechnung-9" });
+
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        Assert.Equal("peppol-bis-billing-3.0",
+            (await response.Content.ReadFromJsonAsync<JsonElement>()).GetProperty("defaultRulesetId").GetString());
+        Assert.Equal(HttpStatusCode.BadRequest, unknown.StatusCode);
+    }
+
+    [Fact]
     public async Task An_invalid_correction_is_a_bad_request()
     {
         var id = await Seed(SignedInFactory.OrgA);

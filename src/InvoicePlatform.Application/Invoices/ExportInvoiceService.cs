@@ -43,20 +43,17 @@ public sealed partial class ExportInvoiceService(
         return new CheckOutcome(RulesetFound: true, result.Violations);
     }
 
-    /// <param name="requestedRulesetId">The user's choice for this download; null means the organisation's default.</param>
+    /// <param name="requestedRulesetId">
+    /// The user's choice for this download; null means the customer's default,
+    /// else the organisation's, else its country's.
+    /// </param>
     public async Task<ExportOutcome> ExportAsync(
         string organizationId,
         string invoiceId,
         string? requestedRulesetId,
         CancellationToken cancellationToken = default)
     {
-        var organization = await settings.GetAsync(organizationId, cancellationToken).ConfigureAwait(false);
-        var record = await platform.FindOrganizationAsync(organizationId, cancellationToken).ConfigureAwait(false);
-        var ruleset = rulesets.Resolve(
-            requestedRulesetId,
-            organization?.DefaultRulesetId,
-            Countries.Find(record?.CountryCode)?.DefaultRulesetId);
-        if (ruleset is null)
+        if (requestedRulesetId is not null && rulesets.Find(requestedRulesetId) is null)
         {
             return ExportOutcome.UnknownRuleset;
         }
@@ -69,6 +66,15 @@ public sealed partial class ExportInvoiceService(
         }
 
         var enriched = await enrichment.EnrichAsync(organizationId, stored.Invoice, cancellationToken).ConfigureAwait(false);
+
+        var organization = await settings.GetAsync(organizationId, cancellationToken).ConfigureAwait(false);
+        var record = await platform.FindOrganizationAsync(organizationId, cancellationToken).ConfigureAwait(false);
+        var ruleset = rulesets.Resolve(
+            requestedRulesetId,
+            enriched.Relation?.DefaultRulesetId,
+            organization?.DefaultRulesetId,
+            Countries.Find(record?.CountryCode)?.DefaultRulesetId)!;
+
         var draft = enriched.Draft with
         {
             // Stable per stored invoice, so a re-export carries the same UUID.

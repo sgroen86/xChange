@@ -2,6 +2,7 @@ using InvoicePlatform.Application.Invoices;
 using InvoicePlatform.Application.Organizations;
 using InvoicePlatform.Application.Relations;
 using InvoicePlatform.Domain.Canonical;
+using InvoicePlatform.Domain.EInvoicing;
 using InvoicePlatform.Domain.Validation;
 
 namespace InvoicePlatform.Application.Tests;
@@ -12,7 +13,7 @@ public class InvoiceEnrichmentTests
     private readonly InvoiceEnrichment _enrichment;
 
     public InvoiceEnrichmentTests()
-        => _enrichment = new InvoiceEnrichment(_settings, new RelationService(new FakeRelationStore(), new TestClock(DateTimeOffset.UnixEpoch)));
+        => _enrichment = new InvoiceEnrichment(_settings, new RelationService(new FakeRelationStore(), new TestClock(DateTimeOffset.UnixEpoch), new InvoiceRulesetRegistry()));
 
     private Task Configure(string endpoint, string scheme)
         => _settings.SaveAsync(new OrganizationSettings { OrganizationId = "org-a", EndpointId = endpoint, EndpointScheme = scheme });

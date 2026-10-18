@@ -11,6 +11,8 @@ interface Props {
   rulesets: RulesetInfo[];
   format: string;
   onFormat: (format: string) => void;
+  /** Why the menu opened on this format, when it is not the organisation's. */
+  defaultNote: string | null;
   /** Numbers the server cannot read yet; they come before anything else. */
   localIssues: LocalIssue[];
   violations: RuleViolation[];
@@ -27,8 +29,9 @@ interface Props {
 }
 
 /**
- * The format menu (organisation default preselected, a choice applies to this
- * download only) and, for a ruleset, what is still missing for it.
+ * The format menu (the customer's or else the organisation's default
+ * preselected, a choice applies to this download only) and, for a ruleset,
+ * what is still missing for it.
  */
 export function ExportPanel(props: Props) {
   const { rulesets, format, onFormat, localIssues, violations, checking, checkFailed } = props;
@@ -72,6 +75,7 @@ export function ExportPanel(props: Props) {
               ))}
               <option value={CANONICAL_FORMAT}>Canonieke XML</option>
             </select>
+            {props.defaultNote && <div className="form-help">{props.defaultNote}</div>}
           </div>
           <div className="form__group" style={{ justifyContent: "flex-end" }}>
             <button
