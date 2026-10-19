@@ -1,3 +1,4 @@
+using InvoicePlatform.Application.Quality;
 using InvoicePlatform.Application.Identity;
 using InvoicePlatform.Application.Imports;
 using InvoicePlatform.Application.Invoices;
@@ -59,6 +60,8 @@ public sealed class SignedInFactory : WebApplicationFactory<Program>
 
     public InMemoryUsageLedger Ledger { get; } = new();
 
+    public InMemoryQualityLedger Quality { get; } = new();
+
     public HttpClient As(string token)
     {
         var client = CreateClient();
@@ -108,6 +111,7 @@ public sealed class SignedInFactory : WebApplicationFactory<Program>
             services.RemoveAll<IEmailSender>();
             services.RemoveAll<IUsageMeter>();
             services.RemoveAll<IUsageLedger>();
+            services.RemoveAll<IQualityLedger>();
 
             var identity = new SignedInIdentity();
             services.AddSingleton<IUserStore>(identity);
@@ -128,6 +132,7 @@ public sealed class SignedInFactory : WebApplicationFactory<Program>
             services.AddSingleton<IEmailSender>(Mail);
             services.AddSingleton<IUsageMeter>(Usage);
             services.AddSingleton<IUsageLedger>(Ledger);
+            services.AddSingleton<IQualityLedger>(Quality);
         });
     }
 

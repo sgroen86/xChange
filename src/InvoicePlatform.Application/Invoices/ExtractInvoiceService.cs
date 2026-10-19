@@ -87,10 +87,16 @@ public sealed class ExtractInvoiceService(
 
         // What reviewers corrected before goes back in first; the enrichment
         // then only fills what is still empty.
-        var learned = await learning.ApplyAsync(organizationId, extractionId, interpretation.Draft, cancellationToken)
+        var learned = await learning.ApplyAsync(organizationId, interpretation.Draft, cancellationToken)
             .ConfigureAwait(false);
 
         var enriched = await enrichment.EnrichAsync(organizationId, learned.Draft, cancellationToken)
+            .ConfigureAwait(false);
+
+        // The model's own reading and what the reviewer will see, for booking
+        // to learn from and to measure the reading against.
+        await learning.KeepExtractionAsync(
+            organizationId, extractionId, interpretation.Execution.Model, interpretation.Draft, learned, enriched.Draft, cancellationToken)
             .ConfigureAwait(false);
 
         var warnings = learned.Notices.Concat(enriched.Notices).Concat(validator.Validate(enriched.Draft)).ToList();

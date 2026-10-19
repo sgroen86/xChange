@@ -20,6 +20,7 @@ import { compare, divRound, format, HUNDRED, isZero, mul, parseDecimal, ZERO } f
 import { text, useLang, useText, type Lang } from "../../../lib/i18n";
 import { formatUsd } from "../../../lib/money";
 import { currentMonth, shiftMonth } from "../../../lib/months";
+import QualityTab from "./QualityTab";
 
 /** A share of the largest value, 0-100, for a CSS bar. Digit arithmetic, like the amounts themselves. */
 function share(value: string, max: string): number {
@@ -67,6 +68,7 @@ export default function CostsClient() {
   const isAdmin = Boolean(user?.isPlatformAdmin);
 
   const [month, setMonth] = useState(() => currentMonth());
+  const [tab, setTab] = useState<"costs" | "quality">("costs");
   const [organizationId, setOrganizationId] = useState<string | null>(null);
   const [downloading, setDownloading] = useState(false);
 
@@ -206,6 +208,8 @@ export default function CostsClient() {
 
   const loading = organizationId ? organization === undefined : platform === undefined;
   const data = organizationId ? organization : platform;
+  // Quality is for the whole platform; one organisation's month shows its costs.
+  const showQuality = !organizationId && tab === "quality";
 
   return (
     <>
@@ -215,7 +219,9 @@ export default function CostsClient() {
             <Icon name="barChart" />{" "}
             {organizationId ? (organization?.name ?? platform?.organizations.find((o) => o.key === organizationId)?.name ?? c.unknownOrganization) : c.title}
           </h1>
-          <p className="page-header__subtitle">{loading ? t.common.loading : c.subtitle(month)}</p>
+          <p className="page-header__subtitle">
+            {showQuality ? c.quality.subtitle(month) : loading ? t.common.loading : c.subtitle(month)}
+          </p>
         </div>
         <div className="page-header__actions">
           {organizationId && (
@@ -247,7 +253,7 @@ export default function CostsClient() {
               <Icon name="chevronRight" />
             </button>
           </div>
-          {!organizationId && (
+          {!organizationId && !showQuality && (
             <button type="button" className="btn btn--primary" onClick={() => void csv()} disabled={downloading}>
               <Icon name="download" /> {downloading ? t.common.busy : c.downloadCsv}
             </button>
@@ -255,173 +261,190 @@ export default function CostsClient() {
         </div>
       </div>
 
-      {data && stats(data.total)}
-
-      {data && data.total.calls === 0 && (
-        <div className="alert alert--info" style={{ marginBottom: "var(--space-4)" }}>
-          <Icon name="info" />
-          <div>{c.empty}</div>
+      {!organizationId && (
+        <div className="tabs">
+          <button type="button" className={`tab ${tab === "costs" ? "tab--active" : ""}`.trim()} onClick={() => setTab("costs")}>
+            {c.tabs.costs}
+          </button>
+          <button type="button" className={`tab ${tab === "quality" ? "tab--active" : ""}`.trim()} onClick={() => setTab("quality")}>
+            {c.tabs.quality}
+          </button>
         </div>
       )}
 
-      {!organizationId && platform && platform.total.calls > 0 && (
+      {showQuality ? (
+        <QualityTab month={month} />
+      ) : (
         <>
-          {card(
-            c.perDay,
-            <table className="table">
-              <thead>
-                <tr>
-                  <th>{c.columns.day}</th>
-                  <th style={{ width: "50%" }} />
-                  <th className="cell-amount">{c.columns.calls}</th>
-                  <th className="cell-amount">{c.columns.cost}</th>
-                </tr>
-              </thead>
-              <tbody>
-                {platform.days.map((day) => (
-                  <tr key={day.key}>
-                    <td>{day.key}</td>
-                    <td>
-                      <div className="progress">
-                        <div className="progress__bar" style={{ width: `${share(day.totals.costUsd, largest(platform.days))}%` }} />
-                      </div>
-                    </td>
-                    <td className="cell-amount">{count(day.totals.calls, lang)}</td>
-                    <td className="cell-amount">{usd(day.totals.costUsd)}</td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>,
+          {data && stats(data.total)}
+
+          {data && data.total.calls === 0 && (
+            <div className="alert alert--info" style={{ marginBottom: "var(--space-4)" }}>
+              <Icon name="info" />
+              <div>{c.empty}</div>
+            </div>
           )}
 
-          {card(
-            c.perModel,
-            <table className="table">
-              <thead>
-                <tr>
-                  <th>{c.columns.model}</th>
-                  {totalsHeaders}
-                </tr>
-              </thead>
-              <tbody>
-                {platform.models.map((model) => (
-                  <tr key={model.key}>
-                    <td>{model.key}</td>
-                    {totalsCells(model.totals)}
-                  </tr>
-                ))}
-              </tbody>
-            </table>,
+          {!organizationId && platform && platform.total.calls > 0 && (
+            <>
+              {card(
+                c.perDay,
+                <table className="table">
+                  <thead>
+                    <tr>
+                      <th>{c.columns.day}</th>
+                      <th style={{ width: "50%" }} />
+                      <th className="cell-amount">{c.columns.calls}</th>
+                      <th className="cell-amount">{c.columns.cost}</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {platform.days.map((day) => (
+                      <tr key={day.key}>
+                        <td>{day.key}</td>
+                        <td>
+                          <div className="progress">
+                            <div className="progress__bar" style={{ width: `${share(day.totals.costUsd, largest(platform.days))}%` }} />
+                          </div>
+                        </td>
+                        <td className="cell-amount">{count(day.totals.calls, lang)}</td>
+                        <td className="cell-amount">{usd(day.totals.costUsd)}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>,
+              )}
+
+              {card(
+                c.perModel,
+                <table className="table">
+                  <thead>
+                    <tr>
+                      <th>{c.columns.model}</th>
+                      {totalsHeaders}
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {platform.models.map((model) => (
+                      <tr key={model.key}>
+                        <td>{model.key}</td>
+                        {totalsCells(model.totals)}
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>,
+              )}
+
+              {card(
+                c.perOrganization,
+                <table className="table table--clickable">
+                  <thead>
+                    <tr>
+                      <th>{c.columns.organization}</th>
+                      {totalsHeaders}
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {platform.organizations.map((row) => (
+                      <tr key={row.key} onClick={() => setOrganizationId(row.key)}>
+                        <td>
+                          {row.name ?? <span className="text-soft">{c.unknownOrganization}</span>}
+                          <div className="text-soft text-sm">{row.key}</div>
+                        </td>
+                        {totalsCells(row.totals)}
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>,
+              )}
+
+              <p className="text-soft text-sm">{c.priceNote(platform.priceVersion)}</p>
+            </>
           )}
 
-          {card(
-            c.perOrganization,
-            <table className="table table--clickable">
-              <thead>
-                <tr>
-                  <th>{c.columns.organization}</th>
-                  {totalsHeaders}
-                </tr>
-              </thead>
-              <tbody>
-                {platform.organizations.map((row) => (
-                  <tr key={row.key} onClick={() => setOrganizationId(row.key)}>
-                    <td>
-                      {row.name ?? <span className="text-soft">{c.unknownOrganization}</span>}
-                      <div className="text-soft text-sm">{row.key}</div>
-                    </td>
-                    {totalsCells(row.totals)}
-                  </tr>
-                ))}
-              </tbody>
-            </table>,
-          )}
+          {organizationId && organization && organization.total.calls > 0 && (
+            <>
+              {card(
+                c.perUser,
+                <table className="table">
+                  <thead>
+                    <tr>
+                      <th>{c.columns.user}</th>
+                      {totalsHeaders}
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {organization.users.map((actor) => (
+                      <tr key={actor.actor}>
+                        <td>
+                          {actorName(actor)}
+                          {actor.name && actor.email && <div className="text-soft text-sm">{actor.email}</div>}
+                        </td>
+                        {totalsCells(actor.totals)}
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>,
+              )}
 
-          <p className="text-soft text-sm">{c.priceNote(platform.priceVersion)}</p>
-        </>
-      )}
+              {card(
+                c.perModel,
+                <table className="table">
+                  <thead>
+                    <tr>
+                      <th>{c.columns.model}</th>
+                      {totalsHeaders}
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {organization.models.map((model) => (
+                      <tr key={model.key}>
+                        <td>{model.key}</td>
+                        {totalsCells(model.totals)}
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>,
+              )}
 
-      {organizationId && organization && organization.total.calls > 0 && (
-        <>
-          {card(
-            c.perUser,
-            <table className="table">
-              <thead>
-                <tr>
-                  <th>{c.columns.user}</th>
-                  {totalsHeaders}
-                </tr>
-              </thead>
-              <tbody>
-                {organization.users.map((actor) => (
-                  <tr key={actor.actor}>
-                    <td>
-                      {actorName(actor)}
-                      {actor.name && actor.email && <div className="text-soft text-sm">{actor.email}</div>}
-                    </td>
-                    {totalsCells(actor.totals)}
-                  </tr>
-                ))}
-              </tbody>
-            </table>,
-          )}
-
-          {card(
-            c.perModel,
-            <table className="table">
-              <thead>
-                <tr>
-                  <th>{c.columns.model}</th>
-                  {totalsHeaders}
-                </tr>
-              </thead>
-              <tbody>
-                {organization.models.map((model) => (
-                  <tr key={model.key}>
-                    <td>{model.key}</td>
-                    {totalsCells(model.totals)}
-                  </tr>
-                ))}
-              </tbody>
-            </table>,
-          )}
-
-          {card(
-            c.topEvents,
-            <table className="table">
-              <thead>
-                <tr>
-                  <th>{c.columns.when}</th>
-                  <th>{c.columns.user}</th>
-                  <th>{c.columns.source}</th>
-                  <th>{c.columns.model}</th>
-                  <th className="cell-amount">{c.columns.tokens}</th>
-                  <th className="cell-amount">{c.columns.cacheTokens}</th>
-                  <th className="cell-amount">{c.columns.cost}</th>
-                </tr>
-              </thead>
-              <tbody>
-                {organization.topEvents.map((event) => (
-                  <tr key={event.eventId}>
-                    <td style={{ whiteSpace: "nowrap" }}>{event.at.slice(0, 16).replace("T", " ")} UTC</td>
-                    <td>{eventActor(event)}</td>
-                    <td>{sourceName(event.source)}</td>
-                    <td>
-                      {event.model}{" "}
-                      {!event.succeeded && <span className="badge badge--danger">{c.failed}</span>}{" "}
-                      {!event.priceKnown && <span className="badge badge--warning">{c.priceUnknown}</span>}
-                    </td>
-                    <td className="cell-amount">
-                      {count(event.inputTokens, lang)} / {count(event.outputTokens, lang)}
-                    </td>
-                    <td className="cell-amount">
-                      {count(event.cacheWriteTokens, lang)} / {count(event.cacheReadTokens, lang)}
-                    </td>
-                    <td className="cell-amount">{usd(event.costUsd)}</td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>,
+              {card(
+                c.topEvents,
+                <table className="table">
+                  <thead>
+                    <tr>
+                      <th>{c.columns.when}</th>
+                      <th>{c.columns.user}</th>
+                      <th>{c.columns.source}</th>
+                      <th>{c.columns.model}</th>
+                      <th className="cell-amount">{c.columns.tokens}</th>
+                      <th className="cell-amount">{c.columns.cacheTokens}</th>
+                      <th className="cell-amount">{c.columns.cost}</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {organization.topEvents.map((event) => (
+                      <tr key={event.eventId}>
+                        <td style={{ whiteSpace: "nowrap" }}>{event.at.slice(0, 16).replace("T", " ")} UTC</td>
+                        <td>{eventActor(event)}</td>
+                        <td>{sourceName(event.source)}</td>
+                        <td>
+                          {event.model}{" "}
+                          {!event.succeeded && <span className="badge badge--danger">{c.failed}</span>}{" "}
+                          {!event.priceKnown && <span className="badge badge--warning">{c.priceUnknown}</span>}
+                        </td>
+                        <td className="cell-amount">
+                          {count(event.inputTokens, lang)} / {count(event.outputTokens, lang)}
+                        </td>
+                        <td className="cell-amount">
+                          {count(event.cacheWriteTokens, lang)} / {count(event.cacheReadTokens, lang)}
+                        </td>
+                        <td className="cell-amount">{usd(event.costUsd)}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>,
+              )}
+            </>
           )}
         </>
       )}

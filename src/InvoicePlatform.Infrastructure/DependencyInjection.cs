@@ -27,6 +27,8 @@ using InvoicePlatform.Infrastructure.Anthropic;
 using InvoicePlatform.Infrastructure.Identity;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
+using InvoicePlatform.Application.Quality;
+using InvoicePlatform.Infrastructure.Quality;
 
 namespace InvoicePlatform.Infrastructure;
 
@@ -131,6 +133,11 @@ public static class DependencyInjection
         // What every model call cost, for the platform administrator.
         services.AddSingleton<IUsageLedger, DynamoDbUsageLedger>();
         services.AddScoped<CostReportService>();
+
+        // How well the model read what reviewers booked, for the platform administrator.
+        services.AddSingleton<IQualityLedger, DynamoDbQualityLedger>();
+        services.AddScoped<ReadingQualityService>();
+        services.AddScoped<QualityReportService>();
 
         // Batch and email import: records in DynamoDB, the queue on SQS, read by the worker.
         services

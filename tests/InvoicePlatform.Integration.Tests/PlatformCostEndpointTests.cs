@@ -16,6 +16,7 @@ public class PlatformCostEndpointTests : IClassFixture<SignedInFactory>
         "/api/v1/platform/costs",
         "/api/v1/platform/costs/organizations/org-a",
         "/api/v1/platform/costs/export",
+        "/api/v1/platform/costs/quality",
     ];
 
     private readonly SignedInFactory _factory;

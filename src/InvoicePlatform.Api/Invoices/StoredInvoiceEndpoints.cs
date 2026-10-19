@@ -68,7 +68,9 @@ public static class StoredInvoiceEndpoints
             request.ProviderModel ?? "onbekend",
             request.InvoiceId,
             request.ExtractionId,
-            cancellationToken).ConfigureAwait(false);
+            // Booked by a signed-in user after review in the app.
+            reviewed: true,
+            cancellationToken: cancellationToken).ConfigureAwait(false);
 
         return Results.Ok(ToResponse(stored));
     }

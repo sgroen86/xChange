@@ -13,7 +13,7 @@ namespace InvoicePlatform.Infrastructure.Learning;
 /// <summary>
 /// Learning data in the invoice table, in the organisation's partition:
 ///
-///   pk = ORG#&lt;organizationId&gt;   sk = EXTRACTION#&lt;extractionId&gt;   what the model read (TTL 30 days)
+///   pk = ORG#&lt;organizationId&gt;   sk = EXTRACTION#&lt;extractionId&gt;   what the model read, and what the reviewer was shown (TTL 30 days)
 ///   pk = ORG#&lt;organizationId&gt;   sk = LEARNING                      the remembered corrections
 ///
 /// Both are read only with the organisation from the session, so another
@@ -28,24 +28,44 @@ internal sealed class DynamoDbLearningStore(IAmazonDynamoDB dynamo, IOptions<Inv
 
     public Task SaveExtractionAsync(string organizationId, ExtractionSnapshot snapshot, CancellationToken cancellationToken = default)
         => dynamo.PutItemAsync(
-            new PutItemRequest
-            {
-                TableName = _table,
-                Item = new Dictionary<string, AttributeValue>
-                {
-                    ["pk"] = new($"ORG#{organizationId}"),
-                    ["sk"] = new($"EXTRACTION#{snapshot.ExtractionId}"),
-                    ["extracted"] = new(JsonSerializer.Serialize(snapshot.Extracted, Json)),
-                    ["applied"] = new(JsonSerializer.Serialize(snapshot.AppliedCorrectionIds, Json)),
-                    ["createdAt"] = new(snapshot.CreatedAt.ToString("O")),
-                    // DynamoDB deletes it after this moment (epoch seconds), read or not.
-                    ["expiresAt"] = new AttributeValue
-                    {
-                        N = snapshot.CreatedAt.Add(ExtractionLifetime).ToUnixTimeSeconds().ToString(CultureInfo.InvariantCulture),
-                    },
-                },
-            },
+            new PutItemRequest { TableName = _table, Item = ExtractionItem(organizationId, snapshot) },
             cancellationToken);
+
+    internal static Dictionary<string, AttributeValue> ExtractionItem(string organizationId, ExtractionSnapshot snapshot)
+    {
+        var item = new Dictionary<string, AttributeValue>
+        {
+            ["pk"] = new($"ORG#{organizationId}"),
+            ["sk"] = new($"EXTRACTION#{snapshot.ExtractionId}"),
+            ["extracted"] = new(JsonSerializer.Serialize(snapshot.Extracted, Json)),
+            ["applied"] = new(JsonSerializer.Serialize(snapshot.AppliedCorrectionIds, Json)),
+            ["createdAt"] = new(snapshot.CreatedAt.ToString("O")),
+            // DynamoDB deletes it after this moment (epoch seconds), read or not.
+            ["expiresAt"] = new AttributeValue
+            {
+                N = snapshot.CreatedAt.Add(ExtractionLifetime).ToUnixTimeSeconds().ToString(CultureInfo.InvariantCulture),
+            },
+        };
+
+        if (snapshot.Model is not null)
+        {
+            item["model"] = new(snapshot.Model);
+        }
+
+        // What the reviewer was shown, only where it differs from the reading,
+        // and without the evidence: measuring needs the fields, and the item
+        // stays well under DynamoDB's 400 KB.
+        if (snapshot.Shown is { } shown)
+        {
+            var withoutEvidence = JsonSerializer.Serialize(shown with { Evidence = [] }, Json);
+            if (withoutEvidence != JsonSerializer.Serialize(snapshot.Extracted with { Evidence = [] }, Json))
+            {
+                item["shown"] = new(withoutEvidence);
+            }
+        }
+
+        return item;
+    }
 
     public async Task<ExtractionSnapshot?> TakeExtractionAsync(string organizationId, string extractionId, CancellationToken cancellationToken = default)
     {
@@ -77,12 +97,19 @@ internal sealed class DynamoDbLearningStore(IAmazonDynamoDB dynamo, IOptions<Inv
             return null;
         }
 
-        return new ExtractionSnapshot(
+        return ToSnapshot(extractionId, item);
+    }
+
+    internal static ExtractionSnapshot ToSnapshot(string extractionId, Dictionary<string, AttributeValue> item)
+        => new(
             extractionId,
             JsonSerializer.Deserialize<CanonicalInvoiceDraft>(item["extracted"].S, Json)!,
             JsonSerializer.Deserialize<List<string>>(item["applied"].S, Json) ?? [],
-            DateTimeOffset.Parse(item["createdAt"].S, CultureInfo.InvariantCulture));
-    }
+            DateTimeOffset.Parse(item["createdAt"].S, CultureInfo.InvariantCulture))
+        {
+            Model = item.TryGetValue("model", out var model) ? model.S : null,
+            Shown = item.TryGetValue("shown", out var shown) ? JsonSerializer.Deserialize<CanonicalInvoiceDraft>(shown.S, Json) : null,
+        };
 
     public async Task<IReadOnlyList<LearnedCorrection>> GetCorrectionsAsync(string organizationId, CancellationToken cancellationToken = default)
     {

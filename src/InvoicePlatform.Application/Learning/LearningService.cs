@@ -18,33 +18,52 @@ public sealed class LearningService(ILearningStore store, IClock clock)
     public async Task<IReadOnlyList<ReadingHint>> HintsAsync(string organizationId, CancellationToken cancellationToken = default)
         => CorrectionMemory.Hints(await store.GetCorrectionsAsync(organizationId, cancellationToken).ConfigureAwait(false));
 
-    /// <summary>
-    /// Puts the remembered corrections into the model's reading, and keeps
-    /// the reading itself so booking can tell what the reviewer changed.
-    /// </summary>
+    /// <summary>Puts the remembered corrections into the model's reading.</summary>
     public async Task<AppliedCorrections> ApplyAsync(
         string organizationId,
-        string extractionId,
         CanonicalInvoiceDraft extracted,
         CancellationToken cancellationToken = default)
     {
         var memory = await store.GetCorrectionsAsync(organizationId, cancellationToken).ConfigureAwait(false);
-        var applied = CorrectionMemory.Apply(extracted, memory);
-
-        await store.SaveExtractionAsync(
-            organizationId,
-            new ExtractionSnapshot(extractionId, extracted, [.. applied.Applied.Select(c => c.Id)], clock.UtcNow),
-            cancellationToken).ConfigureAwait(false);
-
-        return applied;
+        return CorrectionMemory.Apply(extracted, memory);
     }
+
+    /// <summary>
+    /// Keeps the model's reading, and what the reviewer is shown, so booking
+    /// can tell what the reviewer changed - to learn from it, and to measure
+    /// how well the model read.
+    /// </summary>
+    /// <param name="model">The model that read the PDF.</param>
+    /// <param name="extracted">The model's own reading, before anything was applied or filled in.</param>
+    /// <param name="applied">The corrections put into it.</param>
+    /// <param name="shown">The draft the reviewer gets: corrections applied, empty fields filled.</param>
+    public Task KeepExtractionAsync(
+        string organizationId,
+        string extractionId,
+        string model,
+        CanonicalInvoiceDraft extracted,
+        AppliedCorrections applied,
+        CanonicalInvoiceDraft shown,
+        CancellationToken cancellationToken = default)
+        => store.SaveExtractionAsync(
+            organizationId,
+            new ExtractionSnapshot(extractionId, extracted, [.. applied.Applied.Select(c => c.Id)], clock.UtcNow)
+            {
+                Model = model,
+                Shown = ReferenceEquals(shown, extracted) ? null : shown,
+            },
+            cancellationToken);
 
     /// <summary>
     /// Compares the booked invoice with what the model read for this upload:
     /// new corrections are remembered, applied ones the reviewer undid are
     /// forgotten. Does nothing for an unknown or already used extraction.
     /// </summary>
-    public async Task LearnAsync(
+    /// <returns>
+    /// The snapshot that was taken, so booking can measure the reading
+    /// against it; null when there was none.
+    /// </returns>
+    public async Task<ExtractionSnapshot?> LearnAsync(
         string organizationId,
         string extractionId,
         CanonicalInvoiceDraft booked,
@@ -53,7 +72,7 @@ public sealed class LearningService(ILearningStore store, IClock clock)
         var snapshot = await store.TakeExtractionAsync(organizationId, extractionId, cancellationToken).ConfigureAwait(false);
         if (snapshot is null)
         {
-            return;
+            return null;
         }
 
         var memory = await store.GetCorrectionsAsync(organizationId, cancellationToken).ConfigureAwait(false);
@@ -64,6 +83,7 @@ public sealed class LearningService(ILearningStore store, IClock clock)
         var updated = CorrectionMemory.Merge(kept, CorrectionMemory.Learn(snapshot.Extracted, booked, clock.UtcNow));
 
         await store.SaveCorrectionsAsync(organizationId, updated, cancellationToken).ConfigureAwait(false);
+        return snapshot;
     }
 
     /// <returns>False when the organisation has no such correction.</returns>

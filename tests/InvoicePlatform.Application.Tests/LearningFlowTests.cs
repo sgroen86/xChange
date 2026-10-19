@@ -1,3 +1,4 @@
+using InvoicePlatform.Application.Quality;
 using Microsoft.Extensions.Logging.Abstractions;
 using InvoicePlatform.Application.Usage;
 using InvoicePlatform.Application.Interpretation;
@@ -37,7 +38,7 @@ public class LearningFlowTests
         var relations = new RelationService(new FakeRelationStore(), _clock, new InvoiceRulesetRegistry());
         _extract = new ExtractInvoiceService(
             _interpreter, new InvoiceEnrichment(_settings, relations), new InvoiceCalculationValidator(), new CanonicalInvoiceXmlSerializer(), learning, _platform, _usage, new FakeUsageLedger(), _clock, NullLogger<ExtractInvoiceService>.Instance);
-        _book = new BookInvoiceService(_invoices, _invoices, _clock, relations, learning);
+        _book = new BookInvoiceService(_invoices, _invoices, _clock, relations, learning, new ReadingQualityService(new FakeQualityLedger(), _clock, NullLogger<ReadingQualityService>.Instance));
     }
 
     /// <summary>The model misses the seller's VAT number and the buyer reference.</summary>

@@ -1,5 +1,6 @@
 using InvoicePlatform.Application.Identity;
 using InvoicePlatform.Application.Learning;
+using InvoicePlatform.Application.Quality;
 using InvoicePlatform.Application.Relations;
 using InvoicePlatform.Domain.Calculation;
 using InvoicePlatform.Domain.Canonical;
@@ -20,13 +21,19 @@ public sealed class BookInvoiceService(
     IDocumentStore documents,
     IClock clock,
     RelationService relations,
-    LearningService learning)
+    LearningService learning,
+    ReadingQualityService quality)
 {
     /// <param name="invoiceId">
     /// Supply an existing id to re-book a correction, or to book a saved
     /// concept; omit it for a new invoice.
     /// </param>
     /// <param name="extractionId">The upload this invoice came from, so xChange learns from what the reviewer corrected.</param>
+    /// <param name="reviewed">
+    /// True when a person reviewed the invoice in the app and booked it. Only
+    /// then is the reading measured: a booking without a person (the
+    /// conversion API) confirms nothing about what was read.
+    /// </param>
     public async Task<StoredInvoice> BookAsync(
         string organizationId,
         string userId,
@@ -36,6 +43,7 @@ public sealed class BookInvoiceService(
         string providerModel,
         string? invoiceId = null,
         string? extractionId = null,
+        bool reviewed = false,
         CancellationToken cancellationToken = default)
     {
         var id = invoiceId ?? Guid.NewGuid().ToString("n");
@@ -57,7 +65,14 @@ public sealed class BookInvoiceService(
         // one: the calculator's figures are not corrections.
         if (!string.IsNullOrWhiteSpace(extractionId))
         {
-            await learning.LearnAsync(organizationId, extractionId, draft, cancellationToken).ConfigureAwait(false);
+            var snapshot = await learning.LearnAsync(organizationId, extractionId, draft, cancellationToken).ConfigureAwait(false);
+
+            // Measured from the same snapshot, at the same moment: learning
+            // has just taken it, so only the first booking of an upload counts.
+            if (snapshot is not null && reviewed)
+            {
+                await quality.MeasureAsync(organizationId, stored.InvoiceId, userId, snapshot, draft).ConfigureAwait(false);
+            }
         }
 
         return stored;

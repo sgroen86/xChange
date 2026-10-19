@@ -27,4 +27,15 @@ public sealed record ExtractionSnapshot(
     string ExtractionId,
     CanonicalInvoiceDraft Extracted,
     IReadOnlyList<string> AppliedCorrectionIds,
-    DateTimeOffset CreatedAt);
+    DateTimeOffset CreatedAt)
+{
+    /// <summary>The model that read it. Null for a snapshot kept before this was recorded.</summary>
+    public string? Model { get; init; }
+
+    /// <summary>
+    /// What the reviewer was shown: the reading with learned corrections put
+    /// in and empty fields filled from settings and relations. Null when it is
+    /// the reading itself.
+    /// </summary>
+    public CanonicalInvoiceDraft? Shown { get; init; }
+}
