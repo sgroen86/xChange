@@ -15,6 +15,9 @@ public sealed class InboxOptions
 
     public string Domain { get; set; } = "inbox.greenitsolutions.net";
 
+    /// <summary>Earlier inbox domains whose addresses keep receiving (Inbox__PreviousDomains__0, ...).</summary>
+    public List<string> PreviousDomains { get; set; } = [];
+
     /// <summary>The bucket SES writes received mail to, under "inbound/".</summary>
     public string MailBucketName { get; set; } = string.Empty;
 }

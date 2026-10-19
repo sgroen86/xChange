@@ -16,6 +16,7 @@ public class InboxServiceTests
     private const string OrgA = "org-a";
     private const string OrgB = "org-b";
     private const string Domain = "inbox.example.test";
+    private const string PreviousDomain = "inbox.old.test";
 
     private static readonly byte[] Pdf = "%PDF-1.4 x"u8.ToArray();
 
@@ -32,7 +33,7 @@ public class InboxServiceTests
             new NeverCalled(), new InvoiceEnrichment(new FakeSettingsStore(), relations), new InvoiceCalculationValidator(),
             new CanonicalInvoiceXmlSerializer(), new LearningService(new FakeLearningStore(), clock), new FakePlatformStore(), new FakeUsageMeter());
         var imports = new ImportService(_imports, _imports, new FakeInvoiceStore(), extraction, clock);
-        _inbox = new InboxService(_directory, _mail, imports, new InboxSettings(Domain));
+        _inbox = new InboxService(_directory, _mail, imports, new InboxSettings(Domain, [PreviousDomain]));
     }
 
     [Fact]
@@ -84,6 +85,19 @@ public class InboxServiceTests
 
         Assert.Equal(0, created);
         Assert.Equal(0, _mail.Reads);
+    }
+
+    [Fact]
+    public async Task An_address_keeps_receiving_on_the_domain_the_inbox_moved_from()
+    {
+        var address = await _inbox.CreateAddressAsync(OrgA);
+        var code = address.Split('@')[0];
+        _mail.Messages["m3"] = new ReceivedMail("x@y.z", "s", [new MailAttachment("a.pdf", Pdf)]);
+
+        var created = await _inbox.ReceiveAsync("m3", [$"{code}@{PreviousDomain.ToUpperInvariant()}"]);
+
+        Assert.EndsWith($"@{Domain}", address, StringComparison.Ordinal);
+        Assert.Equal(1, created);
     }
 
     [Fact]

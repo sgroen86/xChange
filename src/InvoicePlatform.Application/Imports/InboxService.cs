@@ -25,8 +25,18 @@ public interface IReceivedMailSource
     Task<ReceivedMail?> ReadAsync(string messageId, CancellationToken cancellationToken = default);
 }
 
-/// <param name="Domain">The inbox domain, e.g. "inbox.greenitsolutions.net".</param>
-public sealed record InboxSettings(string Domain);
+/// <param name="Domain">The inbox domain new addresses are shown on, e.g. "inbox.xchangeinvoice.com".</param>
+/// <param name="PreviousDomains">
+/// Domains the inbox lived on before. Mail to an address on one of them still
+/// arrives: an organisation's code is the same on every domain, so moving the
+/// inbox never breaks an address someone already uses.
+/// </param>
+public sealed record InboxSettings(string Domain, IReadOnlyList<string>? PreviousDomains = null)
+{
+    public bool Receives(string domain)
+        => string.Equals(domain, Domain, StringComparison.OrdinalIgnoreCase)
+            || (PreviousDomains ?? []).Any(previous => string.Equals(domain, previous, StringComparison.OrdinalIgnoreCase));
+}
 
 /// <summary>
 /// Email import. Each organisation gets an address that is hard to guess
@@ -71,7 +81,7 @@ public sealed class InboxService(IInboxDirectory directory, IReceivedMailSource 
         foreach (var recipient in recipients)
         {
             var at = recipient.LastIndexOf('@');
-            if (at <= 0 || !string.Equals(recipient[(at + 1)..], settings.Domain, StringComparison.OrdinalIgnoreCase))
+            if (at <= 0 || !settings.Receives(recipient[(at + 1)..]))
             {
                 continue;
             }

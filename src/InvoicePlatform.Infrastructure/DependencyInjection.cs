@@ -141,7 +141,11 @@ public static class DependencyInjection
         services
             .AddOptions<InboxOptions>()
             .Bind(configuration.GetSection(InboxOptions.SectionName));
-        services.AddSingleton(sp => new InboxSettings(sp.GetRequiredService<Microsoft.Extensions.Options.IOptions<InboxOptions>>().Value.Domain));
+        services.AddSingleton(sp =>
+        {
+            var inbox = sp.GetRequiredService<Microsoft.Extensions.Options.IOptions<InboxOptions>>().Value;
+            return new InboxSettings(inbox.Domain, inbox.PreviousDomains);
+        });
         services.AddSingleton<IInboxDirectory, DynamoDbInboxDirectory>();
         services.AddSingleton<IReceivedMailSource, S3ReceivedMailSource>();
         services.AddScoped<InboxService>();
