@@ -1,0 +1,84 @@
+AWSTemplateFormatVersion: "2010-09-09"
+Description: >
+  DNS for xchangeinvoice.com on Route 53. Strato keeps the registration and the
+  mailboxes (info@, support@): the MX record points at Strato's mail servers.
+  Applied by hand once, like bootstrap.yml:
+
+    aws cloudformation deploy --region eu-central-1 --stack-name xchange-domain \
+      --template-file infra/aws/domain.yml
+
+  then the four name servers in the stack outputs are entered at Strato.
+
+  The first version copies what Strato served before the move (website on
+  Strato's webspace, mail at Strato), so switching name servers changes
+  nothing visible. The website, app and inbox move here one at a time.
+
+Parameters:
+  DomainName:
+    Type: String
+    Default: xchangeinvoice.com
+  StratoWebIPv4:
+    Type: String
+    Default: 81.169.145.77
+    Description: Strato webspace, until the website moves to CloudFront.
+  StratoWebIPv6:
+    Type: String
+    Default: "2a01:238:20a:202:1077::"
+
+Resources:
+  Zone:
+    Type: AWS::Route53::HostedZone
+    Properties:
+      Name: !Ref DomainName
+      HostedZoneConfig:
+        Comment: xChange - website, app, inbox; mail stays at Strato
+
+  # Mail for info@ and support@ stays with Strato.
+  Mail:
+    Type: AWS::Route53::RecordSet
+    Properties:
+      HostedZoneId: !Ref Zone
+      Name: !Ref DomainName
+      Type: MX
+      TTL: "3600"
+      ResourceRecords:
+        - "5 smtp.rzone.de."
+
+  ApexV4:
+    Type: AWS::Route53::RecordSet
+    Properties:
+      HostedZoneId: !Ref Zone
+      Name: !Ref DomainName
+      Type: A
+      TTL: "300"
+      ResourceRecords:
+        - !Ref StratoWebIPv4
+
+  ApexV6:
+    Type: AWS::Route53::RecordSet
+    Properties:
+      HostedZoneId: !Ref Zone
+      Name: !Ref DomainName
+      Type: AAAA
+      TTL: "300"
+      ResourceRecords:
+        - !Ref StratoWebIPv6
+
+  Www:
+    Type: AWS::Route53::RecordSet
+    Properties:
+      HostedZoneId: !Ref Zone
+      Name: !Sub www.${DomainName}
+      Type: CNAME
+      TTL: "300"
+      ResourceRecords:
+        - !Ref DomainName
+
+Outputs:
+  HostedZoneId:
+    Value: !Ref Zone
+    Export:
+      Name: xchange-domain-zone-id
+  NameServers:
+    Description: Enter these at Strato as the domain's name servers.
+    Value: !Join [", ", !GetAtt Zone.NameServers]
