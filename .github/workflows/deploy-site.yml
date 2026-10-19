@@ -1,7 +1,8 @@
 name: Deploy xChange website
 
-# The public website (apps/site): a static export in S3 behind CloudFront,
-# stack xchange-site (infra/aws/site.yml). Until launch it sits behind a
+# The public website (apps/site) on https://www.xchangeinvoice.com/ (the bare
+# domain redirects there): a static export in S3 behind CloudFront, stack
+# xchange-site (infra/aws/site.yml). Until launch it sits behind a
 # password and sends noindex; the password lives in the Secrets Manager
 # secret xchange/site-preview ({"username": ..., "password": ...}).
 
