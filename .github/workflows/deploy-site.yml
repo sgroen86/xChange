@@ -79,6 +79,16 @@ jobs:
           role-to-assume: ${{ secrets.AWS_DEPLOY_ROLE_ARN }}
           aws-region: ${{ env.AWS_REGION }}
 
+      # The certificate (infra/aws/certificate.yml) is created by hand once the
+      # domain's DNS is on Route 53. Without it the site stays on its
+      # cloudfront.net address.
+      - name: Find the certificate
+        id: cert
+        run: |
+          ARN=$(aws cloudformation describe-stacks --region us-east-1 --stack-name xchange-certificate             --query "Stacks[0].Outputs[?OutputKey=='CertificateArn'].OutputValue" --output text 2>/dev/null || true)
+          [ "$ARN" = "None" ] && ARN=""
+          echo "arn=$ARN" >> "$GITHUB_OUTPUT"
+
       - name: Deploy the site stack
         id: stack
         run: |
@@ -92,12 +102,13 @@ jobs:
             --stack-name "$SITE_STACK" \
             --template-file infra/aws/site.yml \
             --no-fail-on-empty-changeset \
-            --parameter-overrides PreviewCredentials="$CREDENTIALS" Indexable=false
+            --parameter-overrides PreviewCredentials="$CREDENTIALS" Indexable=false CertificateArn="${{ steps.cert.outputs.arn }}"
 
           out() { aws cloudformation describe-stacks --stack-name "$SITE_STACK" --query "Stacks[0].Outputs[?OutputKey=='$1'].OutputValue" --output text; }
           echo "bucket=$(out BucketName)" >> "$GITHUB_OUTPUT"
           echo "distribution=$(out DistributionId)" >> "$GITHUB_OUTPUT"
           echo "url=$(out SiteUrl)" >> "$GITHUB_OUTPUT"
+          echo "domain=$(out DistributionDomain)" >> "$GITHUB_OUTPUT"
           echo "credentials=$CREDENTIALS" >> "$GITHUB_OUTPUT"
 
       - name: Upload the site
@@ -113,7 +124,8 @@ jobs:
       - name: Smoke-test the preview
         run: |
           set -e
-          URL="${{ steps.stack.outputs.url }}"
+          # The distribution's own name: it answers before and after DNS points www at it.
+          URL="https://${{ steps.stack.outputs.domain }}/"
           # Without the password: refused, and still marked noindex.
           code=$(curl -s -o /dev/null -w '%{http_code}' "${URL}nl/")
           [ "$code" = "401" ] || { echo "Expected 401 without the password, got $code"; exit 1; }
@@ -126,4 +138,4 @@ jobs:
           [ "$code" = "200" ] || { echo "Expected 200 with the password, got $code"; exit 1; }
           grep -qi '^x-robots-tag: noindex' /tmp/headers.txt || { echo "Response lacks X-Robots-Tag noindex"; exit 1; }
           echo "Preview live at $URL"
-          echo "### xChange website (preview, password protected): $URL" >> "$GITHUB_STEP_SUMMARY"
+          echo "### xChange website (preview, password protected): ${{ steps.stack.outputs.url }}" >> "$GITHUB_STEP_SUMMARY"

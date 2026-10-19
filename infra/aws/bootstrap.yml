@@ -261,6 +261,18 @@ Resources:
                 Resource:
                   - !Sub arn:aws:s3:::xchange-site-${AWS::AccountId}
                   - !Sub arn:aws:s3:::xchange-site-${AWS::AccountId}/*
+                  # The app on app.xchangeinvoice.com (infra/aws/app.yml).
+                  - !Sub arn:aws:s3:::xchange-app-${AWS::AccountId}
+                  - !Sub arn:aws:s3:::xchange-app-${AWS::AccountId}/*
+
+              # A distribution on xchangeinvoice.com names its certificate; CloudFront
+              # checks the caller may see it. Read-only.
+              - Sid: DistributionCertificate
+                Effect: Allow
+                Action:
+                  - acm:DescribeCertificate
+                  - acm:ListCertificates
+                Resource: '*'
 
               # The website's preview password - and only that secret's value.
               - Sid: WebsitePreviewPassword

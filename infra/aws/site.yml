@@ -23,9 +23,22 @@ Parameters:
       'false' sends X-Robots-Tag noindex, nofollow on every response. Set to
       'true' only when the site launches.
 
+  DomainName:
+    Type: String
+    Default: xchangeinvoice.com
+    Description: The site answers on www.<domain>; the bare domain redirects there.
+
+  CertificateArn:
+    Type: String
+    Default: ''
+    Description: >
+      The us-east-1 certificate from certificate.yml. Empty: the site is only
+      reachable on its cloudfront.net address.
+
 Conditions:
   HasPassword: !Not [!Equals [!Ref PreviewCredentials, '']]
   Hidden: !Equals [!Ref Indexable, 'false']
+  HasDomain: !Not [!Equals [!Ref CertificateArn, '']]
 
 Resources:
   SiteBucket:
@@ -71,9 +84,10 @@ Resources:
               StringEquals:
                 AWS:SourceArn: !Sub arn:aws:cloudfront::${AWS::AccountId}:distribution/${SiteDistribution}
 
-  # Runs on every request before the cache: the preview password, and the
-  # directory index a static export needs (/nl/pricing/ -> /nl/pricing/index.html)
-  # because an S3 origin behind OAC does not serve index documents itself.
+  # Runs on every request before the cache: the bare domain to www, the preview
+  # password, and the directory index a static export needs
+  # (/nl/pricing/ -> /nl/pricing/index.html) because an S3 origin behind OAC
+  # does not serve index documents itself.
   SiteRequestFunction:
     Type: AWS::CloudFront::Function
     Properties:
@@ -85,8 +99,17 @@ Resources:
       FunctionCode: !Sub
         - |
           var expected = '${Expected}';
+          var apex = '${Apex}';
           function handler(event) {
             var request = event.request;
+            var host = request.headers.host ? request.headers.host.value : '';
+            if (apex !== '' && host === apex) {
+              return {
+                statusCode: 301,
+                statusDescription: 'Moved Permanently',
+                headers: { location: { value: 'https://www.' + apex + request.uri } }
+              };
+            }
             if (expected !== '') {
               var auth = request.headers.authorization;
               if (!auth || auth.value !== 'Basic ' + expected) {
@@ -110,6 +133,7 @@ Resources:
             return request;
           }
         - Expected: !If [HasPassword, !Ref PreviewCredentials, '']
+          Apex: !If [HasDomain, !Ref DomainName, '']
 
   SiteHeaders:
     Type: AWS::CloudFront::ResponseHeadersPolicy
@@ -148,6 +172,17 @@ Resources:
         IPV6Enabled: true
         PriceClass: PriceClass_100
         DefaultRootObject: index.html
+        Aliases: !If
+          - HasDomain
+          - - !Sub www.${DomainName}
+            - !Ref DomainName
+          - !Ref AWS::NoValue
+        ViewerCertificate: !If
+          - HasDomain
+          - AcmCertificateArn: !Ref CertificateArn
+            SslSupportMethod: sni-only
+            MinimumProtocolVersion: TLSv1.2_2021
+          - !Ref AWS::NoValue
         Origins:
           - Id: site
             DomainName: !GetAtt SiteBucket.RegionalDomainName
@@ -184,5 +219,10 @@ Outputs:
   DistributionId:
     Value: !Ref SiteDistribution
   SiteUrl:
-    Description: The preview address until www.xchangeinvoice.com is connected.
-    Value: !Sub https://${SiteDistribution.DomainName}/
+    Value: !If
+      - HasDomain
+      - !Sub https://www.${DomainName}/
+      - !Sub https://${SiteDistribution.DomainName}/
+  DistributionDomain:
+    Description: Where domain.yml points www and the bare domain.
+    Value: !GetAtt SiteDistribution.DomainName

@@ -22,6 +22,7 @@ on:
     branches: [main]
     paths:
       - 'apps/web/**'
+      - 'infra/aws/app.yml'
       - '.github/workflows/deploy-ui.yml'
   workflow_dispatch:
 
@@ -186,3 +187,125 @@ jobs:
           check "/invoices/smoke-test-id/review/" "Factuur beoordelen"
 
           echo "Live site OK."
+
+  # The same app on its own domain: built without a base path, published to
+  # S3 behind CloudFront (stack xchange-app, infra/aws/app.yml). Runs beside the
+  # Strato copy above until greenitsolutions.net/xchange becomes a redirect.
+  deploy-aws:
+    name: Build and publish (app.xchangeinvoice.com)
+    runs-on: ubuntu-latest
+    environment: xchange-aws
+    permissions:
+      id-token: write
+      contents: read
+    env:
+      AWS_REGION: eu-central-1
+      APP_STACK: xchange-app
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v5
+        with:
+          fetch-depth: 1
+
+      - name: Setup Node
+        uses: actions/setup-node@v5
+        with:
+          node-version: '24'
+          cache: npm
+          cache-dependency-path: apps/web/package-lock.json
+
+      - name: Install dependencies
+        working-directory: apps/web
+        run: npm ci
+
+      - name: Test
+        working-directory: apps/web
+        run: npm test
+
+      - name: Build static export
+        working-directory: apps/web
+        env:
+          XCHANGE_BASE_PATH: ""
+          NEXT_PUBLIC_XCHANGE_API_URL: ${{ vars.XCHANGE_API_URL }}
+        run: npm run build
+
+      - name: Verify the export before shipping it
+        working-directory: apps/web
+        run: |
+          set -e
+          test -f out/upload/index.html || { echo "Missing /upload page."; exit 1; }
+          test -f out/invoices/demo/review/index.html || { echo "Missing review page."; exit 1; }
+          # At the root of its own domain the assets are "/_next/...", never "/xchange/_next/...".
+          grep -q '"/_next/' out/upload/index.html || { echo "Assets are not at the root."; exit 1; }
+          ! grep -q '/xchange/_next/' out/upload/index.html || { echo "Assets still carry /xchange."; exit 1; }
+
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ secrets.AWS_DEPLOY_ROLE_ARN }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      # The certificate (infra/aws/certificate.yml) is created by hand once the
+      # domain's DNS is on Route 53. Until it exists there is nothing to publish to.
+      - name: Find the certificate
+        id: cert
+        run: |
+          ARN=$(aws cloudformation describe-stacks --region us-east-1 --stack-name xchange-certificate \
+            --query "Stacks[0].Outputs[?OutputKey=='CertificateArn'].OutputValue" --output text 2>/dev/null || true)
+          if [ -z "$ARN" ] || [ "$ARN" = "None" ]; then
+            echo "No certificate yet - app.xchangeinvoice.com is not published." | tee -a "$GITHUB_STEP_SUMMARY"
+            echo "arn=" >> "$GITHUB_OUTPUT"
+          else
+            echo "arn=$ARN" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Deploy the app stack
+        id: stack
+        if: steps.cert.outputs.arn != ''
+        run: |
+          set -e
+          aws cloudformation deploy \
+            --stack-name "$APP_STACK" \
+            --template-file infra/aws/app.yml \
+            --no-fail-on-empty-changeset \
+            --parameter-overrides CertificateArn="${{ steps.cert.outputs.arn }}"
+          out() { aws cloudformation describe-stacks --stack-name "$APP_STACK" --query "Stacks[0].Outputs[?OutputKey=='$1'].OutputValue" --output text; }
+          echo "bucket=$(out BucketName)" >> "$GITHUB_OUTPUT"
+          echo "distribution=$(out DistributionId)" >> "$GITHUB_OUTPUT"
+          echo "domain=$(out DistributionDomain)" >> "$GITHUB_OUTPUT"
+
+      - name: Upload the app
+        if: steps.cert.outputs.arn != ''
+        working-directory: apps/web
+        run: |
+          set -e
+          BUCKET="${{ steps.stack.outputs.bucket }}"
+          # Hashed assets forever, everything else revalidated, then remove what is gone.
+          # .htaccess is Apache's; CloudFront does the same in its request function.
+          aws s3 sync out/_next "s3://$BUCKET/_next" --cache-control "public, max-age=31536000, immutable"
+          aws s3 sync out "s3://$BUCKET" --exclude "_next/*" --exclude ".htaccess" --cache-control "no-cache" --delete
+          aws cloudfront create-invalidation --distribution-id "${{ steps.stack.outputs.distribution }}" --paths "/*" --query Invalidation.Id --output text
+
+      - name: Smoke-test the app
+        if: steps.cert.outputs.arn != ''
+        run: |
+          set -e
+          # The distribution's own name works before and after DNS points app.xchangeinvoice.com at it.
+          BASE="https://${{ steps.stack.outputs.domain }}"
+          check() {
+            local code
+            for attempt in 1 2 3 4 5 6; do
+              code=$(curl -s -o /tmp/page.html -D /tmp/headers.txt -w '%{http_code}' --max-time 30 "$BASE$1" || echo 000)
+              [ "$code" = "200" ] && break
+              sleep 10
+            done
+            echo "HTTP $code  $BASE$1"
+            [ "$code" = "200" ] || { echo "Expected 200."; return 1; }
+            grep -q "$2" /tmp/page.html || { echo "Page did not contain: $2"; return 1; }
+            grep -qi '^x-robots-tag: noindex' /tmp/headers.txt || { echo "Missing X-Robots-Tag noindex"; return 1; }
+          }
+          check "/upload/" '"/_next/'
+          # Any invoice id lands on the review placeholder, as on Apache.
+          check "/invoices/smoke-test-id/review/" "Factuur beoordelen"
+          echo "### xChange app: https://app.xchangeinvoice.com/ (distribution $BASE)" >> "$GITHUB_STEP_SUMMARY"

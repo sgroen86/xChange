@@ -1,0 +1,44 @@
+AWSTemplateFormatVersion: "2010-09-09"
+Description: >
+  The TLS certificate for xchangeinvoice.com, www.xchangeinvoice.com and
+  app.xchangeinvoice.com. CloudFront only accepts certificates from us-east-1,
+  so this stack lives there. Validated through DNS records in the Route 53 zone
+  (domain.yml), which CloudFormation creates itself; ACM renews it from then on.
+  Applied by hand once, after the name servers point at Route 53:
+
+    aws cloudformation deploy --region us-east-1 --stack-name xchange-certificate \
+      --template-file infra/aws/certificate.yml \
+      --parameter-overrides HostedZoneId=<xchange-domain HostedZoneId output>
+
+  The site and app workflows read the CertificateArn output.
+
+Parameters:
+  DomainName:
+    Type: String
+    Default: xchangeinvoice.com
+  HostedZoneId:
+    Type: AWS::Route53::HostedZone::Id
+
+Resources:
+  Certificate:
+    Type: AWS::CertificateManager::Certificate
+    Properties:
+      DomainName: !Ref DomainName
+      SubjectAlternativeNames:
+        - !Sub www.${DomainName}
+        - !Sub app.${DomainName}
+      ValidationMethod: DNS
+      DomainValidationOptions:
+        - DomainName: !Ref DomainName
+          HostedZoneId: !Ref HostedZoneId
+        - DomainName: !Sub www.${DomainName}
+          HostedZoneId: !Ref HostedZoneId
+        - DomainName: !Sub app.${DomainName}
+          HostedZoneId: !Ref HostedZoneId
+      Tags:
+        - Key: Project
+          Value: xchange
+
+Outputs:
+  CertificateArn:
+    Value: !Ref Certificate

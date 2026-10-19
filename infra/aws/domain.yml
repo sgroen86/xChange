@@ -2,28 +2,49 @@ AWSTemplateFormatVersion: "2010-09-09"
 Description: >
   DNS for xchangeinvoice.com on Route 53. Strato keeps the registration and the
   mailboxes (info@, support@): the MX record points at Strato's mail servers.
-  Applied by hand once, like bootstrap.yml:
+  Applied by hand, like bootstrap.yml:
 
     aws cloudformation deploy --region eu-central-1 --stack-name xchange-domain \
-      --template-file infra/aws/domain.yml
+      --template-file infra/aws/domain.yml \
+      --parameter-overrides SiteDistributionDomain=<xchange-site output> AppDistributionDomain=<xchange-app output>
 
-  then the four name servers in the stack outputs are entered at Strato.
+  Without the distribution parameters it serves what Strato served before the
+  move (website on Strato's webspace), so switching name servers changed
+  nothing visible. Each parameter moves one name to CloudFront.
 
-  The first version copies what Strato served before the move (website on
-  Strato's webspace, mail at Strato), so switching name servers changes
-  nothing visible. The website, app and inbox move here one at a time.
+  All records are one record group on purpose: a group is changed in a single
+  Route 53 batch, so www can turn from a CNAME into an alias without a moment
+  in which both exist (which Route 53 refuses) or neither does.
 
 Parameters:
   DomainName:
     Type: String
     Default: xchangeinvoice.com
+  SiteDistributionDomain:
+    Type: String
+    Default: ''
+    Description: The website's dxxxx.cloudfront.net (stack xchange-site); empty keeps www on Strato.
+  AppDistributionDomain:
+    Type: String
+    Default: ''
+    Description: The app's dxxxx.cloudfront.net (stack xchange-app); empty means no app record yet.
   StratoWebIPv4:
     Type: String
     Default: 81.169.145.77
-    Description: Strato webspace, until the website moves to CloudFront.
   StratoWebIPv6:
     Type: String
     Default: "2a01:238:20a:202:1077::"
+
+Conditions:
+  SiteOnCloudFront: !Not [!Equals [!Ref SiteDistributionDomain, '']]
+  SiteOnStrato: !Equals [!Ref SiteDistributionDomain, '']
+  HasApp: !Not [!Equals [!Ref AppDistributionDomain, '']]
+
+Mappings:
+  CloudFront:
+    # The fixed hosted zone every CloudFront alias record points into.
+    Zone:
+      Id: Z2FDTNDATAQYW2
 
 Resources:
   Zone:
@@ -33,46 +54,87 @@ Resources:
       HostedZoneConfig:
         Comment: xChange - website, app, inbox; mail stays at Strato
 
-  # Mail for info@ and support@ stays with Strato.
-  Mail:
-    Type: AWS::Route53::RecordSet
+  Records:
+    Type: AWS::Route53::RecordSetGroup
     Properties:
       HostedZoneId: !Ref Zone
-      Name: !Ref DomainName
-      Type: MX
-      TTL: "3600"
-      ResourceRecords:
-        - "5 smtp.rzone.de."
+      RecordSets:
+        # Mail for info@ and support@ stays with Strato.
+        - Name: !Ref DomainName
+          Type: MX
+          TTL: "3600"
+          ResourceRecords:
+            - "5 smtp.rzone.de."
 
-  ApexV4:
-    Type: AWS::Route53::RecordSet
-    Properties:
-      HostedZoneId: !Ref Zone
-      Name: !Ref DomainName
-      Type: A
-      TTL: "300"
-      ResourceRecords:
-        - !Ref StratoWebIPv4
+        # The bare domain: CloudFront (which redirects to www), or Strato before that.
+        - !If
+          - SiteOnCloudFront
+          - Name: !Ref DomainName
+            Type: A
+            AliasTarget:
+              DNSName: !Ref SiteDistributionDomain
+              HostedZoneId: !FindInMap [CloudFront, Zone, Id]
+          - Name: !Ref DomainName
+            Type: A
+            TTL: "300"
+            ResourceRecords:
+              - !Ref StratoWebIPv4
+        - !If
+          - SiteOnCloudFront
+          - Name: !Ref DomainName
+            Type: AAAA
+            AliasTarget:
+              DNSName: !Ref SiteDistributionDomain
+              HostedZoneId: !FindInMap [CloudFront, Zone, Id]
+          - Name: !Ref DomainName
+            Type: AAAA
+            TTL: "300"
+            ResourceRecords:
+              - !Ref StratoWebIPv6
 
-  ApexV6:
-    Type: AWS::Route53::RecordSet
-    Properties:
-      HostedZoneId: !Ref Zone
-      Name: !Ref DomainName
-      Type: AAAA
-      TTL: "300"
-      ResourceRecords:
-        - !Ref StratoWebIPv6
+        # www: the website.
+        - !If
+          - SiteOnCloudFront
+          - Name: !Sub www.${DomainName}
+            Type: A
+            AliasTarget:
+              DNSName: !Ref SiteDistributionDomain
+              HostedZoneId: !FindInMap [CloudFront, Zone, Id]
+          - !Ref AWS::NoValue
+        - !If
+          - SiteOnCloudFront
+          - Name: !Sub www.${DomainName}
+            Type: AAAA
+            AliasTarget:
+              DNSName: !Ref SiteDistributionDomain
+              HostedZoneId: !FindInMap [CloudFront, Zone, Id]
+          - !Ref AWS::NoValue
+        - !If
+          - SiteOnStrato
+          - Name: !Sub www.${DomainName}
+            Type: CNAME
+            TTL: "300"
+            ResourceRecords:
+              - !Ref DomainName
+          - !Ref AWS::NoValue
 
-  Www:
-    Type: AWS::Route53::RecordSet
-    Properties:
-      HostedZoneId: !Ref Zone
-      Name: !Sub www.${DomainName}
-      Type: CNAME
-      TTL: "300"
-      ResourceRecords:
-        - !Ref DomainName
+        # app: the application.
+        - !If
+          - HasApp
+          - Name: !Sub app.${DomainName}
+            Type: A
+            AliasTarget:
+              DNSName: !Ref AppDistributionDomain
+              HostedZoneId: !FindInMap [CloudFront, Zone, Id]
+          - !Ref AWS::NoValue
+        - !If
+          - HasApp
+          - Name: !Sub app.${DomainName}
+            Type: AAAA
+            AliasTarget:
+              DNSName: !Ref AppDistributionDomain
+              HostedZoneId: !FindInMap [CloudFront, Zone, Id]
+          - !Ref AWS::NoValue
 
 Outputs:
   HostedZoneId:
@@ -80,5 +142,5 @@ Outputs:
     Export:
       Name: xchange-domain-zone-id
   NameServers:
-    Description: Enter these at Strato as the domain's name servers.
+    Description: Entered at Strato as the domain's name servers.
     Value: !Join [", ", !GetAtt Zone.NameServers]
