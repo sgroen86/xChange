@@ -226,11 +226,26 @@ jobs:
         working-directory: apps/web
         run: npm test
 
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ secrets.AWS_DEPLOY_ROLE_ARN }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      # The API's address straight from its stack, so this build can never be
+      # left on mock data (no login) by a variable missing in this environment.
+      - name: Find the API
+        id: api
+        run: |
+          URL=$(aws cloudformation describe-stacks --stack-name xchange-service             --query "Stacks[0].Outputs[?OutputKey=='ServiceUrl'].OutputValue" --output text)
+          case "$URL" in https://*) ;; *) echo "No API address from xchange-service: '$URL'"; exit 1;; esac
+          echo "url=${URL%/}" >> "$GITHUB_OUTPUT"
+
       - name: Build static export
         working-directory: apps/web
         env:
           XCHANGE_BASE_PATH: ""
-          NEXT_PUBLIC_XCHANGE_API_URL: ${{ vars.XCHANGE_API_URL }}
+          NEXT_PUBLIC_XCHANGE_API_URL: ${{ steps.api.outputs.url }}
         run: npm run build
 
       - name: Verify the export before shipping it
@@ -242,12 +257,8 @@ jobs:
           # At the root of its own domain the assets are "/_next/...", never "/xchange/_next/...".
           grep -q '"/_next/' out/upload/index.html || { echo "Assets are not at the root."; exit 1; }
           ! grep -q '/xchange/_next/' out/upload/index.html || { echo "Assets still carry /xchange."; exit 1; }
-
-      - name: Configure AWS credentials
-        uses: aws-actions/configure-aws-credentials@v4
-        with:
-          role-to-assume: ${{ secrets.AWS_DEPLOY_ROLE_ARN }}
-          aws-region: ${{ env.AWS_REGION }}
+          # Pointed at the API: without it the app runs on mock data and shows no login.
+          grep -rqF "${{ steps.api.outputs.url }}" out/_next/static || { echo "The build does not contain the API address."; exit 1; }
 
       # The certificate (infra/aws/certificate.yml) is created by hand once the
       # domain's DNS is on Route 53. Until it exists there is nothing to publish to.
