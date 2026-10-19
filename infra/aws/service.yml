@@ -48,6 +48,13 @@ Parameters:
       at inbound-smtp.eu-central-1.amazonaws.com, and the DKIM records from
       this stack's outputs verify it - both set by hand at the DNS host.
 
+  # The inbox domain on xChange's own domain. Its identity is created first;
+  # addresses move to it once Route 53 carries its DKIM and MX records and SES
+  # has verified it (domain.yml). Until then InboxDomain stays the live one.
+  NewInboxDomain:
+    Type: String
+    Default: inbox.xchangeinvoice.com
+
   AnthropicModel:
     Type: String
     Default: claude-opus-5
@@ -59,6 +66,12 @@ Parameters:
   AllowedOriginWww:
     Type: String
     Default: https://www.greenitsolutions.net
+
+  # The app on its own domain (infra/aws/app.yml). www.xchangeinvoice.com is
+  # the public website, which never calls the API.
+  AppOrigin:
+    Type: String
+    Default: https://app.xchangeinvoice.com
 
   MemorySize:
     Type: Number
@@ -266,6 +279,7 @@ Resources:
           InvoiceStorage__BucketName: !Ref DocumentBucket
           Cors__AllowedOrigins__0: !Ref AllowedOrigin
           Cors__AllowedOrigins__1: !Ref AllowedOriginWww
+          Cors__AllowedOrigins__2: !Ref AppOrigin
           OfficialValidation__FunctionName: !Ref ValidatorAlias
           Imports__QueueUrl: !Ref ImportQueue
           Inbox__Domain: !Ref InboxDomain
@@ -565,6 +579,14 @@ Resources:
     Properties:
       EmailIdentity: !Ref InboxDomain
 
+  # The inbox on xchangeinvoice.com, verified through Route 53 (domain.yml,
+  # InboxDkimTokens). Kept beside the first one: existing addresses go on
+  # working on their old domain.
+  NewInboxIdentity:
+    Type: AWS::SES::EmailIdentity
+    Properties:
+      EmailIdentity: !Ref NewInboxDomain
+
   MailFunctionRole:
     Type: AWS::IAM::Role
     Properties:
@@ -686,6 +708,13 @@ Outputs:
 
   # The three CNAME records that verify the inbox domain for SES, to be set at
   # the DNS host together with the MX record.
+  NewInboxDkimTokens:
+    Description: For domain.yml's InboxDkimTokens parameter.
+    Value: !Join
+      - ','
+      - - !Select [0, !Split ['.', !GetAtt NewInboxIdentity.DkimDNSTokenName1]]
+        - !Select [0, !Split ['.', !GetAtt NewInboxIdentity.DkimDNSTokenName2]]
+        - !Select [0, !Split ['.', !GetAtt NewInboxIdentity.DkimDNSTokenName3]]
   InboxDkim1:
     Value: !Sub "${InboxIdentity.DkimDNSTokenName1} CNAME ${InboxIdentity.DkimDNSTokenValue1}"
   InboxDkim2:
