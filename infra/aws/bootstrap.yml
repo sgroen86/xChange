@@ -186,6 +186,8 @@ Resources:
                   - ses:CreateReceiptRule
                   - ses:DeleteReceiptRule
                   - ses:UpdateReceiptRule
+                  # Updating a rule (e.g. its recipients) also sets its position.
+                  - ses:SetReceiptRulePosition
                   - ses:DescribeReceiptRule
                   - ses:SetActiveReceiptRuleSet
                   - ses:DescribeActiveReceiptRuleSet
