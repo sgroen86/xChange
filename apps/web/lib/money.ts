@@ -7,6 +7,7 @@
  * separators, never the digits.
  */
 
+import { format, parseDecimal } from "./decimal.ts";
 import { currentLanguage, type Lang } from "./i18n/language.ts";
 
 /**
@@ -31,4 +32,26 @@ export function formatMoney(
   // "€1,234.50" but "USD 1,234.50": a letter code keeps its space.
   const gap = english && symbol === "€" ? "" : " ";
   return `${negative ? "-" : ""}${symbol}${gap}${grouped}${english ? "." : ","}${cents}`;
+}
+
+/**
+ * A model cost in USD, rounded to `decimals` (half away from zero) by digit
+ * arithmetic: "0.012345" -> "$0.0123" in English, "$ 0,0123" in Dutch.
+ * Returns "—" for an absent or malformed value.
+ */
+export function formatUsd(
+  value: string | null | undefined,
+  lang: Lang = currentLanguage(),
+  decimals = 4,
+): string {
+  const parsed = parseDecimal(value);
+  if (!parsed) return "—";
+
+  const fixed = format(parsed, decimals);
+  const negative = fixed.startsWith("-");
+  const [whole, fraction = ""] = (negative ? fixed.slice(1) : fixed).split(".");
+  const english = lang === "en";
+  const grouped = whole.replace(/\B(?=(\d{3})+(?!\d))/g, english ? "," : ".");
+  const decimalPart = fraction ? `${english ? "." : ","}${fraction}` : "";
+  return `${negative ? "-" : ""}$${english ? "" : " "}${grouped}${decimalPart}`;
 }

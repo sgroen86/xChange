@@ -1,3 +1,5 @@
+using Microsoft.Extensions.Logging.Abstractions;
+using InvoicePlatform.Application.Usage;
 using InvoicePlatform.Application.Interpretation;
 using InvoicePlatform.Application.Invoices;
 using InvoicePlatform.Application.Learning;
@@ -34,7 +36,7 @@ public class LearningFlowTests
         var learning = new LearningService(_store, _clock);
         var relations = new RelationService(new FakeRelationStore(), _clock, new InvoiceRulesetRegistry());
         _extract = new ExtractInvoiceService(
-            _interpreter, new InvoiceEnrichment(_settings, relations), new InvoiceCalculationValidator(), new CanonicalInvoiceXmlSerializer(), learning, _platform, _usage);
+            _interpreter, new InvoiceEnrichment(_settings, relations), new InvoiceCalculationValidator(), new CanonicalInvoiceXmlSerializer(), learning, _platform, _usage, new FakeUsageLedger(), _clock, NullLogger<ExtractInvoiceService>.Instance);
         _book = new BookInvoiceService(_invoices, _invoices, _clock, relations, learning);
     }
 
@@ -48,7 +50,7 @@ public class LearningFlowTests
     private async Task UploadCorrectAndBook(string organizationId = OrgA)
     {
         _interpreter.Next = ModelReading();
-        var extracted = await _extract.ExtractAsync(organizationId, new byte[] { 1 });
+        var extracted = await _extract.ExtractAsync(organizationId, new byte[] { 1 }, "user-1", UsageSources.Upload);
         await _book.BookAsync(organizationId, "u", CompleteInvoice.Create(), new byte[] { 1 }, "a.pdf", "m", extractionId: extracted.InvoiceId);
     }
 
@@ -58,7 +60,7 @@ public class LearningFlowTests
         await UploadCorrectAndBook();
 
         _interpreter.Next = ModelReading();
-        var second = await _extract.ExtractAsync(OrgA, new byte[] { 1 });
+        var second = await _extract.ExtractAsync(OrgA, new byte[] { 1 }, "user-1", UsageSources.Upload);
 
         Assert.Equal(CompleteInvoice.Create().Seller!.VatIdentifier, second.Draft.Seller!.VatIdentifier);
         Assert.Contains(second.Warnings, w => w is { Code: "LEARNED", Path: "seller.vatIdentifier", Severity: ValidationSeverity.Info });
@@ -70,7 +72,7 @@ public class LearningFlowTests
         await UploadCorrectAndBook();
 
         _interpreter.Next = ModelReading();
-        await _extract.ExtractAsync(OrgA, new byte[] { 1 });
+        await _extract.ExtractAsync(OrgA, new byte[] { 1 }, "user-1", UsageSources.Upload);
 
         Assert.Contains(_interpreter.LastHints!, h => h is { Field: "buyerReference", YouRead: null } && h.ReviewerEntered == CompleteInvoice.Create().BuyerReference);
     }
@@ -81,7 +83,7 @@ public class LearningFlowTests
         await UploadCorrectAndBook(OrgA);
 
         _interpreter.Next = ModelReading();
-        var other = await _extract.ExtractAsync(OrgB, new byte[] { 1 });
+        var other = await _extract.ExtractAsync(OrgB, new byte[] { 1 }, "user-1", UsageSources.Upload);
 
         Assert.Null(other.Draft.Seller!.VatIdentifier);
         Assert.Empty(_interpreter.LastHints!);
@@ -91,7 +93,7 @@ public class LearningFlowTests
     public async Task Booking_the_same_upload_twice_teaches_once()
     {
         _interpreter.Next = ModelReading();
-        var extracted = await _extract.ExtractAsync(OrgA, new byte[] { 1 });
+        var extracted = await _extract.ExtractAsync(OrgA, new byte[] { 1 }, "user-1", UsageSources.Upload);
         var first = await _book.BookAsync(OrgA, "u", CompleteInvoice.Create(), new byte[] { 1 }, "a.pdf", "m", extractionId: extracted.InvoiceId);
         await _book.BookAsync(OrgA, "u", CompleteInvoice.Create(), new byte[] { 1 }, "a.pdf", "m", first.InvoiceId, extracted.InvoiceId);
 
@@ -104,7 +106,7 @@ public class LearningFlowTests
         await UploadCorrectAndBook();
 
         _interpreter.Next = ModelReading();
-        var second = await _extract.ExtractAsync(OrgA, new byte[] { 1 });
+        var second = await _extract.ExtractAsync(OrgA, new byte[] { 1 }, "user-1", UsageSources.Upload);
         var undone = second.Draft with { Seller = second.Draft.Seller! with { VatIdentifier = null } };
         await _book.BookAsync(OrgA, "u", undone, new byte[] { 1 }, "a.pdf", "m", extractionId: second.InvoiceId);
 
@@ -127,11 +129,11 @@ public class LearningFlowTests
     public async Task The_platform_administrators_model_reads_the_pdf()
     {
         _interpreter.Next = ModelReading();
-        await _extract.ExtractAsync(OrgA, new byte[] { 1 });
+        await _extract.ExtractAsync(OrgA, new byte[] { 1 }, "user-1", UsageSources.Upload);
         Assert.Null(_interpreter.LastModel);
 
         await _platform.SaveSettingsAsync(new InvoicePlatform.Application.Organizations.PlatformSettings { ExtractionModel = "claude-opus-5-5" });
-        await _extract.ExtractAsync(OrgA, new byte[] { 1 });
+        await _extract.ExtractAsync(OrgA, new byte[] { 1 }, "user-1", UsageSources.Upload);
 
         Assert.Equal("claude-opus-5-5", _interpreter.LastModel);
     }
@@ -149,7 +151,7 @@ public class LearningFlowTests
         {
             LastHints = hints;
             LastModel = model;
-            return Task.FromResult(new InvoiceInterpretationResult(Next, new ProviderExecution("test", "m", 0)));
+            return Task.FromResult(new InvoiceInterpretationResult(Next, new ProviderExecution("test", "m", 0, TokenUsage.None)));
         }
     }
 }

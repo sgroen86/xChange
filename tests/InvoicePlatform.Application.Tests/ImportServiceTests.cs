@@ -1,3 +1,5 @@
+using Microsoft.Extensions.Logging.Abstractions;
+using InvoicePlatform.Application.Usage;
 using InvoicePlatform.Application.Imports;
 using InvoicePlatform.Application.Interpretation;
 using InvoicePlatform.Application.Invoices;
@@ -31,7 +33,7 @@ public class ImportServiceTests
             new InvoiceEnrichment(new FakeSettingsStore(), relations),
             new InvoiceCalculationValidator(),
             new CanonicalInvoiceXmlSerializer(),
-            new LearningService(new FakeLearningStore(), _clock), new FakePlatformStore(), new FakeUsageMeter());
+            new LearningService(new FakeLearningStore(), _clock), new FakePlatformStore(), new FakeUsageMeter(), new FakeUsageLedger(), _clock, NullLogger<ExtractInvoiceService>.Instance);
         _service = new ImportService(_imports, _imports, _documents, extraction, _clock);
     }
 
@@ -143,7 +145,7 @@ public class ImportServiceTests
             => Fail
                 ? throw new InvalidOperationException("The document is unreadable.")
                 : Task.FromResult(new InvoiceInterpretationResult(
-                    CompleteInvoice.Create("F-2026-001"), new ProviderExecution("test", "m", 0)));
+                    CompleteInvoice.Create("F-2026-001"), new ProviderExecution("test", "m", 0, TokenUsage.None)));
     }
 
     private sealed class FakeImports : IImportRepository, IImportQueue

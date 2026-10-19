@@ -10,6 +10,10 @@ internal interface IOrganizationApiText
     string NotSaved { get; }
 
     string SettingNotSaved { get; }
+
+    string InvalidMonthTitle { get; }
+
+    string InvalidMonthDetail { get; }
 }
 
 internal sealed class OrganizationApiTextNl : IOrganizationApiText
@@ -19,6 +23,10 @@ internal sealed class OrganizationApiTextNl : IOrganizationApiText
     public string NotSaved => "Niet opgeslagen";
 
     public string SettingNotSaved => "Instelling niet opgeslagen";
+
+    public string InvalidMonthTitle => "Ongeldige maand";
+
+    public string InvalidMonthDetail => "Geef de maand als jjjj-MM, bijvoorbeeld 2026-10.";
 }
 
 internal sealed class OrganizationApiTextEn : IOrganizationApiText
@@ -28,6 +36,10 @@ internal sealed class OrganizationApiTextEn : IOrganizationApiText
     public string NotSaved => "Not saved";
 
     public string SettingNotSaved => "Setting not saved";
+
+    public string InvalidMonthTitle => "Invalid month";
+
+    public string InvalidMonthDetail => "Give the month as yyyy-MM, for example 2026-10.";
 }
 
 internal static class OrganizationApiText

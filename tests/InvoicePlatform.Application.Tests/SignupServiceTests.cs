@@ -1,3 +1,4 @@
+using Microsoft.Extensions.Logging.Abstractions;
 using InvoicePlatform.Application.Identity;
 using InvoicePlatform.Application.Interpretation;
 using InvoicePlatform.Application.Invoices;
@@ -203,7 +204,7 @@ public class ConversionLimitTests
         var relations = new RelationService(new FakeRelationStore(), clock, new InvoiceRulesetRegistry());
         _extract = new ExtractInvoiceService(_reader, new InvoiceEnrichment(new FakeSettingsStore(), relations),
             new InvoiceCalculationValidator(), new CanonicalInvoiceXmlSerializer(),
-            new LearningService(new FakeLearningStore(), clock), new FakePlatformStore(), _usage);
+            new LearningService(new FakeLearningStore(), clock), new FakePlatformStore(), _usage, new FakeUsageLedger(), clock, NullLogger<ExtractInvoiceService>.Instance);
     }
 
     [Fact]
@@ -211,9 +212,9 @@ public class ConversionLimitTests
     {
         await _usage.SetLimitAsync(Org, 2);
 
-        await _extract.ExtractAsync(Org, new byte[] { 1 });
-        await _extract.ExtractAsync(Org, new byte[] { 1 });
-        await Assert.ThrowsAsync<ConversionLimitReachedException>(() => _extract.ExtractAsync(Org, new byte[] { 1 }));
+        await _extract.ExtractAsync(Org, new byte[] { 1 }, "user-1", UsageSources.Upload);
+        await _extract.ExtractAsync(Org, new byte[] { 1 }, "user-1", UsageSources.Upload);
+        await Assert.ThrowsAsync<ConversionLimitReachedException>(() => _extract.ExtractAsync(Org, new byte[] { 1 }, "user-1", UsageSources.Upload));
 
         Assert.Equal(2, _reader.Calls);
         Assert.Equal(new UsageSummary(2, 2), await _usage.GetAsync(Org));
@@ -225,7 +226,7 @@ public class ConversionLimitTests
         await _usage.SetLimitAsync(Org, 1);
         _reader.Fail = true;
 
-        await Assert.ThrowsAsync<InvalidOperationException>(() => _extract.ExtractAsync(Org, new byte[] { 1 }));
+        await Assert.ThrowsAsync<InvalidOperationException>(() => _extract.ExtractAsync(Org, new byte[] { 1 }, "user-1", UsageSources.Upload));
 
         Assert.Equal(new UsageSummary(0, 1), await _usage.GetAsync(Org));
     }
@@ -235,7 +236,7 @@ public class ConversionLimitTests
     {
         for (var i = 0; i < 25; i++)
         {
-            await _extract.ExtractAsync("org-own", new byte[] { 1 });
+            await _extract.ExtractAsync("org-own", new byte[] { 1 }, "user-1", UsageSources.Upload);
         }
 
         Assert.Equal(new UsageSummary(25, null), await _usage.GetAsync("org-own"));
@@ -253,7 +254,7 @@ public class ConversionLimitTests
             Calls++;
             return Fail
                 ? throw new InvalidOperationException("unreadable")
-                : Task.FromResult(new InvoiceInterpretationResult(CompleteInvoice.Create(), new ProviderExecution("test", "m", 0)));
+                : Task.FromResult(new InvoiceInterpretationResult(CompleteInvoice.Create(), new ProviderExecution("test", "m", 0, TokenUsage.None)));
         }
     }
 }

@@ -34,6 +34,7 @@ function activeNavId(pathname: string): PageKey {
   if (pathname.includes("/invoices")) return "invoices";
   if (pathname.includes("/settings")) return "instellingen";
   if (pathname.includes("/relations")) return "relations";
+  if (pathname.includes("/platform/costs")) return "costs";
   if (pathname.includes("/platform")) return "platform";
   if (pathname.includes("/invite") || pathname.includes("/signup")) return "invite";
   return "upload";

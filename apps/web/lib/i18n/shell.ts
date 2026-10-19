@@ -35,6 +35,7 @@ const nl = {
     users: "Gebruikers",
     settings: "Instellingen",
     platform: "Platform",
+    costs: "Kosten",
   },
   /** Header title and breadcrumb, keyed by the active nav id. */
   pages: {
@@ -44,6 +45,7 @@ const nl = {
     relations: { title: "Relaties", breadcrumb: "xChange / Relaties" },
     instellingen: { title: "Instellingen", breadcrumb: "Beheer / Instellingen" },
     platform: { title: "Platform", breadcrumb: "Beheer / Platform" },
+    costs: { title: "Kosten", breadcrumb: "Beheer / Kosten" },
     invite: { title: "Uitnodiging", breadcrumb: "xChange / Account aanmaken" },
   },
   /** Errors created by lib/api.ts (API problem details are shown as they come). */
@@ -96,6 +98,7 @@ const en: typeof nl = {
     users: "Users",
     settings: "Settings",
     platform: "Platform",
+    costs: "Costs",
   },
   pages: {
     upload: { title: "Upload invoice", breadcrumb: "xChange / Upload" },
@@ -104,6 +107,7 @@ const en: typeof nl = {
     relations: { title: "Customers", breadcrumb: "xChange / Customers" },
     instellingen: { title: "Settings", breadcrumb: "Administration / Settings" },
     platform: { title: "Platform", breadcrumb: "Administration / Platform" },
+    costs: { title: "Costs", breadcrumb: "Administration / Costs" },
     invite: { title: "Invitation", breadcrumb: "xChange / Create account" },
   },
   api: {

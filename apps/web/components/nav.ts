@@ -56,6 +56,7 @@ export const navStructure: NavEntry[] = [
   { id: "gebruikers", label: "users", icon: "users", hidden: true },
   { id: "instellingen", label: "settings", icon: "settings", href: "/settings" },
   { id: "platform", label: "platform", icon: "users", href: "/platform", requiresPlatformAdmin: true },
+  { id: "costs", label: "costs", icon: "barChart", href: "/platform/costs", requiresPlatformAdmin: true },
 ];
 
 /* Page titles shown in the header live in the shell dictionary, under `pages`, keyed by nav id. */

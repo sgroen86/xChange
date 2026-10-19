@@ -128,6 +128,10 @@ public static class DependencyInjection
         // Conversions per organisation: a trial limit for self-signed-up ones.
         services.AddSingleton<IUsageMeter, DynamoDbUsageMeter>();
 
+        // What every model call cost, for the platform administrator.
+        services.AddSingleton<IUsageLedger, DynamoDbUsageLedger>();
+        services.AddScoped<CostReportService>();
+
         // Batch and email import: records in DynamoDB, the queue on SQS, read by the worker.
         services
             .AddOptions<ImportQueueOptions>()

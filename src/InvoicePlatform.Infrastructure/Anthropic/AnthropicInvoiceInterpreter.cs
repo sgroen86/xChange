@@ -260,10 +260,13 @@ public sealed class AnthropicInvoiceInterpreter : IInvoiceInterpreter
         var response = await CreateAsync(request, timeout.Token).ConfigureAwait(false);
         stopwatch.Stop();
 
+        // From here on the call is paid for: a failure carries what it cost.
+        var execution = new ProviderExecution(ProviderName, model, stopwatch.ElapsedMilliseconds, UsageOf(response));
+
         if (response.StopReason == "refusal")
         {
             throw new InvoiceInterpretationException(
-                "The model declined to process this document.");
+                "The model declined to process this document.", execution);
         }
 
         var json = string.Concat(
@@ -272,7 +275,7 @@ public sealed class AnthropicInvoiceInterpreter : IInvoiceInterpreter
         if (string.IsNullOrWhiteSpace(json))
         {
             throw new InvoiceInterpretationException(
-                "The model returned no content for this document.");
+                "The model returned no content for this document.", execution);
         }
 
         ExtractedInvoiceJson? extracted;
@@ -284,32 +287,42 @@ public sealed class AnthropicInvoiceInterpreter : IInvoiceInterpreter
         {
             // Deliberately not logging the payload: it is invoice content.
             throw new InvoiceInterpretationException(
-                "The model returned output that did not match the expected schema.", exception);
+                "The model returned output that did not match the expected schema.", execution, exception);
         }
 
         if (extracted is null)
         {
-            throw new InvoiceInterpretationException("The model returned an empty result.");
+            throw new InvoiceInterpretationException("The model returned an empty result.", execution);
         }
 
         // Token counts, not content: what an extraction costs is read from these.
         _logger.LogInformation(
-            "Interpreted invoice with {Model} in {DurationMs}ms: {InputTokens} input tokens, {OutputTokens} output tokens, {PdfBytes} PDF bytes, {Hints} hints",
+            "Interpreted invoice with {Model} in {DurationMs}ms: {InputTokens} input tokens, {OutputTokens} output tokens, {CacheWriteTokens} cache-write tokens, {CacheReadTokens} cache-read tokens, {PdfBytes} PDF bytes, {Hints} hints",
             model,
             stopwatch.ElapsedMilliseconds,
-            response.Usage.InputTokens,
-            response.Usage.OutputTokens,
+            execution.Usage.InputTokens,
+            execution.Usage.OutputTokens,
+            execution.Usage.CacheWriteTokens,
+            execution.Usage.CacheReadTokens,
             pdf.Length,
             hints?.Count ?? 0);
 
-        return new InvoiceInterpretationResult(
-            extracted.ToDomain(),
-            new ProviderExecution(ProviderName, model, stopwatch.ElapsedMilliseconds));
+        return new InvoiceInterpretationResult(extracted.ToDomain(), execution);
     }
+
+    /// <summary>The SDK's usage, mapped here so that its type never leaves this class.</summary>
+    private static TokenUsage UsageOf(Message response) => new(
+        response.Usage.InputTokens,
+        response.Usage.OutputTokens,
+        response.Usage.CacheCreationInputTokens ?? 0,
+        response.Usage.CacheReadInputTokens ?? 0);
 }
 
-/// <summary>Raised when the provider produced nothing usable.</summary>
-public sealed class InvoiceInterpretationException : Exception
+/// <summary>
+/// Raised when the provider produced nothing usable. When it did answer, the
+/// answer's cost comes with it (<see cref="InterpretationFailedException.Execution"/>).
+/// </summary>
+public sealed class InvoiceInterpretationException : InterpretationFailedException
 {
     public InvoiceInterpretationException(string message)
         : base(message)
@@ -317,7 +330,12 @@ public sealed class InvoiceInterpretationException : Exception
     }
 
     public InvoiceInterpretationException(string message, Exception innerException)
-        : base(message, innerException)
+        : base(message, innerException: innerException)
+    {
+    }
+
+    public InvoiceInterpretationException(string message, ProviderExecution execution, Exception? innerException = null)
+        : base(message, execution, innerException)
     {
     }
 }

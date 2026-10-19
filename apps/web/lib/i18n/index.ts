@@ -8,6 +8,7 @@ import { useSyncExternalStore } from "react";
 
 import { auth } from "./auth.ts";
 import { common } from "./common.ts";
+import { costs } from "./costs.ts";
 import { imports } from "./imports.ts";
 import { invoices } from "./invoices.ts";
 import {
@@ -24,7 +25,7 @@ import { settings } from "./settings.ts";
 import { shell } from "./shell.ts";
 import { upload } from "./upload.ts";
 
-const areas = { common, shell, auth, review, upload, imports, invoices, relations, settings, platform };
+const areas = { common, shell, auth, review, upload, imports, invoices, relations, settings, platform, costs };
 
 type Areas = typeof areas;
 export type Dictionary = { [Area in keyof Areas]: Areas[Area]["nl"] };

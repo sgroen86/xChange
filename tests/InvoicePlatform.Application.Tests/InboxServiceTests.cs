@@ -1,3 +1,5 @@
+using Microsoft.Extensions.Logging.Abstractions;
+using InvoicePlatform.Application.Usage;
 using InvoicePlatform.Application.Imports;
 using InvoicePlatform.Application.Interpretation;
 using InvoicePlatform.Application.Invoices;
@@ -31,7 +33,7 @@ public class InboxServiceTests
         var relations = new RelationService(new FakeRelationStore(), clock, new InvoiceRulesetRegistry());
         var extraction = new ExtractInvoiceService(
             new NeverCalled(), new InvoiceEnrichment(new FakeSettingsStore(), relations), new InvoiceCalculationValidator(),
-            new CanonicalInvoiceXmlSerializer(), new LearningService(new FakeLearningStore(), clock), new FakePlatformStore(), new FakeUsageMeter());
+            new CanonicalInvoiceXmlSerializer(), new LearningService(new FakeLearningStore(), clock), new FakePlatformStore(), new FakeUsageMeter(), new FakeUsageLedger(), clock, NullLogger<ExtractInvoiceService>.Instance);
         var imports = new ImportService(_imports, _imports, new FakeInvoiceStore(), extraction, clock);
         _inbox = new InboxService(_directory, _mail, imports, new InboxSettings(Domain, [PreviousDomain]));
     }

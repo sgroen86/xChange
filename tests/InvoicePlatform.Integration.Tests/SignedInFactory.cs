@@ -57,6 +57,8 @@ public sealed class SignedInFactory : WebApplicationFactory<Program>
 
     public InMemoryUsage Usage { get; } = new();
 
+    public InMemoryUsageLedger Ledger { get; } = new();
+
     public HttpClient As(string token)
     {
         var client = CreateClient();
@@ -105,6 +107,7 @@ public sealed class SignedInFactory : WebApplicationFactory<Program>
             services.RemoveAll<ISignupStore>();
             services.RemoveAll<IEmailSender>();
             services.RemoveAll<IUsageMeter>();
+            services.RemoveAll<IUsageLedger>();
 
             var identity = new SignedInIdentity();
             services.AddSingleton<IUserStore>(identity);
@@ -124,6 +127,7 @@ public sealed class SignedInFactory : WebApplicationFactory<Program>
             services.AddSingleton<ISignupStore>(Signups);
             services.AddSingleton<IEmailSender>(Mail);
             services.AddSingleton<IUsageMeter>(Usage);
+            services.AddSingleton<IUsageLedger>(Ledger);
         });
     }
 

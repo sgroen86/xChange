@@ -1,5 +1,6 @@
 using InvoicePlatform.Application.Identity;
 using InvoicePlatform.Application.Invoices;
+using InvoicePlatform.Application.Usage;
 using InvoicePlatform.Domain.Imports;
 
 namespace InvoicePlatform.Application.Imports;
@@ -120,7 +121,13 @@ public sealed class ImportService(
             var pdf = await documents.GetAsync(record.DocumentKey, cancellationToken).ConfigureAwait(false)
                 ?? throw new InvalidOperationException(ImportText.Current.PdfNotFound);
 
-            var result = await extraction.ExtractAsync(organizationId, pdf, cancellationToken).ConfigureAwait(false);
+            // Booked to whoever uploaded it; a mailed PDF has nobody.
+            var result = await extraction.ExtractAsync(
+                organizationId,
+                pdf,
+                record.CreatedByUserId ?? UsageActors.Email,
+                record.Source == ImportSource.Email ? UsageSources.Email : UsageSources.Batch,
+                cancellationToken).ConfigureAwait(false);
 
             record = record with
             {

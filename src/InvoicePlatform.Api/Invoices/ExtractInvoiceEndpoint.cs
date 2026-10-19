@@ -78,7 +78,7 @@ public static class ExtractInvoiceEndpoint
         {
             // The organisation comes from the session, never from the request.
             var user = request.HttpContext.GetAuthenticatedUser()!;
-            var result = await service.ExtractAsync(user.OrganizationId, bytes, cancellationToken).ConfigureAwait(false);
+            var result = await service.ExtractAsync(user.OrganizationId, bytes, user.Id, UsageSources.Upload, cancellationToken).ConfigureAwait(false);
             return Results.Ok(ToResponse(result));
         }
         catch (ConversionLimitReachedException exception)
