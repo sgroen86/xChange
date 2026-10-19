@@ -13,7 +13,7 @@ public sealed class InboxOptions
 {
     public const string SectionName = "Inbox";
 
-    public string Domain { get; set; } = "inbox.greenitsolutions.net";
+    public string Domain { get; set; } = "inbox.xchangeinvoice.com";
 
     /// <summary>Earlier inbox domains whose addresses keep receiving (Inbox__PreviousDomains__0, ...).</summary>
     public List<string> PreviousDomains { get; set; } = [];

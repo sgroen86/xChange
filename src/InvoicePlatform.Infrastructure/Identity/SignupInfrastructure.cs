@@ -13,11 +13,11 @@ public sealed class EmailOptions
 {
     public const string SectionName = "Email";
 
-    /// <summary>The sender, on an SES-verified domain, e.g. "xChange &lt;noreply@inbox.greenitsolutions.net&gt;".</summary>
-    public string From { get; set; } = "xChange <noreply@inbox.greenitsolutions.net>";
+    /// <summary>The sender, on an SES-verified domain, e.g. "xChange &lt;noreply@inbox.xchangeinvoice.com&gt;".</summary>
+    public string From { get; set; } = "xChange <noreply@inbox.xchangeinvoice.com>";
 
     /// <summary>Where the app lives, for links in mails.</summary>
-    public string AppUrl { get; set; } = "https://greenitsolutions.net/xchange";
+    public string AppUrl { get; set; } = "https://app.xchangeinvoice.com";
 }
 
 /// <summary>

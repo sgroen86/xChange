@@ -37,20 +37,20 @@ Parameters:
 
   AppUrl:
     Type: String
-    Default: https://greenitsolutions.net/xchange
+    Default: https://app.xchangeinvoice.com
     Description: Where the app lives, for links in mails (sign-up confirmation).
 
   InboxDomain:
     Type: String
     Default: inbox.greenitsolutions.net
     Description: >
-      The subdomain organisations' invoice inboxes live on. Its MX record points
-      at inbound-smtp.eu-central-1.amazonaws.com, and the DKIM records from
-      this stack's outputs verify it - both set by hand at the DNS host.
+      The inbox's first domain. Addresses on it keep receiving; new addresses
+      are shown on NewInboxDomain. Its MX record points at
+      inbound-smtp.eu-central-1.amazonaws.com, and the DKIM records from this
+      stack's outputs verify it - both set by hand at Strato.
 
-  # The inbox domain on xChange's own domain. Its identity is created first;
-  # addresses move to it once Route 53 carries its DKIM and MX records and SES
-  # has verified it (domain.yml). Until then InboxDomain stays the live one.
+  # The inbox on xChange's own domain: where addresses are shown and mail is
+  # sent from. Verified through its DKIM and MX records in Route 53 (domain.yml).
   NewInboxDomain:
     Type: String
     Default: inbox.xchangeinvoice.com
@@ -282,8 +282,9 @@ Resources:
           Cors__AllowedOrigins__2: !Ref AppOrigin
           OfficialValidation__FunctionName: !Ref ValidatorAlias
           Imports__QueueUrl: !Ref ImportQueue
-          Inbox__Domain: !Ref InboxDomain
-          Email__From: !Sub "xChange <noreply@${InboxDomain}>"
+          Inbox__Domain: !Ref NewInboxDomain
+          Inbox__PreviousDomains__0: !Ref InboxDomain
+          Email__From: !Sub "xChange <noreply@${NewInboxDomain}>"
           Email__AppUrl: !Ref AppUrl
       Tags:
         - Key: Project
@@ -645,7 +646,8 @@ Resources:
           InvoiceStorage__TableName: !Ref InvoiceTable
           InvoiceStorage__BucketName: !Ref DocumentBucket
           Imports__QueueUrl: !Ref ImportQueue
-          Inbox__Domain: !Ref InboxDomain
+          Inbox__Domain: !Ref NewInboxDomain
+          Inbox__PreviousDomains__0: !Ref InboxDomain
           Inbox__MailBucketName: !Ref MailBucket
       Tags:
         - Key: Project
@@ -684,6 +686,7 @@ Resources:
         Enabled: true
         Recipients:
           - !Ref InboxDomain
+          - !Ref NewInboxDomain
         # Spam and virus verdicts reach the mail function, which drops a FAIL.
         ScanEnabled: true
         TlsPolicy: Optional

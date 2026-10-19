@@ -40,7 +40,7 @@ public sealed record InboxSettings(string Domain, IReadOnlyList<string>? Previou
 
 /// <summary>
 /// Email import. Each organisation gets an address that is hard to guess
-/// (<c>&lt;code&gt;@inbox.greenitsolutions.net</c>) and can be replaced when it
+/// (<c>&lt;code&gt;@inbox.xchangeinvoice.com</c>) and can be replaced when it
 /// attracts unwanted mail. Every PDF attached to a mail sent there becomes an
 /// import in that organisation's "to review" list, read in the background like
 /// a batch upload.

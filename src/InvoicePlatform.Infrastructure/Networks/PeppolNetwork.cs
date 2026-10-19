@@ -51,7 +51,7 @@ public sealed class PeppolNetwork : IReceiverNetwork, IDisposable
 
         // Redirects are followed by hand, so every hop is checked like the first.
         _http = new HttpClient(new SocketsHttpHandler { AllowAutoRedirect = false }) { Timeout = _options.Timeout };
-        _http.DefaultRequestHeaders.UserAgent.ParseAdd("xChange/1.0 (+https://greenitsolutions.net/xchange/)");
+        _http.DefaultRequestHeaders.UserAgent.ParseAdd("xChange/1.0 (+https://www.xchangeinvoice.com/)");
     }
 
     public string Name => "peppol";

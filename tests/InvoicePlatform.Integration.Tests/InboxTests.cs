@@ -61,7 +61,7 @@ public class InboxTests : IClassFixture<SignedInFactory>
 
         Assert.Equal(HttpStatusCode.Forbidden, byUser.StatusCode);
         var address = (await created.Content.ReadFromJsonAsync<JsonElement>()).GetProperty("address").GetString();
-        Assert.EndsWith("@inbox.greenitsolutions.net", address, StringComparison.Ordinal);
+        Assert.EndsWith("@inbox.xchangeinvoice.com", address, StringComparison.Ordinal);
         Assert.Equal(address, seen.GetProperty("address").GetString());
         Assert.NotEqual(address, otherOrg.GetProperty("address").GetString());
     }
