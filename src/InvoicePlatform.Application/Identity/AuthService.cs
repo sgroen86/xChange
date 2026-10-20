@@ -6,18 +6,37 @@ namespace InvoicePlatform.Application.Identity;
 
 /// <summary>Outcome of a login or setup attempt. Never carries the hash.</summary>
 /// <param name="LockedOut">Refused because the address tried too often: the caller should wait, whatever the message says.</param>
+/// <param name="Mfa">
+/// Set instead of a session when the password was right and a second step
+/// must follow: a code, or setting MFA up. Nothing about the user is returned
+/// until that step is done.
+/// </param>
+/// <param name="RecoveryCodesLeft">After a login with a recovery code: how many remain.</param>
+/// <param name="RecoveryCodes">After setting MFA up: the codes, shown once and never stored in plain text.</param>
+/// <param name="ChallengeGone">The challenge expired, was used up or never existed: the login must start again.</param>
 public sealed record AuthResult(
     bool Succeeded,
     string? Error = null,
     string? Token = null,
     DateTimeOffset? ExpiresAt = null,
     AuthenticatedUser? User = null,
-    bool LockedOut = false)
+    bool LockedOut = false,
+    MfaPending? Mfa = null,
+    int? RecoveryCodesLeft = null,
+    IReadOnlyList<string>? RecoveryCodes = null,
+    bool ChallengeGone = false)
 {
     public static AuthResult Fail(string error) => new(false, error);
 
     public static AuthResult Locked() => new(false, IdentityText.Current.TooManyAttempts, LockedOut: true);
+
+    public static AuthResult Gone(string error) => new(false, error, ChallengeGone: true);
 }
+
+/// <summary>The second step a login still needs.</summary>
+/// <param name="Challenge">Opaque, single-use, short-lived; only its hash is stored.</param>
+/// <param name="SetupRequired">MFA is mandatory for this user and not set up yet.</param>
+public sealed record MfaPending(string Challenge, bool SetupRequired, DateTimeOffset ExpiresAt);
 
 /// <summary>What the API may safely tell the browser about the signed-in user.</summary>
 public sealed record AuthenticatedUser(
@@ -49,7 +68,8 @@ public sealed class AuthService(
     ILoginAttemptStore attempts,
     IPasswordHasher passwords,
     IClock clock,
-    IPlatformStore platform)
+    IPlatformStore platform,
+    IMfaStore mfa)
 {
     /// <summary>
     /// Creates the first account and its organization.
@@ -129,7 +149,8 @@ public sealed class AuthService(
             },
             cancellationToken).ConfigureAwait(false);
 
-        return await IssueSessionAsync(user, cancellationToken).ConfigureAwait(false);
+        // A platform administrator: MFA is set up before the first session.
+        return await ContinueSignInAsync(user, clientKey: null, cancellationToken).ConfigureAwait(false);
     }
 
     /// <param name="clientKey">
@@ -169,11 +190,7 @@ public sealed class AuthService(
             return AuthResult.Fail(IdentityText.Current.AccountDeactivated);
         }
 
-        await attempts.ClearAsync(clientKey, cancellationToken).ConfigureAwait(false);
-        await users.UpdateLastLoginAsync(user.OrganizationId, user.Id, now, cancellationToken)
-            .ConfigureAwait(false);
-
-        return await IssueSessionAsync(user, cancellationToken).ConfigureAwait(false);
+        return await ContinueSignInAsync(user, clientKey, cancellationToken).ConfigureAwait(false);
     }
 
     /// <summary>Resolves a bearer token to a user, or null if it is not usable.</summary>
@@ -239,7 +256,8 @@ public sealed class AuthService(
 
     /// <summary>
     /// Turns an invitation into an account: Admin of the invited organisation,
-    /// signed in at once. The invitation is consumed before the account is
+    /// who sets up MFA (the returned challenge) and is then signed in. The
+    /// invitation is consumed before the account is
     /// made, so it cannot be used twice, even by two simultaneous requests.
     /// </summary>
     public async Task<AuthResult> AcceptInvitationAsync(
@@ -309,8 +327,9 @@ public sealed class AuthService(
                 cancellationToken).ConfigureAwait(false);
         }
 
+        // The invitation proved who this is; the new Admin still sets up MFA before the first session.
         await attempts.ClearAsync(clientKey, cancellationToken).ConfigureAwait(false);
-        return await IssueSessionAsync(user, cancellationToken).ConfigureAwait(false);
+        return await ContinueSignInAsync(user, clientKey, cancellationToken).ConfigureAwait(false);
     }
 
     private async Task<Invitation?> FindUsableInvitationAsync(
@@ -331,11 +350,74 @@ public sealed class AuthService(
     public Task LogoutAsync(string token, CancellationToken cancellationToken = default)
         => sessions.DeleteAsync(token, cancellationToken);
 
-    /// <summary>Signs a user in that was just created elsewhere (self sign-up), clearing the address's attempts.</summary>
+    /// <summary>
+    /// Signs a user in that was just created elsewhere (self sign-up), clearing
+    /// the address's attempts. Such a user is an Admin, so this returns the MFA
+    /// setup challenge rather than a session.
+    /// </summary>
     internal async Task<AuthResult> SignInAsync(User user, string clientKey, CancellationToken cancellationToken)
     {
         await attempts.ClearAsync(clientKey, cancellationToken).ConfigureAwait(false);
+        return await ContinueSignInAsync(user, clientKey, cancellationToken).ConfigureAwait(false);
+    }
+
+    /// <summary>
+    /// After the password (or an invitation, or a confirmation link) proved who
+    /// this is: a code if MFA is on, setting it up if it is mandatory and not
+    /// on, otherwise the session.
+    ///
+    /// The address's failed attempts are only cleared once the session exists.
+    /// Clearing them at the password would hand out a fresh set of guesses at
+    /// the code with every new challenge.
+    /// </summary>
+    internal async Task<AuthResult> ContinueSignInAsync(User user, string? clientKey, CancellationToken cancellationToken)
+    {
+        var state = await mfa.GetAsync(user.OrganizationId, user.Id, cancellationToken).ConfigureAwait(false);
+
+        if (state is { IsEnabled: true })
+        {
+            return await ChallengeAsync(user, MfaChallengePurpose.SignIn, cancellationToken).ConfigureAwait(false);
+        }
+
+        if (UserMfa.IsMandatoryFor(user))
+        {
+            return await ChallengeAsync(user, MfaChallengePurpose.Setup, cancellationToken).ConfigureAwait(false);
+        }
+
+        return await CompleteSignInAsync(user, clientKey, cancellationToken).ConfigureAwait(false);
+    }
+
+    /// <summary>Every step is done: clear the address's failures, record the login, issue the session.</summary>
+    internal async Task<AuthResult> CompleteSignInAsync(User user, string? clientKey, CancellationToken cancellationToken)
+    {
+        if (clientKey is not null)
+        {
+            await attempts.ClearAsync(clientKey, cancellationToken).ConfigureAwait(false);
+        }
+
+        await users.UpdateLastLoginAsync(user.OrganizationId, user.Id, clock.UtcNow, cancellationToken)
+            .ConfigureAwait(false);
+
         return await IssueSessionAsync(user, cancellationToken).ConfigureAwait(false);
+    }
+
+    private async Task<AuthResult> ChallengeAsync(User user, MfaChallengePurpose purpose, CancellationToken cancellationToken)
+    {
+        var now = clock.UtcNow;
+        var token = MfaChallenge.NewToken();
+        var challenge = new MfaChallenge(
+            MfaChallenge.HashOf(token),
+            user.OrganizationId,
+            user.Id,
+            purpose,
+            now,
+            now.Add(MfaChallenge.LifetimeFor(purpose)));
+
+        await mfa.SaveChallengeAsync(challenge, cancellationToken).ConfigureAwait(false);
+
+        return new AuthResult(
+            true,
+            Mfa: new MfaPending(token, purpose == MfaChallengePurpose.Setup, challenge.ExpiresAt));
     }
 
     /// <summary>Counts an attempt towards the per-address lockout (login, invitations, sign-up).</summary>

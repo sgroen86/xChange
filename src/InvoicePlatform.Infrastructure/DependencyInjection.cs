@@ -10,6 +10,7 @@ using InvoicePlatform.Domain.EInvoicing.Ubl;
 using InvoicePlatform.Domain.Serialization;
 using InvoicePlatform.Domain.Validation;
 using Amazon.DynamoDBv2;
+using Amazon.KeyManagementService;
 using Amazon.Lambda;
 using Amazon.S3;
 using Amazon.SQS;
@@ -93,6 +94,16 @@ public static class DependencyInjection
         services.AddSingleton<IPasswordHasher, BcryptPasswordHasher>();
         services.AddSingleton<IClock, SystemClock>();
         services.AddScoped<AuthService>();
+
+        // Two-step verification: state and challenges in the identity table,
+        // TOTP secrets encrypted with a KMS key the table does not hold.
+        services
+            .AddOptions<MfaOptions>()
+            .Bind(configuration.GetSection(MfaOptions.SectionName));
+        services.AddSingleton<IAmazonKeyManagementService>(_ => new AmazonKeyManagementServiceClient());
+        services.AddSingleton<ISecretProtector, KmsSecretProtector>();
+        services.AddSingleton<IMfaStore, DynamoDbMfaStore>();
+        services.AddScoped<MfaService>();
 
         // Self sign-up: pending sign-ups expire by themselves; the confirmation goes out through SES.
         services

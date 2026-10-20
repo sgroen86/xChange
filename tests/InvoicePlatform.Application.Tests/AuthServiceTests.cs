@@ -7,31 +7,65 @@ namespace InvoicePlatform.Application.Tests;
 /// <summary>
 /// Covers the parts of login where a mistake is a security hole rather than a
 /// bug: lockout, inactive accounts, session expiry, and immediate revocation.
+///
+/// The login tests use an ordinary user, for whom MFA is optional and off, so
+/// the password alone gives a session. Admins and platform administrators get
+/// an MFA setup challenge instead; that is asserted here and taken further in
+/// <see cref="MfaServiceTests"/>.
 /// </summary>
 public class AuthServiceTests
 {
+    private const string Password = "correct-horse-battery";
+
     private readonly FakeStore _store = new();
     private readonly FakePlatformStore _platform = new();
+    private readonly FakeMfaStore _mfa = new();
     private readonly TestClock _clock = new(DateTimeOffset.Parse("2026-09-08T10:00:00Z"));
     private readonly AuthService _auth;
 
     public AuthServiceTests()
-        => _auth = new AuthService(_store, _store, _store, new FakeHasher(), _clock, _platform);
+        => _auth = new AuthService(_store, _store, _store, new FakeHasher(), _clock, _platform, _mfa);
 
-    private async Task<AuthResult> SetupAsync(string password = "correct-horse-battery")
+    private async Task<AuthResult> SetupAsync(string password = Password)
         => await _auth.SetupFirstUserAsync("Stefan@Example.NL ", password, "Stefan", "Green IT", "SG");
 
+    /// <summary>An ordinary user of an organisation, as an admin would have added them.</summary>
+    private async Task<User> SeedUserAsync(string email = "piet@example.nl", UserRole role = UserRole.User)
+    {
+        var user = new User
+        {
+            Id = Guid.NewGuid().ToString("n"),
+            OrganizationId = "org-1",
+            Email = email,
+            PasswordHash = new FakeHasher().Hash(Password),
+            Name = "Piet",
+            Role = role,
+        };
+        await _store.AddAsync(user);
+        return user;
+    }
+
+    private async Task<AuthResult> SignInAsync()
+    {
+        await SeedUserAsync();
+        var result = await _auth.LoginAsync("piet@example.nl", Password, "1.2.3.4");
+        Assert.NotNull(result.Token);
+        return result;
+    }
+
     [Fact]
-    public async Task Setup_creates_the_first_admin_and_signs_them_in()
+    public async Task Setup_creates_the_first_admin_who_sets_up_mfa_before_any_session()
     {
         var result = await SetupAsync();
 
         Assert.True(result.Succeeded);
-        Assert.NotNull(result.Token);
-        Assert.Equal(UserRole.Admin, result.User!.Role);
+        Assert.Null(result.Token);
+        Assert.Null(result.User);
+        Assert.True(result.Mfa!.SetupRequired);
         // Email is normalised, so casing and stray spaces cannot create a second account.
-        Assert.Equal("stefan@example.nl", result.User.Email);
-        Assert.NotEmpty(result.User.OrganizationId);
+        var stored = await _store.FindByEmailAsync("stefan@example.nl");
+        Assert.Equal(UserRole.Admin, stored!.Role);
+        Assert.NotEmpty(stored.OrganizationId);
     }
 
     [Fact]
@@ -74,20 +108,21 @@ public class AuthServiceTests
     [Fact]
     public async Task Login_succeeds_with_the_right_password_and_is_case_insensitive_on_email()
     {
-        await SetupAsync();
+        await SeedUserAsync();
 
-        var result = await _auth.LoginAsync("STEFAN@example.nl", "correct-horse-battery", "1.2.3.4");
+        var result = await _auth.LoginAsync("PIET@example.nl", Password, "1.2.3.4");
 
         Assert.True(result.Succeeded);
         Assert.NotNull(result.Token);
+        Assert.Null(result.Mfa);
     }
 
     [Fact]
     public async Task Login_fails_with_the_wrong_password()
     {
-        await SetupAsync();
+        await SeedUserAsync();
 
-        var result = await _auth.LoginAsync("stefan@example.nl", "wrong-password-here", "1.2.3.4");
+        var result = await _auth.LoginAsync("piet@example.nl", "wrong-password-here", "1.2.3.4");
 
         Assert.False(result.Succeeded);
         Assert.Equal("Ongeldige inloggegevens.", result.Error);
@@ -96,10 +131,10 @@ public class AuthServiceTests
     [Fact]
     public async Task An_unknown_account_and_a_wrong_password_are_indistinguishable()
     {
-        await SetupAsync();
+        await SeedUserAsync();
 
         var unknown = await _auth.LoginAsync("nobody@example.nl", "some-long-password", "1.2.3.4");
-        var wrong = await _auth.LoginAsync("stefan@example.nl", "some-long-password", "5.6.7.8");
+        var wrong = await _auth.LoginAsync("piet@example.nl", "some-long-password", "5.6.7.8");
 
         // Different messages here would let someone enumerate which addresses
         // have accounts.
@@ -109,15 +144,15 @@ public class AuthServiceTests
     [Fact]
     public async Task Five_failures_lock_the_address_out()
     {
-        await SetupAsync();
+        await SeedUserAsync();
 
         for (var attempt = 0; attempt < LoginAttempts.MaxAttempts; attempt++)
         {
-            await _auth.LoginAsync("stefan@example.nl", "wrong-password-here", "9.9.9.9");
+            await _auth.LoginAsync("piet@example.nl", "wrong-password-here", "9.9.9.9");
         }
 
         // Now even the correct password is refused.
-        var locked = await _auth.LoginAsync("stefan@example.nl", "correct-horse-battery", "9.9.9.9");
+        var locked = await _auth.LoginAsync("piet@example.nl", Password, "9.9.9.9");
 
         Assert.False(locked.Succeeded);
         Assert.Contains("Te veel pogingen", locked.Error);
@@ -126,63 +161,120 @@ public class AuthServiceTests
     [Fact]
     public async Task The_lockout_is_per_address_not_global()
     {
-        await SetupAsync();
+        await SeedUserAsync();
 
         for (var attempt = 0; attempt < LoginAttempts.MaxAttempts; attempt++)
         {
-            await _auth.LoginAsync("stefan@example.nl", "wrong-password-here", "9.9.9.9");
+            await _auth.LoginAsync("piet@example.nl", "wrong-password-here", "9.9.9.9");
         }
 
         // One attacker must not be able to lock the real user out.
-        var elsewhere = await _auth.LoginAsync("stefan@example.nl", "correct-horse-battery", "1.1.1.1");
+        var elsewhere = await _auth.LoginAsync("piet@example.nl", Password, "1.1.1.1");
 
         Assert.True(elsewhere.Succeeded);
+        Assert.NotNull(elsewhere.Token);
     }
 
     [Fact]
     public async Task The_lockout_expires()
     {
-        await SetupAsync();
+        await SeedUserAsync();
 
         for (var attempt = 0; attempt < LoginAttempts.MaxAttempts; attempt++)
         {
-            await _auth.LoginAsync("stefan@example.nl", "wrong-password-here", "9.9.9.9");
+            await _auth.LoginAsync("piet@example.nl", "wrong-password-here", "9.9.9.9");
         }
 
         _clock.Advance(LoginAttempts.LockoutDuration + TimeSpan.FromMinutes(1));
 
-        var later = await _auth.LoginAsync("stefan@example.nl", "correct-horse-battery", "9.9.9.9");
+        var later = await _auth.LoginAsync("piet@example.nl", Password, "9.9.9.9");
 
-        Assert.True(later.Succeeded);
+        Assert.NotNull(later.Token);
     }
 
     [Fact]
     public async Task A_successful_login_clears_the_failure_count()
     {
-        await SetupAsync();
+        await SeedUserAsync();
 
         for (var attempt = 0; attempt < LoginAttempts.MaxAttempts - 1; attempt++)
         {
-            await _auth.LoginAsync("stefan@example.nl", "wrong-password-here", "9.9.9.9");
+            await _auth.LoginAsync("piet@example.nl", "wrong-password-here", "9.9.9.9");
         }
 
-        Assert.True((await _auth.LoginAsync("stefan@example.nl", "correct-horse-battery", "9.9.9.9")).Succeeded);
+        Assert.NotNull((await _auth.LoginAsync("piet@example.nl", Password, "9.9.9.9")).Token);
 
         // The earlier failures must not carry over and lock the account on the
         // next single mistake.
-        await _auth.LoginAsync("stefan@example.nl", "wrong-password-here", "9.9.9.9");
-        var stillFine = await _auth.LoginAsync("stefan@example.nl", "correct-horse-battery", "9.9.9.9");
+        await _auth.LoginAsync("piet@example.nl", "wrong-password-here", "9.9.9.9");
+        var stillFine = await _auth.LoginAsync("piet@example.nl", Password, "9.9.9.9");
 
-        Assert.True(stillFine.Succeeded);
+        Assert.NotNull(stillFine.Token);
+    }
+
+    [Fact]
+    public async Task A_right_password_does_not_clear_the_failure_count_while_mfa_is_still_to_come()
+    {
+        // Otherwise every new challenge would hand out a fresh set of guesses at the code.
+        await SeedUserAsync("admin@example.nl", UserRole.Admin);
+
+        for (var attempt = 0; attempt < LoginAttempts.MaxAttempts - 1; attempt++)
+        {
+            await _auth.LoginAsync("admin@example.nl", "wrong-password-here", "9.9.9.9");
+        }
+
+        Assert.NotNull((await _auth.LoginAsync("admin@example.nl", Password, "9.9.9.9")).Mfa);
+        await _auth.LoginAsync("admin@example.nl", "wrong-password-here", "9.9.9.9");
+
+        Assert.True((await _auth.LoginAsync("admin@example.nl", Password, "9.9.9.9")).LockedOut);
+    }
+
+    [Theory]
+    [InlineData(UserRole.Admin, false)]
+    [InlineData(UserRole.User, true)]
+    public async Task Admins_and_platform_administrators_get_an_mfa_setup_challenge_instead_of_a_session(UserRole role, bool platformAdmin)
+    {
+        var user = await SeedUserAsync("boss@example.nl", role);
+        if (platformAdmin)
+        {
+            _store.MakePlatformAdmin(user.Id);
+        }
+
+        var result = await _auth.LoginAsync("boss@example.nl", Password, "1.2.3.4");
+
+        Assert.True(result.Succeeded);
+        Assert.Null(result.Token);
+        Assert.Null(result.User);
+        Assert.True(result.Mfa!.SetupRequired);
+        Assert.Equal(64, result.Mfa.Challenge.Length);
+        // Only the hash is stored, bound to this user; setting up an
+        // authenticator gets fifteen minutes rather than the five a code gets.
+        var stored = Assert.Single(_mfa.Challenges.Values);
+        Assert.Equal(MfaChallenge.HashOf(result.Mfa.Challenge), stored.TokenHash);
+        Assert.Equal((user.Id, MfaChallengePurpose.Setup), (stored.UserId, stored.Purpose));
+        Assert.Equal(_clock.UtcNow + TimeSpan.FromMinutes(15), stored.ExpiresAt);
+    }
+
+    [Fact]
+    public async Task A_user_with_mfa_on_gets_a_code_challenge_instead_of_a_session()
+    {
+        var user = await SeedUserAsync();
+        await _mfa.SaveAsync(new UserMfa { OrganizationId = user.OrganizationId, UserId = user.Id, ProtectedSecret = "x" });
+
+        var result = await _auth.LoginAsync("piet@example.nl", Password, "1.2.3.4");
+
+        Assert.Null(result.Token);
+        Assert.False(result.Mfa!.SetupRequired);
+        Assert.Equal(MfaChallengePurpose.SignIn, Assert.Single(_mfa.Challenges.Values).Purpose);
     }
 
     [Fact]
     public async Task A_deactivated_account_cannot_log_in_even_with_the_right_password()
     {
-        var setup = await SetupAsync();
-        _store.Deactivate(setup.User!.Id);
+        var user = await SeedUserAsync();
+        _store.Deactivate(user.Id);
 
-        var result = await _auth.LoginAsync("stefan@example.nl", "correct-horse-battery", "1.2.3.4");
+        var result = await _auth.LoginAsync("piet@example.nl", Password, "1.2.3.4");
 
         Assert.False(result.Succeeded);
         Assert.Equal("Account gedeactiveerd.", result.Error);
@@ -191,18 +283,18 @@ public class AuthServiceTests
     [Fact]
     public async Task A_valid_token_resolves_to_the_user()
     {
-        var setup = await SetupAsync();
+        var session = await SignInAsync();
 
-        var user = await _auth.ValidateAsync(setup.Token!);
+        var user = await _auth.ValidateAsync(session.Token!);
 
         Assert.NotNull(user);
-        Assert.Equal(setup.User!.Id, user!.Id);
+        Assert.Equal(session.User!.Id, user!.Id);
     }
 
     [Fact]
     public async Task An_unknown_or_empty_token_resolves_to_nothing()
     {
-        await SetupAsync();
+        await SignInAsync();
 
         Assert.Null(await _auth.ValidateAsync("not-a-real-token"));
         Assert.Null(await _auth.ValidateAsync(""));
@@ -211,21 +303,21 @@ public class AuthServiceTests
     [Fact]
     public async Task A_session_stops_working_once_it_expires()
     {
-        var setup = await SetupAsync();
+        var session = await SignInAsync();
 
         _clock.Advance(AuthSession.Lifetime + TimeSpan.FromMinutes(1));
 
-        Assert.Null(await _auth.ValidateAsync(setup.Token!));
+        Assert.Null(await _auth.ValidateAsync(session.Token!));
     }
 
     [Fact]
     public async Task Logging_out_invalidates_the_token_immediately()
     {
-        var setup = await SetupAsync();
+        var session = await SignInAsync();
 
-        await _auth.LogoutAsync(setup.Token!);
+        await _auth.LogoutAsync(session.Token!);
 
-        Assert.Null(await _auth.ValidateAsync(setup.Token!));
+        Assert.Null(await _auth.ValidateAsync(session.Token!));
     }
 
     [Fact]
@@ -233,21 +325,19 @@ public class AuthServiceTests
     {
         // The reason sessions are server-side rather than self-contained tokens:
         // revocation has to take effect now, not when the token expires.
-        var setup = await SetupAsync();
-        Assert.NotNull(await _auth.ValidateAsync(setup.Token!));
+        var session = await SignInAsync();
+        Assert.NotNull(await _auth.ValidateAsync(session.Token!));
 
-        _store.Deactivate(setup.User!.Id);
+        _store.Deactivate(session.User!.Id);
 
-        Assert.Null(await _auth.ValidateAsync(setup.Token!));
+        Assert.Null(await _auth.ValidateAsync(session.Token!));
     }
 
     [Fact]
     public async Task Tokens_are_unique_and_not_guessable_in_shape()
     {
-        await SetupAsync();
-
-        var first = await _auth.LoginAsync("stefan@example.nl", "correct-horse-battery", "1.2.3.4");
-        var second = await _auth.LoginAsync("stefan@example.nl", "correct-horse-battery", "1.2.3.4");
+        var first = await SignInAsync();
+        var second = await _auth.LoginAsync("piet@example.nl", Password, "1.2.3.4");
 
         Assert.NotEqual(first.Token, second.Token);
         Assert.Equal(64, first.Token!.Length); // 32 bytes, hex encoded
@@ -256,12 +346,13 @@ public class AuthServiceTests
     [Fact]
     public async Task The_password_hash_is_never_returned()
     {
-        var result = await SetupAsync();
+        foreach (var result in new[] { await SetupAsync(), await SignInAsync() })
+        {
+            var serialized = System.Text.Json.JsonSerializer.Serialize(result);
 
-        var serialized = System.Text.Json.JsonSerializer.Serialize(result);
-
-        Assert.DoesNotContain("hash", serialized, StringComparison.OrdinalIgnoreCase);
-        Assert.DoesNotContain("correct-horse-battery", serialized, StringComparison.Ordinal);
+            Assert.DoesNotContain("hash", serialized, StringComparison.OrdinalIgnoreCase);
+            Assert.DoesNotContain(Password, serialized, StringComparison.Ordinal);
+        }
     }
 
     // ── Organisations and invitations ────────────────────────────────────────
@@ -269,10 +360,11 @@ public class AuthServiceTests
     [Fact]
     public async Task Setup_makes_the_first_account_platform_administrator_and_records_the_organisation()
     {
-        var result = await SetupAsync();
+        await SetupAsync();
 
-        Assert.True(result.User!.IsPlatformAdmin);
-        var organization = await _platform.FindOrganizationAsync(result.User.OrganizationId);
+        var user = await _store.FindByEmailAsync("stefan@example.nl");
+        Assert.True(user!.IsPlatformAdmin);
+        var organization = await _platform.FindOrganizationAsync(user.OrganizationId);
         Assert.Equal(("Green IT", "SG"), (organization!.Name, organization.CountryCode));
     }
 
@@ -294,18 +386,19 @@ public class AuthServiceTests
     }
 
     [Fact]
-    public async Task Accepting_an_invitation_makes_an_admin_of_that_organisation_and_signs_them_in()
+    public async Task Accepting_an_invitation_makes_an_admin_of_that_organisation_who_sets_up_mfa_first()
     {
         var (organizationId, code) = await InviteAsync();
 
         var result = await _auth.AcceptInvitationAsync(code, "Jan Tan", "a-long-enough-password", "10.0.0.1");
 
         Assert.True(result.Succeeded);
-        Assert.NotNull(result.Token);
-        Assert.Equal(organizationId, result.User!.OrganizationId);
-        Assert.Equal(UserRole.Admin, result.User.Role);
-        Assert.Equal("jan@klant.sg", result.User.Email);
-        Assert.False(result.User.IsPlatformAdmin);
+        Assert.Null(result.Token);
+        Assert.True(result.Mfa!.SetupRequired);
+        var user = await _store.FindByEmailAsync("jan@klant.sg");
+        Assert.Equal(organizationId, user!.OrganizationId);
+        Assert.Equal(UserRole.Admin, user.Role);
+        Assert.False(user.IsPlatformAdmin);
         Assert.Null((await _platform.FindOrganizationAsync(organizationId))!.PendingInvitationHash);
     }
 
@@ -424,6 +517,17 @@ public class AuthServiceTests
                 if (user.Id == userId)
                 {
                     _byEmail[email] = user with { IsActive = false };
+                }
+            }
+        }
+
+        public void MakePlatformAdmin(string userId)
+        {
+            foreach (var (email, user) in _byEmail.ToList())
+            {
+                if (user.Id == userId)
+                {
+                    _byEmail[email] = user with { IsPlatformAdmin = true };
                 }
             }
         }

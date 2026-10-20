@@ -10,6 +10,7 @@
 import { API_BASE_URL, ApiError, isApiConfigured } from "./api";
 import { text } from "./i18n";
 import { currentLanguage } from "./i18n/language";
+import { signInStep, type SignInPayload } from "./mfa";
 
 const TOKEN_KEY = "xchange.session.token";
 const USER_KEY = "xchange.session.user";
@@ -42,6 +43,24 @@ export interface Session {
   token: string;
   expiresAt: string;
   user: SessionUser;
+  /** After a login with a recovery code: how many are left. */
+  recoveryCodesLeft?: number | null;
+}
+
+/**
+ * What logging in (or signing up, or accepting an invitation) gives: a
+ * session, or a second step first - a code from the app, or setting MFA up
+ * when it is mandatory. A challenge is not a session and is never stored.
+ */
+export type SignInResult =
+  | { kind: "session"; session: Session }
+  | { kind: "mfa"; challenge: string }
+  | { kind: "mfaSetup"; challenge: string };
+
+/** What an authenticator app needs: the secret as text and the URI the QR code carries. */
+export interface MfaSetupInfo {
+  secret: string;
+  otpauthUri: string;
 }
 
 export function getToken(): string | null {
@@ -173,10 +192,16 @@ export async function isSetupRequired(): Promise<boolean> {
   }
 }
 
-export async function login(email: string, password: string): Promise<Session> {
-  const session = await post<Session>("/api/v1/auth/login", { email, password });
-  store(session);
-  return session;
+/** Stores a session; a challenge is handed back for the second step instead. */
+function signedIn(payload: Session & SignInPayload): SignInResult {
+  const step = signInStep(payload);
+  if (step.kind !== "session") return step;
+  store(payload);
+  return { kind: "session", session: payload };
+}
+
+export async function login(email: string, password: string): Promise<SignInResult> {
+  return signedIn(await post<Session & SignInPayload>("/api/v1/auth/login", { email, password }));
 }
 
 export async function setupFirstUser(
@@ -185,16 +210,35 @@ export async function setupFirstUser(
   name: string,
   organizationName: string,
   countryCode: string,
-): Promise<Session> {
-  const session = await post<Session>("/api/v1/auth/setup", {
-    email,
-    password,
-    name,
-    organizationName,
-    countryCode,
-  });
+): Promise<SignInResult> {
+  return signedIn(
+    await post<Session & SignInPayload>("/api/v1/auth/setup", {
+      email,
+      password,
+      name,
+      organizationName,
+      countryCode,
+    }),
+  );
+}
+
+/** The second step of a login: a code from the app, or a recovery code. */
+export async function verifyMfa(challenge: string, answer: { code: string } | { recoveryCode: string }): Promise<Session> {
+  const session = await post<Session>("/api/v1/auth/login/mfa", { challenge, ...answer });
   store(session);
   return session;
+}
+
+/** The secret for the setup a login requires. Calling it again gives a new one. */
+export function startMfaSetup(challenge: string): Promise<MfaSetupInfo> {
+  return post<MfaSetupInfo>("/api/v1/auth/mfa/setup", { challenge });
+}
+
+/** The first code from the app: MFA is on, and the session and the recovery codes (shown once) follow. */
+export async function confirmMfaSetup(challenge: string, code: string): Promise<{ session: Session; recoveryCodes: string[] }> {
+  const payload = await post<Session & { recoveryCodes: string[] }>("/api/v1/auth/mfa/setup/confirm", { challenge, code });
+  store(payload);
+  return { session: payload, recoveryCodes: payload.recoveryCodes };
 }
 
 /** The countries an organisation can be in. Public: the setup screen needs it before any login. */
@@ -227,11 +271,11 @@ export async function getInvitation(code: string): Promise<InvitationDetails> {
   return payload as InvitationDetails;
 }
 
-/** Turns an invitation into an account and signs in with it. */
-export async function acceptInvitation(code: string, name: string, password: string): Promise<Session> {
-  const session = await post<Session>(`/api/v1/invitations/${encodeURIComponent(code)}/accept`, { name, password });
-  store(session);
-  return session;
+/** Turns an invitation into an account. The new user is an Admin, so MFA setup comes before the session. */
+export async function acceptInvitation(code: string, name: string, password: string): Promise<SignInResult> {
+  return signedIn(
+    await post<Session & SignInPayload>(`/api/v1/invitations/${encodeURIComponent(code)}/accept`, { name, password }),
+  );
 }
 
 /** Whether anyone may sign up on their own (the platform administrator opens it at launch). */
@@ -252,11 +296,9 @@ export async function startSignup(input: {
   await post<void>("/api/v1/signup", input);
 }
 
-/** The link in the confirmation mail: creates the organisation and signs in. */
-export async function confirmSignup(code: string): Promise<Session> {
-  const session = await post<Session>("/api/v1/signup/confirm", { code });
-  store(session);
-  return session;
+/** The link in the confirmation mail: creates the organisation; its Admin sets up MFA before the session. */
+export async function confirmSignup(code: string): Promise<SignInResult> {
+  return signedIn(await post<Session & SignInPayload>("/api/v1/signup/confirm", { code }));
 }
 
 export async function logout(): Promise<void> {

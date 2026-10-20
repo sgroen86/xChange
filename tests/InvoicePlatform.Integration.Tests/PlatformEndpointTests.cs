@@ -71,9 +71,13 @@ public class PlatformEndpointTests : IClassFixture<SignedInFactory>
 
         var accepted = await anonymous.PostAsJsonAsync($"/api/v1/invitations/{code}/accept", new { name = "Jan Tan", password = "a-long-enough-password" });
         Assert.Equal(HttpStatusCode.OK, accepted.StatusCode);
-        var session = await accepted.Content.ReadFromJsonAsync<JsonElement>();
-        Assert.False(string.IsNullOrEmpty(session.GetProperty("token").GetString()));
-        Assert.Equal("Admin", session.GetProperty("user").GetProperty("role").GetString());
+        // An Admin: MFA is set up before the first session.
+        var pending = await accepted.Content.ReadFromJsonAsync<JsonElement>();
+        Assert.True(pending.GetProperty("mfaSetupRequired").GetBoolean());
+        var (token, _, _) = await MfaEndpointTests.FinishSetupAsync(anonymous, pending.GetProperty("challenge").GetString()!);
+        var me = await _factory.As(token).GetFromJsonAsync<JsonElement>("/api/v1/auth/me");
+        Assert.Equal("Admin", me.GetProperty("role").GetString());
+        Assert.Equal("jan@klant.sg", me.GetProperty("email").GetString());
 
         var again = await anonymous.PostAsJsonAsync($"/api/v1/invitations/{code}/accept", new { name = "Jan", password = "a-long-enough-password" });
         Assert.Equal(HttpStatusCode.BadRequest, again.StatusCode);

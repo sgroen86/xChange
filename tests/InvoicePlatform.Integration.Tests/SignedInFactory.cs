@@ -62,6 +62,29 @@ public sealed class SignedInFactory : WebApplicationFactory<Program>
 
     public InMemoryQualityLedger Quality { get; } = new();
 
+    /// <summary>Two-step verification state; the secrets "protected" by <see cref="TestProtector"/>.</summary>
+    public InMemoryMfa Mfa { get; } = new();
+
+    /// <summary>The fixed users plus whoever signs up, accepts an invitation or is added with <see cref="AddUserAsync"/>.</summary>
+    internal SignedInIdentity Identity { get; } = new();
+
+    /// <summary>Adds an account that logs in with a real password, checked as the API checks it.</summary>
+    public async Task<User> AddUserAsync(string email, string password, UserRole role, string organizationId = OrgA)
+    {
+        var hasher = Services.GetRequiredService<IPasswordHasher>();
+        var user = new User
+        {
+            Id = Guid.NewGuid().ToString("n"),
+            OrganizationId = organizationId,
+            Email = email,
+            PasswordHash = hasher.Hash(password),
+            Name = email,
+            Role = role,
+        };
+        await Identity.AddAsync(user);
+        return user;
+    }
+
     public HttpClient As(string token)
     {
         var client = CreateClient();
@@ -112,11 +135,14 @@ public sealed class SignedInFactory : WebApplicationFactory<Program>
             services.RemoveAll<IUsageMeter>();
             services.RemoveAll<IUsageLedger>();
             services.RemoveAll<IQualityLedger>();
+            services.RemoveAll<IMfaStore>();
+            services.RemoveAll<ISecretProtector>();
 
-            var identity = new SignedInIdentity();
-            services.AddSingleton<IUserStore>(identity);
-            services.AddSingleton<ISessionStore>(identity);
-            services.AddSingleton<ILoginAttemptStore>(identity);
+            services.AddSingleton<IUserStore>(Identity);
+            services.AddSingleton<ISessionStore>(Identity);
+            services.AddSingleton<ILoginAttemptStore>(Identity);
+            services.AddSingleton<IMfaStore>(Mfa);
+            services.AddSingleton<ISecretProtector>(new TestProtector());
             services.AddSingleton<IOrganizationSettingsStore>(Settings);
             services.AddSingleton<IInvoiceRepository>(Invoices);
             services.AddSingleton<IDocumentStore>(Invoices);
@@ -136,9 +162,11 @@ public sealed class SignedInFactory : WebApplicationFactory<Program>
         });
     }
 
-    private sealed class SignedInIdentity : IUserStore, ISessionStore, ILoginAttemptStore
+    internal sealed class SignedInIdentity : IUserStore, ISessionStore, ILoginAttemptStore
     {
-        private static readonly User[] Users =
+        private readonly Dictionary<string, AuthSession> _sessions = [];
+
+        private readonly List<User> _users =
         [
             new() { Id = "admin-a", OrganizationId = OrgA, Email = "admin@a", PasswordHash = "-", Name = "Admin A", Role = UserRole.Admin },
             new() { Id = "user-a", OrganizationId = OrgA, Email = "user@a", PasswordHash = "-", Name = "User A", Role = UserRole.User },
@@ -147,28 +175,81 @@ public sealed class SignedInFactory : WebApplicationFactory<Program>
             new() { Id = "platform-a", OrganizationId = OrgA, Email = "platform@a", PasswordHash = "-", Name = "Platform", Role = UserRole.Admin, IsPlatformAdmin = true },
         ];
 
-        // The token is the user id: good enough for a test, never for anything else.
+        /// <summary>
+        /// A session issued by a login during the test, or else a fixed one:
+        /// for the fixed users the token is the user id - good enough for a
+        /// test, never for anything else.
+        /// </summary>
         public Task<AuthSession?> FindAsync(string token, CancellationToken cancellationToken = default)
-            => Task.FromResult(Users.FirstOrDefault(u => u.Id == token) is { } user
-                ? new AuthSession(token, user.Id, user.OrganizationId, DateTimeOffset.UnixEpoch, DateTimeOffset.MaxValue)
-                : null);
+        {
+            lock (_users)
+            {
+                if (_sessions.TryGetValue(token, out var issued))
+                {
+                    return Task.FromResult<AuthSession?>(issued);
+                }
+
+                return Task.FromResult(_users.FirstOrDefault(u => u.Id == token) is { } user
+                    ? new AuthSession(token, user.Id, user.OrganizationId, DateTimeOffset.UnixEpoch, DateTimeOffset.MaxValue)
+                    : null);
+            }
+        }
 
         public Task<User?> FindByIdAsync(string organizationId, string userId, CancellationToken cancellationToken = default)
-            => Task.FromResult(Users.FirstOrDefault(u => u.OrganizationId == organizationId && u.Id == userId));
+        {
+            lock (_users)
+            {
+                return Task.FromResult(_users.FirstOrDefault(u => u.OrganizationId == organizationId && u.Id == userId));
+            }
+        }
 
         public Task<User?> FindByEmailAsync(string email, CancellationToken cancellationToken = default)
-            => Task.FromResult(Users.FirstOrDefault(u => u.Email == email));
+        {
+            lock (_users)
+            {
+                return Task.FromResult(_users.FirstOrDefault(u => u.Email == email));
+            }
+        }
 
         public Task<bool> AnyUsersExistAsync(CancellationToken cancellationToken = default) => Task.FromResult(true);
 
-        public Task AddAsync(User user, CancellationToken cancellationToken = default) => Task.CompletedTask;
+        public Task AddAsync(User user, CancellationToken cancellationToken = default)
+        {
+            lock (_users)
+            {
+                if (_users.Any(u => u.Email == user.Email))
+                {
+                    throw new InvalidOperationException("duplicate");
+                }
+
+                _users.Add(user);
+            }
+
+            return Task.CompletedTask;
+        }
 
         public Task UpdateLastLoginAsync(string organizationId, string userId, DateTimeOffset at, CancellationToken cancellationToken = default)
             => Task.CompletedTask;
 
-        public Task SaveAsync(AuthSession session, CancellationToken cancellationToken = default) => Task.CompletedTask;
+        public Task SaveAsync(AuthSession session, CancellationToken cancellationToken = default)
+        {
+            lock (_users)
+            {
+                _sessions[session.Token] = session;
+            }
 
-        public Task DeleteAsync(string token, CancellationToken cancellationToken = default) => Task.CompletedTask;
+            return Task.CompletedTask;
+        }
+
+        public Task DeleteAsync(string token, CancellationToken cancellationToken = default)
+        {
+            lock (_users)
+            {
+                _sessions.Remove(token);
+            }
+
+            return Task.CompletedTask;
+        }
 
         public Task<LoginAttempts?> GetAsync(string clientKey, CancellationToken cancellationToken = default)
             => Task.FromResult<LoginAttempts?>(null);
@@ -176,6 +257,138 @@ public sealed class SignedInFactory : WebApplicationFactory<Program>
         public Task SaveAsync(LoginAttempts attempts, CancellationToken cancellationToken = default) => Task.CompletedTask;
 
         public Task ClearAsync(string clientKey, CancellationToken cancellationToken = default) => Task.CompletedTask;
+    }
+}
+
+/// <summary>MFA state and challenges in memory, conditional where the DynamoDB store is.</summary>
+public sealed class InMemoryMfa : IMfaStore
+{
+    private readonly Dictionary<(string Org, string User), UserMfa> _users = [];
+    private readonly Dictionary<string, MfaChallenge> _challenges = [];
+
+    public UserMfa? Find(string organizationId, string userId)
+    {
+        lock (_users)
+        {
+            return _users.GetValueOrDefault((organizationId, userId));
+        }
+    }
+
+    public Task<UserMfa?> GetAsync(string organizationId, string userId, CancellationToken cancellationToken = default)
+        => Task.FromResult(Find(organizationId, userId));
+
+    public Task SaveAsync(UserMfa mfa, CancellationToken cancellationToken = default)
+    {
+        lock (_users)
+        {
+            _users[(mfa.OrganizationId, mfa.UserId)] = mfa;
+        }
+
+        return Task.CompletedTask;
+    }
+
+    public Task DeleteAsync(string organizationId, string userId, CancellationToken cancellationToken = default)
+    {
+        lock (_users)
+        {
+            _users.Remove((organizationId, userId));
+        }
+
+        return Task.CompletedTask;
+    }
+
+    public Task<bool> TryUseStepAsync(string organizationId, string userId, long step, CancellationToken cancellationToken = default)
+    {
+        lock (_users)
+        {
+            if (!_users.TryGetValue((organizationId, userId), out var mfa) || mfa.LastUsedStep >= step)
+            {
+                return Task.FromResult(false);
+            }
+
+            _users[(organizationId, userId)] = mfa with { LastUsedStep = step };
+            return Task.FromResult(true);
+        }
+    }
+
+    public Task<int?> TryConsumeRecoveryCodeAsync(string organizationId, string userId, string codeHash, CancellationToken cancellationToken = default)
+    {
+        lock (_users)
+        {
+            if (!_users.TryGetValue((organizationId, userId), out var mfa) || !mfa.RecoveryCodeHashes.Contains(codeHash))
+            {
+                return Task.FromResult<int?>(null);
+            }
+
+            var left = mfa.RecoveryCodeHashes.Where(h => h != codeHash).ToList();
+            _users[(organizationId, userId)] = mfa with { RecoveryCodeHashes = left };
+            return Task.FromResult<int?>(left.Count);
+        }
+    }
+
+    public Task SetRecoveryCodesAsync(string organizationId, string userId, IReadOnlyList<string> codeHashes, CancellationToken cancellationToken = default)
+    {
+        lock (_users)
+        {
+            _users[(organizationId, userId)] = _users[(organizationId, userId)] with { RecoveryCodeHashes = codeHashes };
+        }
+
+        return Task.CompletedTask;
+    }
+
+    public Task SaveChallengeAsync(MfaChallenge challenge, CancellationToken cancellationToken = default)
+    {
+        lock (_challenges)
+        {
+            _challenges[challenge.TokenHash] = challenge;
+        }
+
+        return Task.CompletedTask;
+    }
+
+    public Task<MfaChallenge?> FindChallengeAsync(string tokenHash, CancellationToken cancellationToken = default)
+    {
+        lock (_challenges)
+        {
+            return Task.FromResult(_challenges.GetValueOrDefault(tokenHash));
+        }
+    }
+
+    public Task<int> RecordChallengeFailureAsync(string tokenHash, CancellationToken cancellationToken = default)
+    {
+        lock (_challenges)
+        {
+            if (!_challenges.TryGetValue(tokenHash, out var challenge))
+            {
+                return Task.FromResult(MfaChallenge.MaxFailedAttempts);
+            }
+
+            _challenges[tokenHash] = challenge with { FailedAttempts = challenge.FailedAttempts + 1 };
+            return Task.FromResult(challenge.FailedAttempts + 1);
+        }
+    }
+
+    public Task<bool> TryDeleteChallengeAsync(string tokenHash, CancellationToken cancellationToken = default)
+    {
+        lock (_challenges)
+        {
+            return Task.FromResult(_challenges.Remove(tokenHash));
+        }
+    }
+}
+
+/// <summary>Stands in for KMS: not plain text, and bound to its context as KMS binds encryption context.</summary>
+public sealed class TestProtector : ISecretProtector
+{
+    public Task<string> ProtectAsync(byte[] plaintext, string context, CancellationToken cancellationToken = default)
+        => Task.FromResult($"{context}|{Convert.ToBase64String(plaintext.Select(b => (byte)(b ^ 0x5a)).ToArray())}");
+
+    public Task<byte[]> UnprotectAsync(string protectedValue, string context, CancellationToken cancellationToken = default)
+    {
+        var parts = protectedValue.Split('|');
+        return parts[0] == context
+            ? Task.FromResult(Convert.FromBase64String(parts[1]).Select(b => (byte)(b ^ 0x5a)).ToArray())
+            : throw new System.Security.Cryptography.CryptographicException("Wrong context.");
     }
 }
 

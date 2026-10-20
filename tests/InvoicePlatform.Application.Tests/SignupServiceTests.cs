@@ -29,7 +29,7 @@ public class SignupServiceTests
 
     public SignupServiceTests()
     {
-        var auth = new AuthService(_identity, _identity, _identity, new AuthServiceTests.FakeHasher(), _clock, _platform);
+        var auth = new AuthService(_identity, _identity, _identity, new AuthServiceTests.FakeHasher(), _clock, _platform, new FakeMfaStore());
         _signup = new SignupService(_signups, _identity, _identity, new AuthServiceTests.FakeHasher(), _clock, _platform,
             _mail, _usage, auth, new SignupSettings("https://app.example.test"));
     }
@@ -52,7 +52,7 @@ public class SignupServiceTests
     }
 
     [Fact]
-    public async Task Confirming_creates_an_organisation_on_trial_with_its_admin_signed_in()
+    public async Task Confirming_creates_an_organisation_on_trial_whose_admin_sets_up_mfa_before_a_session()
     {
         await Open();
 
@@ -61,8 +61,9 @@ public class SignupServiceTests
         var result = await _signup.ConfirmAsync(CodeFromMail(), Client);
 
         Assert.True(result.Succeeded);
-        Assert.NotNull(result.Token);
-        Assert.Equal(UserRole.Admin, result.User!.Role);
+        Assert.Null(result.Token);
+        Assert.True(result.Mfa!.SetupRequired);
+        Assert.Equal(UserRole.Admin, (await _identity.FindByEmailAsync("anna@bakkerij.be"))!.Role);
         var organization = Assert.Single(await _platform.ListOrganizationsAsync());
         Assert.Equal(("Bakkerij Peeters", "BE"), (organization.Name, organization.CountryCode));
         Assert.Equal(new UsageSummary(0, SignupService.TrialConversions, Trial: true), await _usage.GetAsync(organization.OrganizationId));

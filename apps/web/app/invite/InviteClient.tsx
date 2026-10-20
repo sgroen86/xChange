@@ -5,10 +5,11 @@ import { useRouter, useSearchParams } from "next/navigation";
 import { useEffect, useState } from "react";
 
 import { Icon } from "../../components/Icon";
+import { MfaSignIn } from "../../components/MfaSignIn";
 import { useToast } from "../../components/Toast";
 import { ApiError } from "../../lib/api";
 import { text, useText } from "../../lib/i18n";
-import { acceptInvitation, getInvitation, listCountries, type InvitationDetails } from "../../lib/auth";
+import { acceptInvitation, getInvitation, listCountries, type InvitationDetails, type Session } from "../../lib/auth";
 
 type State =
   | { status: "loading" }
@@ -31,6 +32,8 @@ export default function InviteClient() {
   const [password, setPassword] = useState("");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  // The invited user becomes Admin, for whom MFA is mandatory: set up before the session.
+  const [mfaStep, setMfaStep] = useState<{ kind: "mfa" | "mfaSetup"; challenge: string } | null>(null);
 
   useEffect(() => {
     let cancelled = false;
@@ -66,9 +69,12 @@ export default function InviteClient() {
     setBusy(true);
     setError(null);
     try {
-      const session = await acceptInvitation(code, name, password);
-      showToast(t.auth.welcome(session.user.name), "success");
-      router.replace("/upload");
+      const result = await acceptInvitation(code, name, password);
+      if (result.kind === "session") {
+        signedIn(result.session);
+      } else {
+        setMfaStep(result);
+      }
     } catch (cause) {
       const message = cause instanceof ApiError ? cause.message : t.auth.genericError;
       setError(message);
@@ -76,6 +82,23 @@ export default function InviteClient() {
       setBusy(false);
     }
   };
+
+  function signedIn(session: Session) {
+    showToast(text().auth.welcome(session.user.name), "success");
+    router.replace("/upload");
+  }
+
+  if (mfaStep && state.status === "ready") {
+    return (
+      <MfaSignIn
+        step={mfaStep}
+        account={state.invitation.email}
+        onSignedIn={signedIn}
+        // The invitation is used up and the account exists: what remains is an ordinary login.
+        onRestart={() => router.replace("/login")}
+      />
+    );
+  }
 
   return (
     <div style={{ maxWidth: 480 }}>

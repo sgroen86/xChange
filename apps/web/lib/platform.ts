@@ -91,6 +91,11 @@ export function reissueInvitation(organizationId: string, invitee: Invitee): Pro
   });
 }
 
+/** Turns off someone's two-step verification, for when phone and recovery codes are both lost. */
+export async function resetUserMfa(email: string): Promise<void> {
+  await call<null>("/api/v1/platform/users/mfa/reset", { method: "POST", body: JSON.stringify({ email }) });
+}
+
 /**
  * The link the administrator sends: this site's /invite/ page with the code.
  * Built from the current URL (…/platform/), so it carries whatever base path

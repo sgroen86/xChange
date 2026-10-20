@@ -107,6 +107,7 @@ var api = app.MapGroup("/api/v1");
 // so a guard chained on at this level silently applies to every route in it,
 // login included.
 api.MapAuthEndpoints();
+api.MapMfaEndpoints();
 api.MapInvoiceEndpoints();
 api.MapStoredInvoiceEndpoints();
 api.MapExportEndpoints();

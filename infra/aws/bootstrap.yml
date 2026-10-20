@@ -295,6 +295,57 @@ Resources:
                   - sqs:ListQueueTags
                 Resource: !Sub arn:aws:sqs:${AWS::Region}:${AWS::AccountId}:xchange-*
 
+              # The key that encrypts TOTP secrets (service.yml, MfaKey). Keys
+              # have generated ids, so they are scoped by tag instead: CI may
+              # create a key only with Project=xchange, and manage only keys
+              # that carry it. It gets no kms:Encrypt or kms:Decrypt - using
+              # the key is the API role's business, not the deploy's.
+              - Sid: MfaKeyCreate
+                Effect: Allow
+                Action: kms:CreateKey
+                Resource: '*'
+                Condition:
+                  StringEquals:
+                    aws:RequestTag/Project: xchange
+
+              - Sid: MfaKeyManage
+                Effect: Allow
+                Action:
+                  - kms:DescribeKey
+                  - kms:GetKeyPolicy
+                  - kms:PutKeyPolicy
+                  - kms:GetKeyRotationStatus
+                  - kms:EnableKeyRotation
+                  - kms:DisableKeyRotation
+                  - kms:ListResourceTags
+                  - kms:TagResource
+                  - kms:UntagResource
+                  - kms:UpdateKeyDescription
+                  - kms:EnableKey
+                  - kms:DisableKey
+                  - kms:ScheduleKeyDeletion
+                  # An alias operation is authorised on the key as well as on the alias.
+                  - kms:CreateAlias
+                  - kms:UpdateAlias
+                  - kms:DeleteAlias
+                Resource: !Sub arn:aws:kms:${AWS::Region}:${AWS::AccountId}:key/*
+                Condition:
+                  StringEquals:
+                    aws:ResourceTag/Project: xchange
+
+              - Sid: MfaKeyAlias
+                Effect: Allow
+                Action:
+                  - kms:CreateAlias
+                  - kms:UpdateAlias
+                  - kms:DeleteAlias
+                Resource: !Sub arn:aws:kms:${AWS::Region}:${AWS::AccountId}:alias/xchange-*
+
+              - Sid: MfaKeyList
+                Effect: Allow
+                Action: kms:ListAliases
+                Resource: '*'
+
               - Sid: IdentityTable
                 Effect: Allow
                 Action:

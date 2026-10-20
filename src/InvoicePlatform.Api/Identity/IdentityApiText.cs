@@ -18,6 +18,12 @@ internal interface IIdentityApiText
     string TooManyAttempts { get; }
 
     string SignupNotSent { get; }
+
+    string VerificationFailed { get; }
+
+    string MfaNotChanged { get; }
+
+    string MfaNotReset { get; }
 }
 
 internal sealed class IdentityApiTextNl : IIdentityApiText
@@ -35,6 +41,12 @@ internal sealed class IdentityApiTextNl : IIdentityApiText
     public string TooManyAttempts => "Te veel pogingen";
 
     public string SignupNotSent => "Aanmelding niet verstuurd";
+
+    public string VerificationFailed => "Verificatie mislukt";
+
+    public string MfaNotChanged => "Tweestapsverificatie niet gewijzigd";
+
+    public string MfaNotReset => "Tweestapsverificatie niet hersteld";
 }
 
 internal sealed class IdentityApiTextEn : IIdentityApiText
@@ -52,6 +64,12 @@ internal sealed class IdentityApiTextEn : IIdentityApiText
     public string TooManyAttempts => "Too many attempts";
 
     public string SignupNotSent => "Sign-up not sent";
+
+    public string VerificationFailed => "Verification failed";
+
+    public string MfaNotChanged => "Two-step verification not changed";
+
+    public string MfaNotReset => "Two-step verification not reset";
 }
 
 internal static class IdentityApiText

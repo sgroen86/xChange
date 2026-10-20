@@ -35,7 +35,7 @@ public class SignupEndpointTests
     }
 
     [Fact]
-    public async Task A_confirmed_signup_signs_in_an_admin_whose_organisation_is_on_trial()
+    public async Task A_confirmed_signup_signs_in_an_admin_after_mfa_setup_whose_organisation_is_on_trial()
     {
         using var factory = new SignedInFactory();
         await Open(factory);
@@ -50,12 +50,15 @@ public class SignupEndpointTests
         Assert.Equal("anna@bakkerij.be", mail.To);
         Assert.Equal(HttpStatusCode.OK, confirm.StatusCode);
         var body = await confirm.Content.ReadFromJsonAsync<JsonElement>();
-        Assert.Equal("Admin", body.GetProperty("user").GetProperty("role").GetString());
 
-        Assert.False(string.IsNullOrEmpty(body.GetProperty("token").GetString()));
+        // The new user is an Admin, so MFA is set up before there is a session.
+        Assert.True(body.GetProperty("mfaSetupRequired").GetBoolean());
+        Assert.False(body.TryGetProperty("token", out _));
+        var (token, _, _) = await MfaEndpointTests.FinishSetupAsync(client, body.GetProperty("challenge").GetString()!);
 
-        // The test factory only knows its fixed sessions, so the new organisation's trial is read from the meter.
-        var organizationId = body.GetProperty("user").GetProperty("organizationId").GetString()!;
+        var me = await factory.As(token).GetFromJsonAsync<JsonElement>("/api/v1/auth/me");
+        Assert.Equal("Admin", me.GetProperty("role").GetString());
+        var organizationId = me.GetProperty("organizationId").GetString()!;
         Assert.Equal(new InvoicePlatform.Application.Usage.UsageSummary(0, 10, Trial: true), await factory.Usage.GetAsync(organizationId));
     }
 

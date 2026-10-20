@@ -5,10 +5,19 @@ import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
 
 import { Icon } from "../../components/Icon";
+import { MfaSignIn } from "../../components/MfaSignIn";
 import { useToast } from "../../components/Toast";
 import { ApiError, isApiConfigured } from "../../lib/api";
-import { useText } from "../../lib/i18n";
-import { isSetupRequired, listCountries, login, setupFirstUser, signupStatus, type CountryOption } from "../../lib/auth";
+import { text, useText } from "../../lib/i18n";
+import {
+  isSetupRequired,
+  listCountries,
+  login,
+  setupFirstUser,
+  signupStatus,
+  type CountryOption,
+  type Session,
+} from "../../lib/auth";
 
 /**
  * Login, and first-run setup when no account exists yet — the same two states
@@ -30,6 +39,8 @@ export default function LoginClient() {
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const [signupOpen, setSignupOpen] = useState(false);
+  // After the right password: the code, or setting MFA up when it is mandatory.
+  const [mfaStep, setMfaStep] = useState<{ kind: "mfa" | "mfaSetup"; challenge: string } | null>(null);
 
   useEffect(() => {
     let cancelled = false;
@@ -64,15 +75,16 @@ export default function LoginClient() {
     setError(null);
 
     try {
-      if (mode === "setup") {
-        const session = await setupFirstUser(email, password, name, organizationName, countryCode);
-        showToast(t.auth.welcome(session.user.name), "success");
-      } else {
-        const session = await login(email, password);
-        showToast(t.auth.loginPage.welcomeBack(session.user.name), "success");
-      }
+      const result =
+        mode === "setup"
+          ? await setupFirstUser(email, password, name, organizationName, countryCode)
+          : await login(email, password);
 
-      router.replace("/upload");
+      if (result.kind === "session") {
+        signedIn(result.session);
+      } else {
+        setMfaStep(result);
+      }
     } catch (cause) {
       const message =
         cause instanceof ApiError ? cause.message : t.auth.genericError;
@@ -82,6 +94,31 @@ export default function LoginClient() {
       setBusy(false);
     }
   };
+
+  function signedIn(session: Session) {
+    showToast(
+      mode === "setup" ? text().auth.welcome(session.user.name) : text().auth.loginPage.welcomeBack(session.user.name),
+      "success",
+    );
+    router.replace("/upload");
+  }
+
+  if (mfaStep) {
+    return (
+      <MfaSignIn
+        step={mfaStep}
+        account={email}
+        onSignedIn={signedIn}
+        onRestart={(message) => {
+          setMfaStep(null);
+          setPassword("");
+          // First-run setup has created the account by now: what remains is logging in.
+          setMode("login");
+          setError(message || null);
+        }}
+      />
+    );
+  }
 
   if (!isApiConfigured) {
     return (

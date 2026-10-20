@@ -8,6 +8,7 @@
   <ItemGroup>
     <PackageReference Include="Anthropic" Version="12.46.0" />
     <PackageReference Include="AWSSDK.DynamoDBv2" Version="4.0.103.6" />
+    <PackageReference Include="AWSSDK.KeyManagementService" Version="4.0.100.19" />
     <PackageReference Include="AWSSDK.Lambda" Version="4.0.110" />
     <PackageReference Include="AWSSDK.S3" Version="4.0.102.5" />
     <PackageReference Include="AWSSDK.SecretsManager" Version="4.0.100.12" />

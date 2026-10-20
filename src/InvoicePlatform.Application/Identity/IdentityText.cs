@@ -40,6 +40,22 @@ internal interface IIdentityText
     string ConfirmationMailSubject { get; }
 
     string ConfirmationMailBody(string name, string organizationName, string link, int trialConversions);
+
+    string InvalidCode { get; }
+
+    string LoginExpired { get; }
+
+    string TooManyWrongCodes { get; }
+
+    string MfaAlreadyEnabled { get; }
+
+    string MfaNotEnabled { get; }
+
+    string MfaMandatory { get; }
+
+    string MfaSetupNotStarted { get; }
+
+    string UserNotFound { get; }
 }
 
 internal sealed class IdentityTextNl : IIdentityText
@@ -98,6 +114,22 @@ internal sealed class IdentityTextNl : IIdentityText
 
         Heb jij je niet aangemeld? Dan kun je deze e-mail negeren; er wordt niets aangemaakt.
         """;
+
+    public string InvalidCode => "Ongeldige code.";
+
+    public string LoginExpired => "Je inlogpoging is verlopen. Log opnieuw in.";
+
+    public string TooManyWrongCodes => "Te veel foute codes. Log opnieuw in.";
+
+    public string MfaAlreadyEnabled => "Tweestapsverificatie staat al aan.";
+
+    public string MfaNotEnabled => "Tweestapsverificatie staat niet aan.";
+
+    public string MfaMandatory => "Tweestapsverificatie is verplicht voor beheerders en kan niet uit.";
+
+    public string MfaSetupNotStarted => "Begin opnieuw met het instellen.";
+
+    public string UserNotFound => "Er is geen gebruiker met dit e-mailadres.";
 }
 
 internal sealed class IdentityTextEn : IIdentityText
@@ -156,6 +188,22 @@ internal sealed class IdentityTextEn : IIdentityText
 
         Didn't sign up? Then you can ignore this email; nothing will be created.
         """;
+
+    public string InvalidCode => "Invalid code.";
+
+    public string LoginExpired => "Your login attempt has expired. Please log in again.";
+
+    public string TooManyWrongCodes => "Too many wrong codes. Please log in again.";
+
+    public string MfaAlreadyEnabled => "Two-step verification is already on.";
+
+    public string MfaNotEnabled => "Two-step verification is not on.";
+
+    public string MfaMandatory => "Two-step verification is mandatory for administrators and cannot be turned off.";
+
+    public string MfaSetupNotStarted => "Start the setup again.";
+
+    public string UserNotFound => "There is no user with this email address.";
 }
 
 internal static class IdentityText

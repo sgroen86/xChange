@@ -11,6 +11,7 @@ import { FALLBACK_SETTINGS, getSettings, updateSettings, type OrganizationSettin
 import { endpointSchemes } from "../invoices/[invoiceId]/review/fields";
 import { InboxAddress } from "./InboxAddress";
 import { LearnedCorrections } from "./LearnedCorrections";
+import { TwoStepCard } from "./TwoStepCard";
 import { UsageCard } from "./UsageCard";
 
 /**
@@ -186,6 +187,8 @@ export default function SettingsClient() {
           </div>
         </form>
       )}
+
+      {isApiConfigured && user && <TwoStepCard email={user.email} />}
 
       <UsageCard />
 

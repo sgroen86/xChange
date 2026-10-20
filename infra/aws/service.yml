@@ -117,7 +117,23 @@ Resources:
                   - dynamodb:Scan
                   # Listing organisations and counting their users.
                   - dynamodb:Query
+                  # Two-step verification: a code's time step, a recovery code
+                  # and a login challenge's wrong guesses are each used with
+                  # one conditional update.
+                  - dynamodb:UpdateItem
                 Resource: !GetAtt IdentityTable.Arn
+
+        - PolicyName: mfa-key
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              # TOTP secrets are encrypted with this key and decrypted to check
+              # a code. Nothing else may use it.
+              - Effect: Allow
+                Action:
+                  - kms:Encrypt
+                  - kms:Decrypt
+                Resource: !GetAtt MfaKey.Arn
 
         - PolicyName: official-validator
           PolicyDocument:
@@ -199,6 +215,38 @@ Resources:
         - Key: Project
           Value: xchange
 
+  # Encrypts the TOTP secrets of two-step verification, so the identity table
+  # (and any copy of it) holds no usable secret. The key policy hands control
+  # to IAM in this account; the API role may encrypt and decrypt, nothing more.
+  # About $1 a month, plus requests far inside the free 20,000.
+  MfaKey:
+    Type: AWS::KMS::Key
+    # Losing the key loses every secret: everyone with MFA would be locked out.
+    DeletionPolicy: Retain
+    UpdateReplacePolicy: Retain
+    Properties:
+      Description: xChange - encrypts TOTP secrets for two-step verification
+      EnableKeyRotation: true
+      KeyPolicy:
+        Version: '2012-10-17'
+        Statement:
+          - Sid: AccountControlsTheKeyThroughIam
+            Effect: Allow
+            Principal:
+              AWS: !Sub arn:aws:iam::${AWS::AccountId}:root
+            Action: kms:*
+            Resource: '*'
+      # The deploy role may only manage keys carrying this tag (bootstrap.yml).
+      Tags:
+        - Key: Project
+          Value: xchange
+
+  MfaKeyAlias:
+    Type: AWS::KMS::Alias
+    Properties:
+      AliasName: alias/xchange-mfa
+      TargetKeyId: !Ref MfaKey
+
   # Booked invoices. Same reasoning as the identity table: DynamoDB is free at
   # this volume where RDS is not, and the store interfaces make a later move to
   # PostgreSQL a one-class change.
@@ -275,6 +323,7 @@ Resources:
           Anthropic__Model: !Ref AnthropicModel
           Anthropic__ApiKeySecretArn: !Ref AnthropicSecretArn
           Identity__TableName: !Ref IdentityTable
+          Mfa__KmsKeyId: !GetAtt MfaKey.Arn
           InvoiceStorage__TableName: !Ref InvoiceTable
           InvoiceStorage__BucketName: !Ref DocumentBucket
           Cors__AllowedOrigins__0: !Ref AllowedOrigin

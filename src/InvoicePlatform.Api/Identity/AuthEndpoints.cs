@@ -189,22 +189,38 @@ public static class AuthEndpoints
             : null;
     }
 
-    internal static object ToResponse(AuthResult result) => new
-    {
-        token = result.Token,
-        expiresAt = result.ExpiresAt,
-        user = result.User is null
-            ? null
-            : new
-            {
-                id = result.User.Id,
-                organizationId = result.User.OrganizationId,
-                email = result.User.Email,
-                name = result.User.Name,
-                role = result.User.Role.ToString(),
-                isPlatformAdmin = result.User.IsPlatformAdmin,
-            },
-    };
+    /// <summary>
+    /// A session, or - when the password was right but a second step must
+    /// follow - only the challenge for that step: no token and nothing about
+    /// the user yet.
+    /// </summary>
+    internal static object ToResponse(AuthResult result) => result.Mfa is { } pending
+        ? (object)new
+        {
+            mfaRequired = !pending.SetupRequired,
+            mfaSetupRequired = pending.SetupRequired,
+            challenge = pending.Challenge,
+            expiresAt = pending.ExpiresAt,
+        }
+        : new
+        {
+            token = result.Token,
+            expiresAt = result.ExpiresAt,
+            user = result.User is null
+                ? null
+                : new
+                {
+                    id = result.User.Id,
+                    organizationId = result.User.OrganizationId,
+                    email = result.User.Email,
+                    name = result.User.Name,
+                    role = result.User.Role.ToString(),
+                    isPlatformAdmin = result.User.IsPlatformAdmin,
+                },
+            // After a login with a recovery code; after setting MFA up, the codes themselves, once.
+            recoveryCodesLeft = result.RecoveryCodesLeft,
+            recoveryCodes = result.RecoveryCodes,
+        };
 
     public sealed record SetupRequest(string? Email, string? Password, string? Name, string? OrganizationName, string? CountryCode);
 

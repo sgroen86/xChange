@@ -3,6 +3,7 @@
 import { useEffect, useState, useSyncExternalStore } from "react";
 
 import { Icon } from "../../components/Icon";
+import { MfaReset } from "./MfaReset";
 import { ModelSetting } from "./ModelSetting";
 import { useToast } from "../../components/Toast";
 import { text, useText } from "../../lib/i18n";
@@ -276,6 +277,8 @@ export default function PlatformClient() {
       )}
 
       <ModelSetting />
+
+      <MfaReset />
     </>
   );
 }
