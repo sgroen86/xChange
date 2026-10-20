@@ -74,6 +74,27 @@ Resources:
           ResourceRecords:
             - "5 smtp.rzone.de."
 
+        # Who may send mail as the domain. info@ and support@ go out through
+        # Strato (whose own record is smtp.rzone.de -> _spf.strato.com); the
+        # inbox subdomain is sent from by Amazon SES only, signed with DKIM.
+        - Name: !Ref DomainName
+          Type: TXT
+          TTL: "3600"
+          ResourceRecords:
+            - '"v=spf1 include:smtp.rzone.de -all"'
+        - Name: !Sub inbox.${DomainName}
+          Type: TXT
+          TTL: "3600"
+          ResourceRecords:
+            - '"v=spf1 include:amazonses.com -all"'
+        # Mail that claims to come from the domain or a subdomain but passes
+        # neither aligned SPF nor DKIM goes to spam rather than the inbox.
+        - Name: !Sub _dmarc.${DomainName}
+          Type: TXT
+          TTL: "3600"
+          ResourceRecords:
+            - '"v=DMARC1; p=quarantine; sp=quarantine; adkim=r; aspf=r"'
+
         # The bare domain: CloudFront (which redirects to www), or Strato before that.
         - !If
           - SiteOnCloudFront
