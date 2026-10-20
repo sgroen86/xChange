@@ -43,7 +43,9 @@ public sealed record SignupResult(SignupOutcome Outcome, string? Error = null);
 ///
 /// The answer to a sign-up is the same whether the address is new or already
 /// has an account (the mail differs), so the form does not reveal who uses
-/// xChange. Every attempt counts towards the same per-address lockout as login.
+/// xChange. Every attempt counts towards the same per-address lockout as login,
+/// and at most <see cref="LoginAttempts.MaxSignupMails"/> mails go to one
+/// address per <see cref="LoginAttempts.SignupMailWindow"/>.
 /// </summary>
 public sealed class SignupService(
     ISignupStore signups,
@@ -94,9 +96,26 @@ public sealed class SignupService(
         // Every sign-up counts, so the form cannot be used to send mail in bulk.
         await auth.RecordAttemptAsync(clientKey, record, now, cancellationToken).ConfigureAwait(false);
 
+        // And per recipient, so one inbox cannot be flooded from many addresses.
+        // Counted for new and known addresses alike, like everything else here.
+        var address = User.NormalizeEmail(emailAddress);
+        var mailKey = LoginAttempts.SignupMailKey(address);
+        var mails = await attempts.GetAsync(mailKey, cancellationToken).ConfigureAwait(false);
+        if (mails is not null && mails.IsLocked(now))
+        {
+            return new SignupResult(SignupOutcome.Locked, IdentityText.Current.TooManySignupMails);
+        }
+
+        await attempts.SaveAsync(
+            LoginAttempts.AfterFailure(mailKey, mails, now, LoginAttempts.MaxSignupMails, LoginAttempts.SignupMailWindow),
+            cancellationToken).ConfigureAwait(false);
+
+        // Hashed whether or not the address is known: skipping bcrypt for a
+        // known one would make that answer measurably faster.
+        var passwordHash = passwords.Hash(password);
+
         // The mail goes out within this request, so it is in the language the person signed up in.
         var text = IdentityText.Current;
-        var address = User.NormalizeEmail(emailAddress);
         if (await users.FindByEmailAsync(address, cancellationToken).ConfigureAwait(false) is not null)
         {
             await email.SendAsync(address, text.KnownAddressMailSubject, text.KnownAddressMailBody(settings.AppUrl), cancellationToken)
@@ -110,7 +129,7 @@ public sealed class SignupService(
                 Invitation.HashOf(code),
                 address,
                 name.Trim(),
-                passwords.Hash(password),
+                passwordHash,
                 organizationName.Trim(),
                 countryCode.Trim().ToUpperInvariant(),
                 now,

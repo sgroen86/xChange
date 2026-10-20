@@ -166,19 +166,33 @@ public static class AuthEndpoints
     }
 
     /// <summary>
-    /// The address used for rate limiting. Behind a Lambda Function URL the
-    /// caller's address arrives in X-Forwarded-For; RemoteIpAddress is the
-    /// proxy. Only the first entry is trusted - the rest are client-supplied.
+    /// The address used for rate limiting: the one the platform vouches for,
+    /// never one the caller can choose.
+    ///
+    /// In Lambda, RemoteIpAddress is filled from the Function URL's
+    /// requestContext.http.sourceIp - the address AWS saw the connection come
+    /// from. X-Forwarded-For is not used: a Function URL keeps whatever the
+    /// caller sent in it and only appends the real address, so its first entry
+    /// is whatever the caller likes, and a new value per request made the
+    /// lockout never trigger. UseForwardedHeaders does not override this
+    /// either: it only trusts the header from a known proxy (loopback), which
+    /// the source address never is.
     /// </summary>
     internal static string ClientKey(HttpContext context)
     {
-        var forwarded = context.Request.Headers["X-Forwarded-For"].FirstOrDefault();
-        if (!string.IsNullOrWhiteSpace(forwarded))
+        if (context.Connection.RemoteIpAddress is { } address)
         {
-            return forwarded.Split(',')[0].Trim();
+            return address.ToString();
         }
 
-        return context.Connection.RemoteIpAddress?.ToString() ?? "unknown";
+        // Should the host ever leave the address empty: the LAST forwarded
+        // entry is the one AWS appended; everything before it is the caller's.
+        // Never one shared key for everybody, which would let five wrong
+        // passwords lock out every user.
+        var last = context.Request.Headers["X-Forwarded-For"].ToString()
+            .Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
+            .LastOrDefault();
+        return string.IsNullOrEmpty(last) ? "unknown" : last;
     }
 
     internal static string? ReadBearerToken(HttpContext context)

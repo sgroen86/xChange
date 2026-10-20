@@ -22,8 +22,8 @@ namespace InvoicePlatform.Infrastructure.Identity;
 ///
 ///   USER#&lt;email&gt;   / PROFILE          the account, found by login
 ///   ORG#&lt;org&gt;      / USER#&lt;id&gt;        the same account, found by id
-///   SESSION#&lt;tok&gt;  / SESSION          expires by TTL
-///   ATTEMPT#&lt;ip&gt;   / ATTEMPT          expires by TTL
+///   SESSION#&lt;sha256(tok)&gt; / SESSION   expires by TTL; the token itself is never stored
+///   ATTEMPT#&lt;key&gt;  / ATTEMPT          expires by TTL; key is an IP, account:&lt;email&gt; or signup-mail:&lt;email&gt;
 ///   ORG#&lt;org&gt;      / SETTINGS         the organisation's settings
 ///
 /// The account is written twice on purpose: login looks up by email, and every
@@ -162,48 +162,49 @@ internal sealed class DynamoDbIdentityStore(
 
     // ── Sessions ─────────────────────────────────────────────────────────────
 
+    // Keyed by the token's hash. Sessions stored before that, under the token
+    // itself, are simply never found again: their owners log in once more.
+
     public Task SaveAsync(AuthSession session, CancellationToken cancellationToken = default)
         => dynamo.PutItemAsync(
-            new PutItemRequest
-            {
-                TableName = _table,
-                Item = new Dictionary<string, AttributeValue>
-                {
-                    [Pk] = new($"SESSION#{session.Token}"),
-                    [Sk] = new("SESSION"),
-                    ["userId"] = new(session.UserId),
-                    ["organizationId"] = new(session.OrganizationId),
-                    ["createdAt"] = new(session.CreatedAt.ToString("O")),
-                    ["expiresAtIso"] = new(session.ExpiresAt.ToString("O")),
-                    // DynamoDB TTL reaps expired sessions for us. It is not
-                    // punctual, which is why IsExpired is still checked on read.
-                    [Ttl] = new AttributeValue { N = session.ExpiresAt.ToUnixTimeSeconds().ToString() },
-                },
-            },
+            new PutItemRequest { TableName = _table, Item = SessionItem(session) },
             cancellationToken);
 
-    public async Task<AuthSession?> FindAsync(string token, CancellationToken cancellationToken = default)
+    internal static Dictionary<string, AttributeValue> SessionItem(AuthSession session) => new()
     {
-        var item = await GetItemAsync($"SESSION#{token}", "SESSION", cancellationToken).ConfigureAwait(false);
+        [Pk] = new($"SESSION#{session.TokenHash}"),
+        [Sk] = new("SESSION"),
+        ["userId"] = new(session.UserId),
+        ["organizationId"] = new(session.OrganizationId),
+        ["createdAt"] = new(session.CreatedAt.ToString("O")),
+        ["expiresAtIso"] = new(session.ExpiresAt.ToString("O")),
+        // DynamoDB TTL reaps expired sessions for us. It is not
+        // punctual, which is why IsExpired is still checked on read.
+        [Ttl] = new AttributeValue { N = session.ExpiresAt.ToUnixTimeSeconds().ToString() },
+    };
+
+    public async Task<AuthSession?> FindAsync(string tokenHash, CancellationToken cancellationToken = default)
+    {
+        var item = await GetItemAsync($"SESSION#{tokenHash}", "SESSION", cancellationToken).ConfigureAwait(false);
         if (item is null)
         {
             return null;
         }
 
         return new AuthSession(
-            token,
+            tokenHash,
             item["userId"].S,
             item["organizationId"].S,
             DateTimeOffset.Parse(item["createdAt"].S),
             DateTimeOffset.Parse(item["expiresAtIso"].S));
     }
 
-    public Task DeleteAsync(string token, CancellationToken cancellationToken = default)
+    public Task DeleteAsync(string tokenHash, CancellationToken cancellationToken = default)
         => dynamo.DeleteItemAsync(
             new DeleteItemRequest
             {
                 TableName = _table,
-                Key = Key($"SESSION#{token}", "SESSION"),
+                Key = Key($"SESSION#{tokenHash}", "SESSION"),
             },
             cancellationToken);
 
@@ -214,7 +215,11 @@ internal sealed class DynamoDbIdentityStore(
         var item = await GetItemAsync($"ATTEMPT#{clientKey}", "ATTEMPT", cancellationToken)
             .ConfigureAwait(false);
 
-        if (item is null)
+        // TTL deletion can lag by days; a counter past its expiry is treated
+        // as gone, so failures stop counting when they are meant to.
+        if (item is null
+            || (item.TryGetValue(Ttl, out var ttl) && long.TryParse(ttl.N, out var expires)
+                && DateTimeOffset.FromUnixTimeSeconds(expires) <= DateTimeOffset.UtcNow))
         {
             return null;
         }
@@ -228,17 +233,21 @@ internal sealed class DynamoDbIdentityStore(
 
     public Task SaveAsync(LoginAttempts attempts, CancellationToken cancellationToken = default)
     {
+        // Counters expire on their own, so a single mistyped password does
+        // not count against someone an hour later - but never before a lock
+        // they carry has run out (the sign-up mail limit locks for an hour).
+        var expires = DateTimeOffset.UtcNow.Add(LoginAttempts.LockoutDuration * 2);
+        if (attempts.LockedUntil is { } lockedUntil && lockedUntil > expires)
+        {
+            expires = lockedUntil;
+        }
+
         var item = new Dictionary<string, AttributeValue>
         {
             [Pk] = new($"ATTEMPT#{attempts.ClientKey}"),
             [Sk] = new("ATTEMPT"),
             ["failedCount"] = new AttributeValue { N = attempts.FailedCount.ToString() },
-            // Counters expire on their own, so a single mistyped password does
-            // not count against someone an hour later.
-            [Ttl] = new AttributeValue
-            {
-                N = DateTimeOffset.UtcNow.Add(LoginAttempts.LockoutDuration * 2).ToUnixTimeSeconds().ToString(),
-            },
+            [Ttl] = new AttributeValue { N = expires.ToUnixTimeSeconds().ToString() },
         };
 
         if (attempts.LockedUntil is { } until)

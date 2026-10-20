@@ -7,6 +7,10 @@ internal interface IIdentityText
 {
     string TooManyAttempts { get; }
 
+    string AccountLocked { get; }
+
+    string TooManySignupMails { get; }
+
     string InvalidInvitation { get; }
 
     string AccountExists { get; }
@@ -61,6 +65,10 @@ internal interface IIdentityText
 internal sealed class IdentityTextNl : IIdentityText
 {
     public string TooManyAttempts => "Te veel pogingen. Wacht 15 minuten.";
+
+    public string AccountLocked => "Te veel mislukte pogingen voor dit account. Wacht 15 minuten.";
+
+    public string TooManySignupMails => "Er zijn het afgelopen uur al te veel bevestigingsmails naar dit adres gestuurd. Kijk in je inbox of probeer het later opnieuw.";
 
     public string InvalidInvitation => "Deze uitnodiging is ongeldig of verlopen.";
 
@@ -135,6 +143,10 @@ internal sealed class IdentityTextNl : IIdentityText
 internal sealed class IdentityTextEn : IIdentityText
 {
     public string TooManyAttempts => "Too many attempts. Wait 15 minutes.";
+
+    public string AccountLocked => "Too many failed attempts for this account. Wait 15 minutes.";
+
+    public string TooManySignupMails => "Too many confirmation emails have been sent to this address in the past hour. Check your inbox or try again later.";
 
     public string InvalidInvitation => "This invitation is invalid or has expired.";
 

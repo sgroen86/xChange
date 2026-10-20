@@ -1,6 +1,7 @@
 using InvoicePlatform.Application.Identity;
 using InvoicePlatform.Application.Organizations;
 using InvoicePlatform.Domain.Identity;
+using InvoicePlatform.Domain.Localization;
 
 namespace InvoicePlatform.Application.Tests;
 
@@ -213,6 +214,110 @@ public class AuthServiceTests
     }
 
     [Fact]
+    public async Task Failures_spread_over_many_addresses_lock_the_account()
+    {
+        // A botnet never trips the per-address lockout; the account count stops it.
+        await SeedUserAsync();
+
+        for (var attempt = 0; attempt < LoginAttempts.MaxAccountAttempts; attempt++)
+        {
+            var result = await _auth.LoginAsync("piet@example.nl", "wrong-password-here", $"10.0.{attempt}.1");
+            Assert.False(result.LockedOut);
+        }
+
+        var locked = await _auth.LoginAsync("PIET@example.nl", Password, "10.9.9.9");
+
+        Assert.True(locked.LockedOut);
+        Assert.Null(locked.Token);
+        Assert.Equal("Te veel mislukte pogingen voor dit account. Wacht 15 minuten.", locked.Error);
+
+        using (Texts.Use(Language.En))
+        {
+            Assert.Equal(
+                "Too many failed attempts for this account. Wait 15 minutes.",
+                (await _auth.LoginAsync("piet@example.nl", Password, "10.9.9.8")).Error);
+        }
+
+        _clock.Advance(LoginAttempts.LockoutDuration + TimeSpan.FromMinutes(1));
+        Assert.NotNull((await _auth.LoginAsync("piet@example.nl", Password, "10.9.9.9")).Token);
+    }
+
+    [Fact]
+    public async Task The_account_lockout_needs_more_failures_than_the_address_lockout()
+    {
+        await SeedUserAsync();
+
+        for (var attempt = 0; attempt < LoginAttempts.MaxAccountAttempts - 1; attempt++)
+        {
+            await _auth.LoginAsync("piet@example.nl", "wrong-password-here", $"10.0.{attempt}.1");
+        }
+
+        Assert.True(LoginAttempts.MaxAccountAttempts > LoginAttempts.MaxAttempts);
+        Assert.NotNull((await _auth.LoginAsync("piet@example.nl", Password, "10.9.9.9")).Token);
+    }
+
+    [Fact]
+    public async Task A_successful_login_clears_the_account_count()
+    {
+        await SeedUserAsync();
+
+        for (var attempt = 0; attempt < LoginAttempts.MaxAccountAttempts - 1; attempt++)
+        {
+            await _auth.LoginAsync("piet@example.nl", "wrong-password-here", $"10.0.{attempt}.1");
+        }
+
+        Assert.NotNull((await _auth.LoginAsync("piet@example.nl", Password, "10.9.9.9")).Token);
+        Assert.False(_store.Attempts.ContainsKey(LoginAttempts.AccountKey("piet@example.nl")));
+
+        // Without the clear, the very next mistake would lock the account.
+        for (var attempt = 0; attempt < LoginAttempts.MaxAccountAttempts - 1; attempt++)
+        {
+            await _auth.LoginAsync("piet@example.nl", "wrong-password-here", $"10.1.{attempt}.1");
+        }
+
+        Assert.NotNull((await _auth.LoginAsync("piet@example.nl", Password, "10.9.9.9")).Token);
+    }
+
+    [Fact]
+    public async Task An_unknown_address_locks_exactly_like_a_known_one()
+    {
+        // Otherwise the lock itself would tell which addresses have an account.
+        await SeedUserAsync();
+
+        for (var attempt = 0; attempt < LoginAttempts.MaxAccountAttempts; attempt++)
+        {
+            var known = await _auth.LoginAsync("piet@example.nl", "wrong-password-here", $"10.1.{attempt}.1");
+            var unknown = await _auth.LoginAsync("nobody@example.nl", "wrong-password-here", $"10.2.{attempt}.1");
+            Assert.Equal((known.LockedOut, known.Error), (unknown.LockedOut, unknown.Error));
+        }
+
+        var knownLocked = await _auth.LoginAsync("piet@example.nl", Password, "10.3.0.1");
+        var unknownLocked = await _auth.LoginAsync("nobody@example.nl", Password, "10.4.0.1");
+
+        Assert.True(knownLocked.LockedOut);
+        Assert.Equal((knownLocked.LockedOut, knownLocked.Error), (unknownLocked.LockedOut, unknownLocked.Error));
+    }
+
+    [Fact]
+    public async Task An_unknown_address_costs_the_same_password_check_as_a_known_one()
+    {
+        // Skipping bcrypt for an unknown address made that answer measurably faster.
+        var hasher = new CountingHasher();
+        var auth = new AuthService(_store, _store, _store, hasher, _clock, _platform, _mfa);
+        await SeedUserAsync();
+
+        await auth.LoginAsync("nobody@example.nl", "some-long-password", "1.2.3.4");
+        Assert.Equal(1, hasher.Verifies);
+
+        await auth.LoginAsync("piet@example.nl", "some-long-password", "1.2.3.4");
+        await auth.LoginAsync("someone-else@example.nl", "some-long-password", "1.2.3.4");
+
+        Assert.Equal(3, hasher.Verifies);
+        // The hash an unknown address is checked against is made once, not per request.
+        Assert.Equal(1, hasher.Hashes);
+    }
+
+    [Fact]
     public async Task A_right_password_does_not_clear_the_failure_count_while_mfa_is_still_to_come()
     {
         // Otherwise every new challenge would hand out a fresh set of guesses at the code.
@@ -318,6 +423,26 @@ public class AuthServiceTests
         await _auth.LogoutAsync(session.Token!);
 
         Assert.Null(await _auth.ValidateAsync(session.Token!));
+    }
+
+    [Fact]
+    public async Task Only_the_hash_of_a_session_token_is_stored()
+    {
+        var session = await SignInAsync();
+
+        // Keyed by the hash, and the token appears nowhere in what was stored.
+        var (key, stored) = Assert.Single(_store.Sessions);
+        Assert.Equal(AuthSession.HashOf(session.Token!), key);
+        Assert.Equal(key, stored.TokenHash);
+        Assert.DoesNotContain(session.Token!, System.Text.Json.JsonSerializer.Serialize(stored), StringComparison.OrdinalIgnoreCase);
+
+        // The raw token works; what is stored does not, so a copy of the table signs nobody in.
+        Assert.NotNull(await _auth.ValidateAsync(session.Token!));
+        Assert.Null(await _auth.ValidateAsync(key));
+
+        await _auth.LogoutAsync(session.Token!);
+
+        Assert.Empty(_store.Sessions);
     }
 
     [Fact]
@@ -504,6 +629,28 @@ public class AuthServiceTests
         public bool Verify(string password, string hash) => hash == "hashed:" + password;
     }
 
+    /// <summary>The fake hasher, counting how often each operation runs: the stand-in for "this took bcrypt time".</summary>
+    internal sealed class CountingHasher : IPasswordHasher
+    {
+        private readonly FakeHasher _inner = new();
+
+        public int Hashes { get; private set; }
+
+        public int Verifies { get; private set; }
+
+        public string Hash(string password)
+        {
+            Hashes++;
+            return _inner.Hash(password);
+        }
+
+        public bool Verify(string password, string hash)
+        {
+            Verifies++;
+            return _inner.Verify(password, hash);
+        }
+    }
+
     internal sealed class FakeStore : IUserStore, ISessionStore, ILoginAttemptStore
     {
         private readonly Dictionary<string, User> _byEmail = [];
@@ -568,18 +715,23 @@ public class AuthServiceTests
             return Task.CompletedTask;
         }
 
+        /// <summary>Stored sessions by key, exactly as the store received them.</summary>
+        public IReadOnlyDictionary<string, AuthSession> Sessions => _sessions;
+
+        public IReadOnlyDictionary<string, LoginAttempts> Attempts => _attempts;
+
         public Task SaveAsync(AuthSession session, CancellationToken cancellationToken = default)
         {
-            _sessions[session.Token] = session;
+            _sessions[session.TokenHash] = session;
             return Task.CompletedTask;
         }
 
-        public Task<AuthSession?> FindAsync(string token, CancellationToken cancellationToken = default)
-            => Task.FromResult(_sessions.GetValueOrDefault(token));
+        public Task<AuthSession?> FindAsync(string tokenHash, CancellationToken cancellationToken = default)
+            => Task.FromResult(_sessions.GetValueOrDefault(tokenHash));
 
-        public Task DeleteAsync(string token, CancellationToken cancellationToken = default)
+        public Task DeleteAsync(string tokenHash, CancellationToken cancellationToken = default)
         {
-            _sessions.Remove(token);
+            _sessions.Remove(tokenHash);
             return Task.CompletedTask;
         }
 

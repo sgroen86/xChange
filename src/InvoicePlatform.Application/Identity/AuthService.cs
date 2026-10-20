@@ -1,3 +1,5 @@
+using System.Runtime.CompilerServices;
+using System.Security.Cryptography;
 using InvoicePlatform.Application.Organizations;
 using InvoicePlatform.Domain.Identity;
 using InvoicePlatform.Domain.Organizations;
@@ -5,7 +7,7 @@ using InvoicePlatform.Domain.Organizations;
 namespace InvoicePlatform.Application.Identity;
 
 /// <summary>Outcome of a login or setup attempt. Never carries the hash.</summary>
-/// <param name="LockedOut">Refused because the address tried too often: the caller should wait, whatever the message says.</param>
+/// <param name="LockedOut">Refused because the address or the account failed too often: the caller should wait, whatever the message says.</param>
 /// <param name="Mfa">
 /// Set instead of a session when the password was right and a second step
 /// must follow: a code, or setting MFA up. Nothing about the user is returned
@@ -29,6 +31,8 @@ public sealed record AuthResult(
     public static AuthResult Fail(string error) => new(false, error);
 
     public static AuthResult Locked() => new(false, IdentityText.Current.TooManyAttempts, LockedOut: true);
+
+    public static AuthResult AccountLocked() => new(false, IdentityText.Current.AccountLocked, LockedOut: true);
 
     public static AuthResult Gone(string error) => new(false, error, ChallengeGone: true);
 }
@@ -60,7 +64,8 @@ public sealed record InvitationLookup(InvitationInfo? Invitation, string? Error)
 /// lockout after repeated failures, an inactive account refused separately from
 /// a wrong password, last-login recorded on success, and the same Dutch
 /// messages - so the two applications behave the same way even though they hold
-/// separate accounts.
+/// separate accounts. On top of that, failures are counted per account
+/// (<see cref="LoginAttempts.MaxAccountAttempts"/>), which Bookkeeping does not.
 /// </summary>
 public sealed class AuthService(
     IUserStore users,
@@ -154,9 +159,10 @@ public sealed class AuthService(
     }
 
     /// <param name="clientKey">
-    /// Identifies the caller for rate limiting - the client IP. Rate limiting is
-    /// per address rather than per account so that guessing many usernames from
-    /// one place is throttled too.
+    /// Identifies the caller for rate limiting - the client IP. Failures are
+    /// counted per address, so guessing many usernames from one place is
+    /// throttled, and per account, so guessing one password from many places
+    /// is throttled too.
     /// </param>
     public async Task<AuthResult> LoginAsync(
         string email,
@@ -172,14 +178,31 @@ public sealed class AuthService(
             return AuthResult.Locked();
         }
 
-        var user = await users.FindByEmailAsync(User.NormalizeEmail(email), cancellationToken)
-            .ConfigureAwait(false);
+        // Keyed by the address as typed (normalised), whether or not an account
+        // has it: an unknown address locks exactly like a known one.
+        var address = User.NormalizeEmail(email);
+        var accountKey = LoginAttempts.AccountKey(address);
+        var accountRecord = await attempts.GetAsync(accountKey, cancellationToken).ConfigureAwait(false);
+        if (accountRecord is not null && accountRecord.IsLocked(now))
+        {
+            return AuthResult.AccountLocked();
+        }
+
+        var user = await users.FindByEmailAsync(address, cancellationToken).ConfigureAwait(false);
 
         // One message for "no such account" and for "wrong password": telling
-        // them apart would confirm which addresses are registered.
-        if (user is null || !passwords.Verify(password, user.PasswordHash))
+        // them apart would confirm which addresses are registered. The same
+        // bcrypt work for both, too, or the response time would tell them apart.
+        var verified = user is null
+            ? VerifyAgainstNoAccount(password)
+            : passwords.Verify(password, user.PasswordHash);
+
+        if (!verified || user is null)
         {
             await RecordFailureAsync(clientKey, record, now, cancellationToken).ConfigureAwait(false);
+            await attempts.SaveAsync(
+                LoginAttempts.AfterFailure(accountKey, accountRecord, now, LoginAttempts.MaxAccountAttempts, LoginAttempts.LockoutDuration),
+                cancellationToken).ConfigureAwait(false);
             return AuthResult.Fail(IdentityText.Current.InvalidCredentials);
         }
 
@@ -203,7 +226,7 @@ public sealed class AuthService(
             return null;
         }
 
-        var session = await sessions.FindAsync(token, cancellationToken).ConfigureAwait(false);
+        var session = await sessions.FindAsync(AuthSession.HashOf(token), cancellationToken).ConfigureAwait(false);
         if (session is null || session.IsExpired(clock.UtcNow))
         {
             return null;
@@ -348,7 +371,7 @@ public sealed class AuthService(
     }
 
     public Task LogoutAsync(string token, CancellationToken cancellationToken = default)
-        => sessions.DeleteAsync(token, cancellationToken);
+        => sessions.DeleteAsync(AuthSession.HashOf(token), cancellationToken);
 
     /// <summary>
     /// Signs a user in that was just created elsewhere (self sign-up), clearing
@@ -387,13 +410,15 @@ public sealed class AuthService(
         return await CompleteSignInAsync(user, clientKey, cancellationToken).ConfigureAwait(false);
     }
 
-    /// <summary>Every step is done: clear the address's failures, record the login, issue the session.</summary>
+    /// <summary>Every step is done: clear the address's and the account's failures, record the login, issue the session.</summary>
     internal async Task<AuthResult> CompleteSignInAsync(User user, string? clientKey, CancellationToken cancellationToken)
     {
         if (clientKey is not null)
         {
             await attempts.ClearAsync(clientKey, cancellationToken).ConfigureAwait(false);
         }
+
+        await attempts.ClearAsync(LoginAttempts.AccountKey(user.Email), cancellationToken).ConfigureAwait(false);
 
         await users.UpdateLastLoginAsync(user.OrganizationId, user.Id, clock.UtcNow, cancellationToken)
             .ConfigureAwait(false);
@@ -421,14 +446,34 @@ public sealed class AuthService(
     }
 
     /// <summary>Counts an attempt towards the per-address lockout (login, invitations, sign-up).</summary>
-    internal Task RecordAttemptAsync(string clientKey, LoginAttempts? existing, DateTimeOffset now, CancellationToken cancellationToken)
+    /// <returns>The record after counting it.</returns>
+    internal Task<LoginAttempts> RecordAttemptAsync(string clientKey, LoginAttempts? existing, DateTimeOffset now, CancellationToken cancellationToken)
         => RecordFailureAsync(clientKey, existing, now, cancellationToken);
+
+    /// <summary>Whether the account is locked out by failures from any address (<see cref="LoginAttempts.AccountKey"/>).</summary>
+    internal async Task<bool> IsAccountLockedAsync(User user, DateTimeOffset now, CancellationToken cancellationToken)
+    {
+        var record = await attempts.GetAsync(LoginAttempts.AccountKey(user.Email), cancellationToken).ConfigureAwait(false);
+        return record is not null && record.IsLocked(now);
+    }
+
+    /// <summary>Counts a wrong second-step code against the account, from whatever address it came.</summary>
+    /// <returns>The record after counting it.</returns>
+    internal async Task<LoginAttempts> RecordAccountFailureAsync(User user, DateTimeOffset now, CancellationToken cancellationToken)
+    {
+        var key = LoginAttempts.AccountKey(user.Email);
+        var existing = await attempts.GetAsync(key, cancellationToken).ConfigureAwait(false);
+        var updated = LoginAttempts.AfterFailure(key, existing, now, LoginAttempts.MaxAccountAttempts, LoginAttempts.LockoutDuration);
+        await attempts.SaveAsync(updated, cancellationToken).ConfigureAwait(false);
+        return updated;
+    }
 
     private async Task<AuthResult> IssueSessionAsync(User user, CancellationToken cancellationToken)
     {
         var now = clock.UtcNow;
+        var token = AuthSession.NewToken();
         var session = new AuthSession(
-            AuthSession.NewToken(),
+            AuthSession.HashOf(token),
             user.Id,
             user.OrganizationId,
             now,
@@ -438,7 +483,7 @@ public sealed class AuthService(
 
         return new AuthResult(
             true,
-            Token: session.Token,
+            Token: token,
             ExpiresAt: session.ExpiresAt,
             User: ToAuthenticated(user));
     }
@@ -446,19 +491,31 @@ public sealed class AuthService(
     private static AuthenticatedUser ToAuthenticated(User user)
         => new(user.Id, user.OrganizationId, user.Email, user.Name, user.Role, user.IsPlatformAdmin);
 
-    private async Task RecordFailureAsync(
+    private async Task<LoginAttempts> RecordFailureAsync(
         string clientKey,
         LoginAttempts? existing,
         DateTimeOffset now,
         CancellationToken cancellationToken)
     {
-        var failed = (existing?.FailedCount ?? 0) + 1;
-        var lockedUntil = failed >= LoginAttempts.MaxAttempts
-            ? now.Add(LoginAttempts.LockoutDuration)
-            : (DateTimeOffset?)null;
+        var updated = LoginAttempts.AfterFailure(clientKey, existing, now, LoginAttempts.MaxAttempts, LoginAttempts.LockoutDuration);
+        await attempts.SaveAsync(updated, cancellationToken).ConfigureAwait(false);
+        return updated;
+    }
 
-        await attempts.SaveAsync(new LoginAttempts(clientKey, failed, lockedUntil), cancellationToken)
-            .ConfigureAwait(false);
+    /// <summary>
+    /// A hash no password matches, per hasher, made on first use. Verifying
+    /// against it costs what verifying a real one costs.
+    /// </summary>
+    private static readonly ConditionalWeakTable<IPasswordHasher, string> NoAccountHashes = new();
+
+    /// <summary>The bcrypt work of a real check, for a login whose account does not exist. Always false.</summary>
+    private bool VerifyAgainstNoAccount(string password)
+    {
+        var hash = NoAccountHashes.GetValue(
+            passwords,
+            static hasher => hasher.Hash(Convert.ToHexString(RandomNumberGenerator.GetBytes(32))));
+        _ = passwords.Verify(password, hash);
+        return false;
     }
 
     /// <returns>An error message, or null when the input is acceptable.</returns>

@@ -25,19 +25,20 @@ public class SignupServiceTests
     private readonly Signups _signups = new();
     private readonly Mailbox _mail = new();
     private readonly TestClock _clock = new(DateTimeOffset.Parse("2026-10-19T09:00:00Z"));
+    private readonly AuthServiceTests.CountingHasher _hasher = new();
     private readonly SignupService _signup;
 
     public SignupServiceTests()
     {
         var auth = new AuthService(_identity, _identity, _identity, new AuthServiceTests.FakeHasher(), _clock, _platform, new FakeMfaStore());
-        _signup = new SignupService(_signups, _identity, _identity, new AuthServiceTests.FakeHasher(), _clock, _platform,
+        _signup = new SignupService(_signups, _identity, _identity, _hasher, _clock, _platform,
             _mail, _usage, auth, new SignupSettings("https://app.example.test"));
     }
 
     private Task Open() => _platform.SaveSettingsAsync(new PlatformSettings { SignupOpen = true });
 
-    private Task<SignupResult> SignUp(string email = "anna@bakkerij.be")
-        => _signup.StartAsync("Anna Peeters", email, "lang-genoeg-wachtwoord", "Bakkerij Peeters", "BE", Client);
+    private Task<SignupResult> SignUp(string email = "anna@bakkerij.be", string client = Client)
+        => _signup.StartAsync("Anna Peeters", email, "lang-genoeg-wachtwoord", "Bakkerij Peeters", "BE", client);
 
     /// <summary>The code from the last confirmation mail.</summary>
     private string CodeFromMail() => Uri.UnescapeDataString(_mail.Sent[^1].Body.Split("?code=")[1].Split('\n')[0].Trim());
@@ -104,6 +105,41 @@ public class SignupServiceTests
         Assert.Equal(SignupOutcome.MailSent, again.Outcome);
         Assert.Contains("al een xChange-account", _mail.Sent[^1].Subject, StringComparison.Ordinal);
         Assert.DoesNotContain("?code=", _mail.Sent[^1].Body, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task A_known_address_costs_the_same_password_hash_as_a_new_one()
+    {
+        // Skipping bcrypt for a known address made that answer measurably faster.
+        await Open();
+        await SignUp();
+        Assert.Equal(1, _hasher.Hashes);
+        await _signup.ConfirmAsync(CodeFromMail(), Client);
+
+        await SignUp();
+
+        Assert.Equal(2, _hasher.Hashes);
+    }
+
+    [Fact]
+    public async Task One_address_gets_at_most_three_signup_mails_an_hour_from_any_number_of_senders()
+    {
+        await Open();
+        for (var i = 0; i < LoginAttempts.MaxSignupMails; i++)
+        {
+            Assert.Equal(SignupOutcome.MailSent, (await SignUp(client: $"10.0.{i}.1")).Outcome);
+        }
+
+        var fourth = await SignUp("Anna@Bakkerij.be ", "10.9.9.9");
+
+        Assert.Equal(SignupOutcome.Locked, fourth.Outcome);
+        Assert.Contains("te veel bevestigingsmails", fourth.Error, StringComparison.Ordinal);
+        Assert.Equal(LoginAttempts.MaxSignupMails, _mail.Sent.Count);
+        // Another address is not affected.
+        Assert.Equal(SignupOutcome.MailSent, (await SignUp("piet@bakkerij.be", "10.9.9.9")).Outcome);
+
+        _clock.UtcNow += LoginAttempts.SignupMailWindow;
+        Assert.Equal(SignupOutcome.MailSent, (await SignUp(client: "10.9.9.8")).Outcome);
     }
 
     [Fact]

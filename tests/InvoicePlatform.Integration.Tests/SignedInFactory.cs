@@ -178,19 +178,19 @@ public sealed class SignedInFactory : WebApplicationFactory<Program>
         /// <summary>
         /// A session issued by a login during the test, or else a fixed one:
         /// for the fixed users the token is the user id - good enough for a
-        /// test, never for anything else.
+        /// test, never for anything else. Looked up by hash, as the real store is.
         /// </summary>
-        public Task<AuthSession?> FindAsync(string token, CancellationToken cancellationToken = default)
+        public Task<AuthSession?> FindAsync(string tokenHash, CancellationToken cancellationToken = default)
         {
             lock (_users)
             {
-                if (_sessions.TryGetValue(token, out var issued))
+                if (_sessions.TryGetValue(tokenHash, out var issued))
                 {
                     return Task.FromResult<AuthSession?>(issued);
                 }
 
-                return Task.FromResult(_users.FirstOrDefault(u => u.Id == token) is { } user
-                    ? new AuthSession(token, user.Id, user.OrganizationId, DateTimeOffset.UnixEpoch, DateTimeOffset.MaxValue)
+                return Task.FromResult(_users.FirstOrDefault(u => AuthSession.HashOf(u.Id) == tokenHash) is { } user
+                    ? new AuthSession(tokenHash, user.Id, user.OrganizationId, DateTimeOffset.UnixEpoch, DateTimeOffset.MaxValue)
                     : null);
             }
         }
@@ -235,17 +235,17 @@ public sealed class SignedInFactory : WebApplicationFactory<Program>
         {
             lock (_users)
             {
-                _sessions[session.Token] = session;
+                _sessions[session.TokenHash] = session;
             }
 
             return Task.CompletedTask;
         }
 
-        public Task DeleteAsync(string token, CancellationToken cancellationToken = default)
+        public Task DeleteAsync(string tokenHash, CancellationToken cancellationToken = default)
         {
             lock (_users)
             {
-                _sessions.Remove(token);
+                _sessions.Remove(tokenHash);
             }
 
             return Task.CompletedTask;

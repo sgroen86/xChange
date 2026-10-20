@@ -28,15 +28,17 @@ public interface IUserStore
         CancellationToken cancellationToken = default);
 }
 
+/// <summary>Sessions, keyed by the hash of their token (<see cref="AuthSession.HashOf"/>). The token never reaches the store.</summary>
 public interface ISessionStore
 {
     Task SaveAsync(AuthSession session, CancellationToken cancellationToken = default);
 
-    Task<AuthSession?> FindAsync(string token, CancellationToken cancellationToken = default);
+    Task<AuthSession?> FindAsync(string tokenHash, CancellationToken cancellationToken = default);
 
-    Task DeleteAsync(string token, CancellationToken cancellationToken = default);
+    Task DeleteAsync(string tokenHash, CancellationToken cancellationToken = default);
 }
 
+/// <summary>Failure counters, keyed by address, account or sign-up recipient (see <see cref="LoginAttempts"/>).</summary>
 public interface ILoginAttemptStore
 {
     Task<LoginAttempts?> GetAsync(string clientKey, CancellationToken cancellationToken = default);

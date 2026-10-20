@@ -187,6 +187,61 @@ public class MfaServiceTests
     }
 
     [Fact]
+    public async Task Wrong_codes_from_many_addresses_lock_the_account()
+    {
+        // Each address and each challenge stays under its own limit; the account does not.
+        await SeedAsync("admin@example.nl", UserRole.Admin);
+        var (secret, _, _) = await SetUpDuringLoginAsync("admin@example.nl");
+        NextStep();
+        var earlier = await ChallengeAsync("admin@example.nl", "10.8.8.8");
+
+        AuthResult last = null!;
+        for (var i = 0; i < LoginAttempts.MaxAccountAttempts; i++)
+        {
+            var client = $"10.0.{i}.1";
+            last = await _mfa.VerifyLoginAsync(await ChallengeAsync("admin@example.nl", client), "000000", null, client);
+        }
+
+        Assert.True(last.LockedOut);
+        Assert.Equal("Te veel mislukte pogingen voor dit account. Wacht 15 minuten.", last.Error);
+
+        // Neither the right code on a challenge from before, nor the password, gets in now.
+        var right = await _mfa.VerifyLoginAsync(earlier, Authenticator.CodeFor(secret, _clock.UtcNow), null, "10.8.8.8");
+        Assert.True(right.LockedOut);
+        Assert.Null(right.Token);
+        Assert.True((await _auth.LoginAsync("admin@example.nl", Password, "10.9.9.9")).LockedOut);
+
+        // Once the lock has run out, a full login clears the count: one more mistake does not lock again.
+        _clock.UtcNow += LoginAttempts.LockoutDuration + TimeSpan.FromMinutes(1);
+        var session = await _mfa.VerifyLoginAsync(
+            await ChallengeAsync("admin@example.nl", "10.9.9.9"), Authenticator.CodeFor(secret, _clock.UtcNow), null, "10.9.9.9");
+        Assert.NotNull(session.Token);
+
+        NextStep();
+        var mistake = await _mfa.VerifyLoginAsync(await ChallengeAsync("admin@example.nl", "10.9.9.9"), "000000", null, "10.9.9.9");
+        Assert.False(mistake.LockedOut);
+        Assert.Equal("Ongeldige code.", mistake.Error);
+    }
+
+    [Fact]
+    public async Task Wrong_codes_when_signed_in_count_against_the_account_too()
+    {
+        var user = await SeedAsync("piet@example.nl", UserRole.User);
+        var setup = await _mfa.StartAccountSetupAsync("org-1", user.Id);
+
+        MfaResult last = null!;
+        for (var i = 0; i < LoginAttempts.MaxAccountAttempts; i++)
+        {
+            last = await _mfa.ConfirmAccountSetupAsync("org-1", user.Id, "000000", $"10.0.{i}.1");
+        }
+
+        Assert.True(last.LockedOut);
+        Assert.True((await _mfa.ConfirmAccountSetupAsync(
+            "org-1", user.Id, Authenticator.CodeFor(setup.Setup!.Secret, _clock.UtcNow), "10.9.9.9")).LockedOut);
+        Assert.True((await _auth.LoginAsync("piet@example.nl", Password, "10.9.9.9")).LockedOut);
+    }
+
+    [Fact]
     public async Task A_challenge_is_used_once()
     {
         await SeedAsync("admin@example.nl", UserRole.Admin);
@@ -348,7 +403,7 @@ public class MfaServiceTests
     {
         // Enforcement happens at the next login, not by cutting live sessions.
         var admin = await SeedAsync("admin@example.nl", UserRole.Admin);
-        await _users.SaveAsync(new AuthSession("existing", admin.Id, "org-1", _clock.UtcNow, _clock.UtcNow + AuthSession.Lifetime));
+        await _users.SaveAsync(new AuthSession(AuthSession.HashOf("existing"), admin.Id, "org-1", _clock.UtcNow, _clock.UtcNow + AuthSession.Lifetime));
 
         Assert.NotNull(await _auth.ValidateAsync("existing"));
     }

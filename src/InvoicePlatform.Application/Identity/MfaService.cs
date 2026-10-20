@@ -27,9 +27,10 @@ public sealed record MfaResult(
 /// off, new recovery codes, and the platform administrator's reset for someone
 /// who lost their phone.
 ///
-/// Every wrong code counts towards the same per-address lockout as a wrong
-/// password: six digits are a million possibilities, and an unthrottled check
-/// is guessed in minutes.
+/// Every wrong code counts towards the same per-address and per-account
+/// lockouts as a wrong password: six digits are a million possibilities, and
+/// an unthrottled check is guessed in minutes. Per account too, so spreading
+/// the guesses over many addresses does not get round it.
 /// </summary>
 public sealed class MfaService(
     IUserStore users,
@@ -66,6 +67,11 @@ public sealed class MfaService(
             return failure;
         }
 
+        if (await auth.IsAccountLockedAsync(user!, now, cancellationToken).ConfigureAwait(false))
+        {
+            return AuthResult.AccountLocked();
+        }
+
         var state = await store.GetAsync(user!.OrganizationId, user.Id, cancellationToken).ConfigureAwait(false);
         if (state is not { IsEnabled: true })
         {
@@ -89,7 +95,7 @@ public sealed class MfaService(
 
         if (!accepted)
         {
-            return await WrongCodeAsync(challenge!, clientKey, record, now, cancellationToken).ConfigureAwait(false);
+            return await WrongCodeAsync(challenge!, user, clientKey, record, now, cancellationToken).ConfigureAwait(false);
         }
 
         // Single use: of two requests with the same challenge, only one gets a session.
@@ -153,6 +159,11 @@ public sealed class MfaService(
             return failure;
         }
 
+        if (await auth.IsAccountLockedAsync(user!, now, cancellationToken).ConfigureAwait(false))
+        {
+            return AuthResult.AccountLocked();
+        }
+
         var state = await store.GetAsync(user!.OrganizationId, user.Id, cancellationToken).ConfigureAwait(false);
         if (state is { IsEnabled: true })
         {
@@ -168,7 +179,7 @@ public sealed class MfaService(
         var step = await VerifyPendingAsync(user, state.PendingProtectedSecret, code, now, cancellationToken).ConfigureAwait(false);
         if (step is null)
         {
-            return await WrongCodeAsync(challenge!, clientKey, record, now, cancellationToken).ConfigureAwait(false);
+            return await WrongCodeAsync(challenge!, user, clientKey, record, now, cancellationToken).ConfigureAwait(false);
         }
 
         if (!await store.TryDeleteChallengeAsync(challenge!.TokenHash, cancellationToken).ConfigureAwait(false))
@@ -235,6 +246,11 @@ public sealed class MfaService(
             return new MfaResult(false, NotFound: true);
         }
 
+        if (await auth.IsAccountLockedAsync(user, now, cancellationToken).ConfigureAwait(false))
+        {
+            return AccountLocked();
+        }
+
         var state = await store.GetAsync(organizationId, userId, cancellationToken).ConfigureAwait(false);
         if (state is { IsEnabled: true })
         {
@@ -249,7 +265,7 @@ public sealed class MfaService(
         var step = await VerifyPendingAsync(user, state.PendingProtectedSecret, code, now, cancellationToken).ConfigureAwait(false);
         if (step is null)
         {
-            return await WrongAccountCodeAsync(clientKey, record, now, cancellationToken).ConfigureAwait(false);
+            return await WrongAccountCodeAsync(user, clientKey, record, now, cancellationToken).ConfigureAwait(false);
         }
 
         return new MfaResult(true, RecoveryCodes: await ActivateAsync(state, step.Value, now, cancellationToken).ConfigureAwait(false));
@@ -351,14 +367,17 @@ public sealed class MfaService(
         return (challenge, user, null);
     }
 
+    /// <summary>A wrong code during login: counted against the address, the account and the challenge.</summary>
     private async Task<AuthResult> WrongCodeAsync(
         MfaChallenge challenge,
+        User user,
         string clientKey,
         LoginAttempts? record,
         DateTimeOffset now,
         CancellationToken cancellationToken)
     {
-        await auth.RecordAttemptAsync(clientKey, record, now, cancellationToken).ConfigureAwait(false);
+        var address = await auth.RecordAttemptAsync(clientKey, record, now, cancellationToken).ConfigureAwait(false);
+        var account = await auth.RecordAccountFailureAsync(user, now, cancellationToken).ConfigureAwait(false);
 
         var failures = await store.RecordChallengeFailureAsync(challenge.TokenHash, cancellationToken).ConfigureAwait(false);
         if (failures >= MfaChallenge.MaxFailedAttempts)
@@ -367,22 +386,27 @@ public sealed class MfaService(
             return AuthResult.Gone(IdentityText.Current.TooManyWrongCodes);
         }
 
-        return (record?.FailedCount ?? 0) + 1 >= LoginAttempts.MaxAttempts
-            ? AuthResult.Locked()
+        return address.IsLocked(now) ? AuthResult.Locked()
+            : account.IsLocked(now) ? AuthResult.AccountLocked()
             : AuthResult.Fail(IdentityText.Current.InvalidCode);
     }
 
+    /// <summary>A wrong code from a signed-in user: counted against the address and the account.</summary>
     private async Task<MfaResult> WrongAccountCodeAsync(
+        User user,
         string clientKey,
         LoginAttempts? record,
         DateTimeOffset now,
         CancellationToken cancellationToken)
     {
-        await auth.RecordAttemptAsync(clientKey, record, now, cancellationToken).ConfigureAwait(false);
-        return (record?.FailedCount ?? 0) + 1 >= LoginAttempts.MaxAttempts
-            ? new MfaResult(false, IdentityText.Current.TooManyAttempts, LockedOut: true)
+        var address = await auth.RecordAttemptAsync(clientKey, record, now, cancellationToken).ConfigureAwait(false);
+        var account = await auth.RecordAccountFailureAsync(user, now, cancellationToken).ConfigureAwait(false);
+        return address.IsLocked(now) ? new MfaResult(false, IdentityText.Current.TooManyAttempts, LockedOut: true)
+            : account.IsLocked(now) ? AccountLocked()
             : MfaResult.Fail(IdentityText.Current.InvalidCode);
     }
+
+    private static MfaResult AccountLocked() => new(false, IdentityText.Current.AccountLocked, LockedOut: true);
 
     /// <summary>The checks shared by turning MFA off and new recovery codes: on, not locked out, and a valid code. Null when all pass.</summary>
     private async Task<MfaResult?> OpenAccountChangeAsync(
@@ -406,6 +430,11 @@ public sealed class MfaService(
             return new MfaResult(false, NotFound: true);
         }
 
+        if (await auth.IsAccountLockedAsync(user, now, cancellationToken).ConfigureAwait(false))
+        {
+            return AccountLocked();
+        }
+
         // Refused before the code is checked, so a recovery code is not used up for nothing.
         if (refuseWhenMandatory && UserMfa.IsMandatoryFor(user))
         {
@@ -423,7 +452,7 @@ public sealed class MfaService(
             : !string.IsNullOrWhiteSpace(code)
                 && await store.TryConsumeRecoveryCodeAsync(organizationId, userId, RecoveryCodes.HashOf(code), cancellationToken).ConfigureAwait(false) is not null;
 
-        return accepted ? null : await WrongAccountCodeAsync(clientKey, record, now, cancellationToken).ConfigureAwait(false);
+        return accepted ? null : await WrongAccountCodeAsync(user, clientKey, record, now, cancellationToken).ConfigureAwait(false);
     }
 
     private async Task<MfaSetupInfo> BeginSetupAsync(User user, UserMfa? state, CancellationToken cancellationToken)
