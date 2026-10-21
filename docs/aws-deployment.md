@@ -140,7 +140,7 @@ only the instance role can read it.
 Everything else, on every push:
 
 1. runs `dotnet test` — a red build cannot deploy
-2. publishes the API and zips it (no Docker: the managed `dotnet8` runtime takes
+2. publishes the API and zips it (no Docker: the managed `dotnet10` runtime takes
    a zip, which builds faster and stores nothing in ECR)
 3. creates the secret placeholder if missing
 4. uploads the zip to the artefact bucket, keyed by commit sha

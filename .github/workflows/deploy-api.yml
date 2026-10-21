@@ -16,7 +16,7 @@ name: Deploy xChange API
 # a binary body is base64-encoded first, so ~4.4 MB of PDF gets through. The API
 # refuses larger files with a clear message.
 #
-# No Docker: a zip against the managed dotnet8 runtime builds faster and has
+# No Docker: a zip against the managed dotnet10 runtime builds faster and has
 # nothing to store in ECR.
 
 on:
@@ -59,7 +59,7 @@ jobs:
       - name: Setup .NET
         uses: actions/setup-dotnet@v4
         with:
-          dotnet-version: '8.0.x'
+          dotnet-version: '10.0.x'
 
       # Gate the deploy on the tests, not just on the build.
       - name: Test

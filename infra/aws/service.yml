@@ -304,7 +304,7 @@ Resources:
     Type: AWS::Lambda::Function
     Properties:
       FunctionName: xchange-api
-      Runtime: dotnet8
+      Runtime: dotnet10
       # ASP.NET Core hosted by Amazon.Lambda.AspNetCoreServer.Hosting: the
       # handler is just the assembly name.
       Handler: InvoicePlatform.Api
@@ -537,7 +537,7 @@ Resources:
     Type: AWS::Lambda::Function
     Properties:
       FunctionName: xchange-worker
-      Runtime: dotnet8
+      Runtime: dotnet10
       Handler: InvoicePlatform.Worker::InvoicePlatform.Worker.ImportFunction::HandleAsync
       Role: !GetAtt WorkerRole.Arn
       MemorySize: !Ref MemorySize
@@ -680,7 +680,7 @@ Resources:
     Type: AWS::Lambda::Function
     Properties:
       FunctionName: xchange-mail
-      Runtime: dotnet8
+      Runtime: dotnet10
       # The same package as the worker: one assembly, two handlers.
       Handler: InvoicePlatform.Worker::InvoicePlatform.Worker.MailFunction::HandleAsync
       Role: !GetAtt MailFunctionRole.Arn
