@@ -118,6 +118,7 @@ public sealed class InMemoryUsage : IUsageMeter, IBillingStore
             a.PeriodAllowance = state.MonthlyConversions;
             a.PeriodStart = state.PeriodStart;
             a.PeriodEnd = state.PeriodEnd;
+            a.CancelAtPeriodEnd = state.CancelAtPeriodEnd;
             if (state.MonthlyConversions is not null)
             {
                 a.SubscribedOnce = true;
@@ -189,6 +190,8 @@ public sealed class InMemoryUsage : IUsageMeter, IBillingStore
         public bool SubscribedOnce { get; set; }
 
         public bool PaidOnce { get; set; }
+
+        public bool CancelAtPeriodEnd { get; set; }
 
         public string? CustomerId { get; set; }
 

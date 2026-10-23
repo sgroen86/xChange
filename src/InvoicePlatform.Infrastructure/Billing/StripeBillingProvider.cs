@@ -187,7 +187,10 @@ internal sealed class StripeBillingProvider(StripeSecrets secrets, ILogger<Strip
                         item?.Price?.LookupKey,
                         Utc(item?.CurrentPeriodStart),
                         Utc(item?.CurrentPeriodEnd),
-                        subscription.CancelAtPeriodEnd,
+                        // The portal now schedules a cancellation by setting cancel_at
+                        // (the period end) and leaves cancel_at_period_end false;
+                        // either means the subscription will not renew.
+                        subscription.CancelAtPeriodEnd || subscription.CancelAt is not null,
                         Meta(subscription.Metadata, "organizationId"));
                 }
 

@@ -147,6 +147,20 @@ public class BillingEndpointTests : IClassFixture<SignedInFactory>
     }
 
     [Fact]
+    public async Task A_cancellation_scheduled_with_cancel_at_means_the_plan_ends_at_the_period_end()
+    {
+        // How the Customer Portal cancels today: cancel_at = period end, cancel_at_period_end = false.
+        using var configured = WithWebhookSecret();
+        await _factory.Usage.LinkCustomerAsync("org-sub", "cus_sub");
+        var payload = SubscriptionUpdated("evt_sub_cancel", "cus_sub", "xchange_pro_monthly", cancelAt: "1764547200");
+
+        var response = await Post(configured.CreateClient(), payload, Sign(payload, WebhookSecret));
+
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        Assert.True(_factory.Usage.For("org-sub").CancelAtPeriodEnd);
+    }
+
+    [Fact]
     public async Task An_event_xchange_does_not_handle_is_acknowledged()
     {
         using var configured = WithWebhookSecret();
@@ -206,7 +220,7 @@ public class BillingEndpointTests : IClassFixture<SignedInFactory>
         }
         """;
 
-    private static string SubscriptionUpdated(string eventId, string customerId, string lookupKey) => $$"""
+    private static string SubscriptionUpdated(string eventId, string customerId, string lookupKey, string cancelAt = "null") => $$"""
         {
           "id": "{{eventId}}",
           "object": "event",
@@ -222,6 +236,7 @@ public class BillingEndpointTests : IClassFixture<SignedInFactory>
               "customer": "{{customerId}}",
               "status": "active",
               "cancel_at_period_end": false,
+              "cancel_at": {{cancelAt}},
               "metadata": { "organizationId": "org-sub" },
               "items": {
                 "object": "list",
