@@ -14,12 +14,11 @@ import { rememberedPlan } from "../../../lib/signupPlan";
 
 /**
  * Where a new admin goes once signed in: to the upload page, or - with a plan
- * chosen on the website and remembered in this browser - to the settings page,
- * which starts Checkout for it.
+ * chosen on the website and remembered in this browser - to the payment step,
+ * which sends them to Checkout before the app opens.
  */
 function landing(): string {
-  const plan = rememberedPlan();
-  return plan ? `/settings/?checkout=${plan}` : "/upload";
+  return rememberedPlan() ? "/signup/payment/" : "/upload";
 }
 
 /**

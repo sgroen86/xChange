@@ -47,6 +47,12 @@ const nl = {
       "Na het bevestigen van je e-mailadres en het instellen van tweestapsverificatie ga je meteen door naar de betaling. Open de bevestigingslink in deze browser; anders begin je met de gratis proefperiode en kies je je abonnement onder Instellingen.",
     useTrial: "Liever eerst de gratis proefperiode",
   },
+  payment: {
+    title: "Betalen",
+    going: "Je wordt doorgestuurd naar de beveiligde betaalpagina…",
+    retry: "Opnieuw proberen",
+    trialInstead: "Eerst de gratis proefperiode",
+  },
   confirm: {
     title: "Account activeren",
     welcome: (name: string) => `Welkom bij xChange, ${name}.`,
@@ -102,6 +108,12 @@ const en: typeof nl = {
     payNext:
       "You'll go to payment right after confirming your email address and setting up two-step verification. Open the confirmation link in this browser; otherwise you start on the free trial and choose your plan under Settings.",
     useTrial: "Start with the free trial instead",
+  },
+  payment: {
+    title: "Payment",
+    going: "Taking you to the secure payment page…",
+    retry: "Try again",
+    trialInstead: "Start with the free trial",
   },
   confirm: {
     title: "Activate account",

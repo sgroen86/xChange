@@ -71,6 +71,28 @@ export function AppShell({ children }: { children: React.ReactNode }) {
     router.replace("/login");
   };
 
+  // Before the app proper - logging in, signing up, paying, accepting an
+  // invitation - there is no menu: just the brand, the language and the form.
+  if (onLoginPage) {
+    return (
+      <div className="standalone">
+        <header className="standalone__top">
+          <div className="standalone__brand">
+            <div className="sidebar__logo">
+              <Icon name="zap" />
+            </div>
+            <div>
+              <div className="standalone__name">xChange</div>
+              <div className="standalone__tagline">{t.shell.brandSub}</div>
+            </div>
+          </div>
+          <LanguageSwitch />
+        </header>
+        <main className="standalone__main">{children}</main>
+      </div>
+    );
+  }
+
   const invoiceId = currentInvoiceId(pathname);
   const activeId = activeNavId(pathname);
   const page = t.shell.pages[activeId];
