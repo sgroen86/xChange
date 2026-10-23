@@ -76,6 +76,11 @@ internal sealed class StripeBillingProvider(StripeSecrets secrets, ILogger<Strip
                 PaymentIntentData = subscription
                     ? null
                     : new Stripe.Checkout.SessionPaymentIntentDataOptions { Metadata = new Dictionary<string, string>(metadata) },
+                // xChange sells as itself, not through Stripe as merchant of record
+                // (owner's choice, 2026-10-23); VAT comes with Stripe Tax once the
+                // selling company is chosen. Explicit, because new accounts have
+                // Managed Payments on by default and then refuse products without a tax code.
+                ManagedPayments = new Stripe.Checkout.SessionManagedPaymentsOptions { Enabled = false },
             },
             cancellationToken: cancellationToken)).ConfigureAwait(false);
         return session.Url;
