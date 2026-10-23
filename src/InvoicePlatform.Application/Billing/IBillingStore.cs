@@ -102,5 +102,11 @@ public static class SubscriptionStatuses
     /// <summary>A payment failed; the provider retries. xChange keeps serving until it cancels.</summary>
     public const string PastDue = "past_due";
 
+    /// <summary>Retries ran out; the subscription stays open at the provider, with its invoices unpaid.</summary>
+    public const string Unpaid = "unpaid";
+
     public static bool GivesConversions(string? status) => status is Active or Trialing or PastDue;
+
+    /// <summary>A subscription that still runs at the provider: it is cancelled there before its organisation can go.</summary>
+    public static bool IsOpen(string? status) => status is Active or Trialing or PastDue or Unpaid;
 }

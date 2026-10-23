@@ -140,6 +140,9 @@ public sealed class SignedInFactory : WebApplicationFactory<Program>
             services.RemoveAll<IQualityLedger>();
             services.RemoveAll<IMfaStore>();
             services.RemoveAll<ISecretProtector>();
+            services.RemoveAll<IOrganizationIdentityDeletion>();
+            services.RemoveAll<IOrganizationRecordDeletion>();
+            services.RemoveAll<IOrganizationDocumentDeletion>();
 
             services.AddSingleton<IUserStore>(Identity);
             services.AddSingleton<ISessionStore>(Identity);
@@ -163,6 +166,11 @@ public sealed class SignedInFactory : WebApplicationFactory<Program>
             services.AddSingleton<IBillingStore>(Usage);
             services.AddSingleton<IUsageLedger>(Ledger);
             services.AddSingleton<IQualityLedger>(Quality);
+
+            var deletion = new InMemoryOrganizationDeletion(this);
+            services.AddSingleton<IOrganizationIdentityDeletion>(deletion);
+            services.AddSingleton<IOrganizationRecordDeletion>(deletion);
+            services.AddSingleton<IOrganizationDocumentDeletion>(Invoices);
         });
     }
 
@@ -216,6 +224,22 @@ public sealed class SignedInFactory : WebApplicationFactory<Program>
         }
 
         public Task<bool> AnyUsersExistAsync(CancellationToken cancellationToken = default) => Task.FromResult(true);
+
+        public IReadOnlyList<User> ListForOrganization(string organizationId)
+        {
+            lock (_users)
+            {
+                return _users.Where(u => u.OrganizationId == organizationId).ToList();
+            }
+        }
+
+        public int RemoveOrganization(string organizationId)
+        {
+            lock (_users)
+            {
+                return _users.RemoveAll(u => u.OrganizationId == organizationId);
+            }
+        }
 
         public Task AddAsync(User user, CancellationToken cancellationToken = default)
         {
@@ -280,6 +304,16 @@ public sealed class InMemoryMfa : IMfaStore
 
     public Task<UserMfa?> GetAsync(string organizationId, string userId, CancellationToken cancellationToken = default)
         => Task.FromResult(Find(organizationId, userId));
+
+    public int RemoveOrganization(string organizationId)
+    {
+        lock (_users)
+        {
+            var keys = _users.Keys.Where(k => k.Org == organizationId).ToList();
+            keys.ForEach(k => _users.Remove(k));
+            return keys.Count;
+        }
+    }
 
     public Task SaveAsync(UserMfa mfa, CancellationToken cancellationToken = default)
     {
@@ -396,7 +430,7 @@ public sealed class TestProtector : ISecretProtector
     }
 }
 
-public sealed class InMemoryInvoices : IInvoiceRepository, IDocumentStore
+public sealed class InMemoryInvoices : IInvoiceRepository, IDocumentStore, IOrganizationDocumentDeletion
 {
     private readonly Dictionary<(string Org, string Id), StoredInvoice> _invoices = [];
     private readonly Dictionary<string, byte[]> _documents = [];
@@ -466,6 +500,26 @@ public sealed class InMemoryInvoices : IInvoiceRepository, IDocumentStore
 
         return Task.CompletedTask;
     }
+
+    public Task<int> DeleteAllForOrganizationAsync(string organizationId, CancellationToken cancellationToken = default)
+    {
+        lock (_documents)
+        {
+            var keys = _documents.Keys.Where(k => k.StartsWith($"{organizationId}/", StringComparison.Ordinal)).ToList();
+            keys.ForEach(k => _documents.Remove(k));
+            return Task.FromResult(keys.Count);
+        }
+    }
+
+    public int RemoveOrganization(string organizationId)
+    {
+        lock (_invoices)
+        {
+            var keys = _invoices.Keys.Where(k => k.Org == organizationId).ToList();
+            keys.ForEach(k => _invoices.Remove(k));
+            return keys.Count;
+        }
+    }
 }
 
 public sealed class InMemorySettings : IOrganizationSettingsStore
@@ -488,6 +542,14 @@ public sealed class InMemorySettings : IOrganizationSettingsStore
         }
 
         return Task.CompletedTask;
+    }
+
+    public int RemoveOrganization(string organizationId)
+    {
+        lock (_settings)
+        {
+            return _settings.Remove(organizationId) ? 1 : 0;
+        }
     }
 }
 
@@ -520,6 +582,16 @@ public sealed class InMemoryRelations : IRelationRepository
         }
 
         return Task.CompletedTask;
+    }
+
+    public int RemoveOrganization(string organizationId)
+    {
+        lock (_relations)
+        {
+            var keys = _relations.Keys.Where(k => k.Org == organizationId).ToList();
+            keys.ForEach(k => _relations.Remove(k));
+            return keys.Count;
+        }
     }
 }
 
@@ -566,6 +638,14 @@ public sealed class InMemoryPlatform : IPlatformStore
 
     public Task<int> CountUsersAsync(string organizationId, CancellationToken cancellationToken = default)
         => Task.FromResult(0);
+
+    public int RemoveOrganization(string organizationId)
+    {
+        lock (_organizations)
+        {
+            return _organizations.Remove(organizationId) ? 1 : 0;
+        }
+    }
 
     public Task SaveInvitationAsync(Invitation invitation, CancellationToken cancellationToken = default)
     {
@@ -656,6 +736,19 @@ public sealed class InMemoryInboxDirectory : IInboxDirectory
         }
     }
 
+    public int RemoveOrganization(string organizationId)
+    {
+        lock (_byLocal)
+        {
+            if (!_byOrg.Remove(organizationId, out var localPart))
+            {
+                return 0;
+            }
+
+            return 1 + (_byLocal.Remove(localPart) ? 1 : 0);
+        }
+    }
+
     public Task AssignAsync(string organizationId, string localPart, string? previousLocalPart, CancellationToken cancellationToken = default)
     {
         lock (_byLocal)
@@ -715,6 +808,16 @@ public sealed class InMemoryImports : IImportRepository, IImportQueue
         return Task.CompletedTask;
     }
 
+    public int RemoveOrganization(string organizationId)
+    {
+        lock (_records)
+        {
+            var keys = _records.Keys.Where(k => k.Org == organizationId).ToList();
+            keys.ForEach(k => _records.Remove(k));
+            return keys.Count;
+        }
+    }
+
     public Task EnqueueAsync(string organizationId, string importId, CancellationToken cancellationToken = default)
     {
         lock (Queued)
@@ -758,6 +861,22 @@ public sealed class InMemoryLearningStore : ILearningStore
         }
     }
 
+    public int RemoveOrganization(string organizationId)
+    {
+        int removed;
+        lock (_extractions)
+        {
+            var keys = _extractions.Keys.Where(k => k.Org == organizationId).ToList();
+            keys.ForEach(k => _extractions.Remove(k));
+            removed = keys.Count;
+        }
+
+        lock (_corrections)
+        {
+            return removed + (_corrections.Remove(organizationId) ? 1 : 0);
+        }
+    }
+
     public Task SaveCorrectionsAsync(string organizationId, IReadOnlyList<LearnedCorrection> corrections, CancellationToken cancellationToken = default)
     {
         lock (_corrections)
@@ -786,4 +905,43 @@ public sealed class StubOfficialValidator : IOfficialValidator
 
     public Task<OfficialValidation> ValidateAsync(string rulesetId, string xml, CancellationToken cancellationToken = default)
         => Task.FromResult(Verdict);
+}
+
+/// <summary>
+/// Deleting an organisation over the in-memory stores, as the DynamoDB classes
+/// do over the tables. Platform sums are not kept per organisation here.
+/// </summary>
+internal sealed class InMemoryOrganizationDeletion(SignedInFactory factory) : IOrganizationIdentityDeletion, IOrganizationRecordDeletion
+{
+    public Task<IReadOnlyList<User>> ListUsersAsync(string organizationId, CancellationToken cancellationToken = default)
+        => Task.FromResult(factory.Identity.ListForOrganization(organizationId));
+
+    public Task<int> DeleteUsersAsync(string organizationId, CancellationToken cancellationToken = default)
+        => Task.FromResult(factory.Identity.RemoveOrganization(organizationId));
+
+    public Task<int> DeleteMfaAsync(string organizationId, CancellationToken cancellationToken = default)
+        => Task.FromResult(factory.Mfa.RemoveOrganization(organizationId));
+
+    public Task<int> DeleteInboxAsync(string organizationId, CancellationToken cancellationToken = default)
+        => Task.FromResult(factory.Inboxes.RemoveOrganization(organizationId));
+
+    public Task<int> DeleteSettingsAsync(string organizationId, CancellationToken cancellationToken = default)
+        => Task.FromResult(factory.Settings.RemoveOrganization(organizationId));
+
+    public Task<int> DeleteOrganizationRecordAsync(string organizationId, CancellationToken cancellationToken = default)
+        => Task.FromResult(factory.Platform.RemoveOrganization(organizationId));
+
+    public Task<int> DeletePlatformSumsAsync(string organizationId, CancellationToken cancellationToken = default)
+        => Task.FromResult(0);
+
+    public Task<int> DeleteCustomerLinkAsync(string organizationId, string customerId, CancellationToken cancellationToken = default)
+        => Task.FromResult(factory.Usage.RemoveCustomer(organizationId, customerId));
+
+    public Task<int> DeleteAllForOrganizationAsync(string organizationId, CancellationToken cancellationToken = default)
+        => Task.FromResult(
+            factory.Invoices.RemoveOrganization(organizationId)
+            + factory.Imports.RemoveOrganization(organizationId)
+            + factory.Relations.RemoveOrganization(organizationId)
+            + factory.Learning.RemoveOrganization(organizationId)
+            + factory.Usage.RemoveOrganization(organizationId));
 }

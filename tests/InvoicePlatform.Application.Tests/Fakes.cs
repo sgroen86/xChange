@@ -125,6 +125,9 @@ internal sealed class FakePlatformStore : IPlatformStore
     public Task<int> CountUsersAsync(string organizationId, CancellationToken cancellationToken = default)
         => Task.FromResult(UserCount(organizationId));
 
+    /// <summary>What deleting an organisation's record does to this item (the same item in DynamoDB).</summary>
+    public bool RemoveOrganization(string organizationId) => _organizations.Remove(organizationId);
+
     public Task SaveInvitationAsync(Invitation invitation, CancellationToken cancellationToken = default)
     {
         _invitations[invitation.CodeHash] = invitation;

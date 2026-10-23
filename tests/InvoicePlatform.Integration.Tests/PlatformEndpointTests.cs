@@ -36,6 +36,7 @@ public class PlatformEndpointTests : IClassFixture<SignedInFactory>
     [InlineData("POST", "/api/v1/platform/organizations")]
     [InlineData("PUT", "/api/v1/platform/organizations/x")]
     [InlineData("POST", "/api/v1/platform/organizations/x/invitation")]
+    [InlineData("DELETE", "/api/v1/platform/organizations/x")]
     public async Task Platform_routes_refuse_anonymous_and_organisation_admins(string method, string path)
     {
         HttpRequestMessage Request() => new(new HttpMethod(method), path)

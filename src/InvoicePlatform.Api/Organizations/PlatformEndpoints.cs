@@ -7,7 +7,8 @@ namespace InvoicePlatform.Api.Organizations;
 /// <summary>
 /// Managing organisations across the platform. Every route requires a platform
 /// administrator. None of them returns an organisation's invoices, relations or
-/// settings: those remain readable only from inside the organisation.
+/// settings: those remain readable only from inside the organisation. Deleting
+/// one removes them unread.
 /// </summary>
 public static class PlatformEndpoints
 {
@@ -28,6 +29,10 @@ public static class PlatformEndpoints
 
         group.MapPost("/platform/organizations/{organizationId}/invitation", ReissueAsync)
             .WithName("ReissueInvitation")
+            .RequirePlatformAdmin();
+
+        group.MapDelete("/platform/organizations/{organizationId}", DeleteAsync)
+            .WithName("DeleteOrganization")
             .RequirePlatformAdmin();
 
         return group;
@@ -98,6 +103,38 @@ public static class PlatformEndpoints
         return ToResult(result);
     }
 
+    /// <summary>
+    /// Deletes the organisation and everything it has, irreversibly. The body
+    /// repeats the organisation's name, as a confirmation the client cannot
+    /// skip by accident.
+    /// </summary>
+    private static async Task<IResult> DeleteAsync(
+        string organizationId,
+        HttpContext context,
+        OrganizationDeletionService deletion,
+        CancellationToken cancellationToken)
+    {
+        var user = context.GetAuthenticatedUser()!;
+        var request = await RequestBody.ReadAsync<DeleteOrganizationRequest>(context, cancellationToken).ConfigureAwait(false);
+        if (request is null)
+        {
+            return RequestBody.Invalid();
+        }
+
+        var result = await deletion.DeleteAsync(
+            user.Id, user.OrganizationId, organizationId, request.ConfirmName, cancellationToken).ConfigureAwait(false);
+
+        return result.Outcome switch
+        {
+            OrganizationDeletionOutcome.Deleted => Results.NoContent(),
+            OrganizationDeletionOutcome.NotFound => Results.NotFound(),
+            OrganizationDeletionOutcome.Refused => Results.Problem(
+                detail: result.Error, title: OrganizationApiText.Current.NotDeleted, statusCode: StatusCodes.Status409Conflict),
+            _ => Results.Problem(
+                detail: result.Error, title: OrganizationApiText.Current.NotDeleted, statusCode: StatusCodes.Status400BadRequest),
+        };
+    }
+
     private static IResult ToResult(PlatformResult result) => result.Outcome switch
     {
         PlatformOutcome.Succeeded => Results.Ok(new
@@ -126,4 +163,6 @@ public static class PlatformEndpoints
     public sealed record CreateOrganizationRequest(string? Name, string? CountryCode, InviteeRequest? FirstUser);
 
     public sealed record UpdateOrganizationRequest(string? Name, string? CountryCode);
+
+    public sealed record DeleteOrganizationRequest(string? ConfirmName);
 }

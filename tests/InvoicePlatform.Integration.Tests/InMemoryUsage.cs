@@ -146,6 +146,22 @@ public sealed class InMemoryUsage : IUsageMeter, IBillingStore
         }
     }
 
+    public int RemoveOrganization(string organizationId)
+    {
+        lock (_orgs)
+        {
+            return _orgs.Remove(organizationId) ? 1 : 0;
+        }
+    }
+
+    public int RemoveCustomer(string organizationId, string customerId)
+    {
+        lock (_orgs)
+        {
+            return _customers.TryGetValue(customerId, out var owner) && owner == organizationId && _customers.Remove(customerId) ? 1 : 0;
+        }
+    }
+
     private Allowance Get(string organizationId)
     {
         if (!_orgs.TryGetValue(organizationId, out var allowance))

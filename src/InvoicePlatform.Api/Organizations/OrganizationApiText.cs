@@ -14,6 +14,8 @@ internal interface IOrganizationApiText
     string InvalidMonthTitle { get; }
 
     string InvalidMonthDetail { get; }
+
+    string NotDeleted { get; }
 }
 
 internal sealed class OrganizationApiTextNl : IOrganizationApiText
@@ -27,6 +29,8 @@ internal sealed class OrganizationApiTextNl : IOrganizationApiText
     public string InvalidMonthTitle => "Ongeldige maand";
 
     public string InvalidMonthDetail => "Geef de maand als jjjj-MM, bijvoorbeeld 2026-10.";
+
+    public string NotDeleted => "Niet verwijderd";
 }
 
 internal sealed class OrganizationApiTextEn : IOrganizationApiText
@@ -40,6 +44,8 @@ internal sealed class OrganizationApiTextEn : IOrganizationApiText
     public string InvalidMonthTitle => "Invalid month";
 
     public string InvalidMonthDetail => "Give the month as yyyy-MM, for example 2026-10.";
+
+    public string NotDeleted => "Not deleted";
 }
 
 internal static class OrganizationApiText

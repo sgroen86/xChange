@@ -91,6 +91,19 @@ export function reissueInvitation(organizationId: string, invitee: Invitee): Pro
   });
 }
 
+/**
+ * Deletes the organisation and everything it has, irreversibly. The name is
+ * sent back as typed; the API refuses unless it matches exactly (400), and
+ * refuses the caller's own organisation, one with a platform administrator and
+ * one whose subscription still runs (409) - the message says which.
+ */
+export async function deleteOrganization(organizationId: string, confirmName: string): Promise<void> {
+  await call<null>(`/api/v1/platform/organizations/${encodeURIComponent(organizationId)}`, {
+    method: "DELETE",
+    body: JSON.stringify({ confirmName }),
+  });
+}
+
 /** Turns off someone's two-step verification, for when phone and recovery codes are both lost. */
 export async function resetUserMfa(email: string): Promise<void> {
   await call<null>("/api/v1/platform/users/mfa/reset", { method: "POST", body: JSON.stringify({ email }) });

@@ -128,6 +128,8 @@ Resources:
                   # and a login challenge's wrong guesses are each used with
                   # one conditional update.
                   - dynamodb:UpdateItem
+                  # Deleting an organisation removes its users' MFA state in batches.
+                  - dynamodb:BatchWriteItem
                 Resource: !GetAtt IdentityTable.Arn
 
         - PolicyName: mfa-key
@@ -168,14 +170,24 @@ Resources:
                   # webhooks write their change and an idempotency marker in one
                   # TransactWriteItems, which IAM authorises as these Put/Update.
                   - dynamodb:UpdateItem
+                  # Deleting an organisation empties its partition in batches.
+                  - dynamodb:BatchWriteItem
                 Resource: !GetAtt InvoiceTable.Arn
               - Effect: Allow
                 Action:
                   - s3:GetObject
                   - s3:PutObject
-                  # Deleting an invoice takes its PDF with it.
+                  # Deleting an invoice takes its PDF with it; deleting an
+                  # organisation takes all of its PDFs (DeleteObjects is
+                  # authorised as this action).
                   - s3:DeleteObject
                 Resource: !Sub ${DocumentBucket.Arn}/*
+              # Deleting an organisation lists its PDFs under its prefix first.
+              # Organisation ids are not known to IAM, so the prefix is not
+              # narrowed further; the code lists "<organizationId>/" only.
+              - Effect: Allow
+                Action: s3:ListBucket
+                Resource: !GetAtt DocumentBucket.Arn
               # Batch import: the API stores the PDF and queues it; the worker reads it.
               - Effect: Allow
                 Action: sqs:SendMessage

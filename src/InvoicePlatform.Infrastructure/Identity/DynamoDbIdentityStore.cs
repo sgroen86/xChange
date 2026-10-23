@@ -349,7 +349,7 @@ internal sealed class DynamoDbIdentityStore(
             : new AttributeValue { NULL = true },
     };
 
-    private static User ToUser(Dictionary<string, AttributeValue> item) => new()
+    internal static User ToUser(Dictionary<string, AttributeValue> item) => new()
     {
         Id = item["id"].S,
         OrganizationId = item["organizationId"].S,

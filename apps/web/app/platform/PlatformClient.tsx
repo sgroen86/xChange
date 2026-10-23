@@ -3,6 +3,7 @@
 import { useEffect, useState, useSyncExternalStore } from "react";
 
 import { Icon } from "../../components/Icon";
+import { DeleteOrganizationDialog } from "./DeleteOrganizationDialog";
 import { MfaReset } from "./MfaReset";
 import { ModelSetting } from "./ModelSetting";
 import { useToast } from "../../components/Toast";
@@ -39,6 +40,7 @@ export default function PlatformClient() {
   const [panel, setPanel] = useState<Panel>({ kind: "none" });
   const [link, setLink] = useState<{ organization: string; url: string } | null>(null);
   const [saving, setSaving] = useState(false);
+  const [deleting, setDeleting] = useState<PlatformOrganization | null>(null);
 
   // Form fields, shared by the panels.
   const [name, setName] = useState("");
@@ -122,6 +124,17 @@ export default function PlatformClient() {
     } catch {
       showToast(pl.copyFailed, "warning");
     }
+  };
+
+  const deleted = (organization: PlatformOrganization) => {
+    setDeleting(null);
+    setPanel((current) =>
+      current.kind !== "none" && current.kind !== "create" && current.organization.organizationId === organization.organizationId
+        ? { kind: "none" }
+        : current,
+    );
+    showToast(pl.remove.deleted(organization.name), "success");
+    void reload();
   };
 
   const countryName = (code: string) => countries.find((c) => c.code === code)?.name ?? code;
@@ -266,6 +279,12 @@ export default function PlatformClient() {
                         <button type="button" className="btn btn--ghost btn--sm" onClick={() => open({ kind: "invite", organization })}>
                           <Icon name="user" /> {pl.newLink}
                         </button>
+                        {/* Never the administrator's own organisation: the API refuses it too. */}
+                        {user && organization.organizationId !== user.organizationId && (
+                          <button type="button" className="btn btn--ghost btn--sm" onClick={() => setDeleting(organization)}>
+                            <Icon name="trash" /> {t.common.delete}
+                          </button>
+                        )}
                       </td>
                     </tr>
                   ))}
@@ -274,6 +293,14 @@ export default function PlatformClient() {
             </div>
           </div>
         </div>
+      )}
+
+      {deleting && (
+        <DeleteOrganizationDialog
+          organization={deleting}
+          onClose={() => setDeleting(null)}
+          onDeleted={() => deleted(deleting)}
+        />
       )}
 
       <ModelSetting />

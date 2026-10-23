@@ -34,6 +34,22 @@ const nl = {
   edit: "Wijzigen",
   newLink: "Nieuwe link",
 
+  remove: {
+    title: (organization: string) => `${organization} verwijderen`,
+    irreversible: "Dit is definitief en kan niet ongedaan worden gemaakt. Alles van deze organisatie wordt verwijderd:",
+    what: [
+      "alle gebruikers: ze worden direct uitgelogd en kunnen niet meer inloggen; ook hun tweestapsverificatie en een open uitnodiging",
+      "alle facturen, imports en relaties, met hun PDF's",
+      "de instellingen, het inboxadres, wat xChange van correcties heeft geleerd, het verbruik en de kosten- en kwaliteitsgegevens",
+    ],
+    stripe:
+      "Een lopend abonnement moet eerst zijn opgezegd. De klant in Stripe blijft bestaan, met zijn betaalgeschiedenis voor de boekhouding.",
+    confirmLabel: (organization: string) => `Typ ter bevestiging de naam van de organisatie: ${organization}`,
+    confirm: "Definitief verwijderen",
+    deleted: (organization: string) => `${organization} is verwijderd.`,
+    failed: "Verwijderen mislukt.",
+  },
+
   model: {
     title: "Leesmodel en aanmelden",
     label: "Model dat de PDF's leest",
@@ -78,6 +94,22 @@ const en: typeof nl = {
   pending: (email: string | null) => `Open · ${email}`,
   edit: "Edit",
   newLink: "New link",
+
+  remove: {
+    title: (organization: string) => `Delete ${organization}`,
+    irreversible: "This is permanent and cannot be undone. Everything of this organisation is deleted:",
+    what: [
+      "all users: they are signed out at once and cannot sign in again; also their two-step verification and any open invitation",
+      "all invoices, imports and relations, with their PDFs",
+      "the settings, the inbox address, what xChange learned from corrections, the usage and the cost and quality records",
+    ],
+    stripe:
+      "A running subscription must be cancelled first. The customer in Stripe remains, with its payment history for the accounts.",
+    confirmLabel: (organization: string) => `To confirm, type the organisation's name: ${organization}`,
+    confirm: "Delete permanently",
+    deleted: (organization: string) => `${organization} has been deleted.`,
+    failed: "Deleting failed.",
+  },
 
   model: {
     title: "Reading model and sign-up",

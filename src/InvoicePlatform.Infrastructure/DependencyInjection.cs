@@ -92,6 +92,8 @@ public static class DependencyInjection
         services.AddSingleton<ILoginAttemptStore>(sp => sp.GetRequiredService<DynamoDbIdentityStore>());
         services.AddSingleton<IOrganizationSettingsStore>(sp => sp.GetRequiredService<DynamoDbIdentityStore>());
         services.AddSingleton<IPlatformStore, DynamoDbPlatformStore>();
+        // Deleting an organisation: its items in the identity table.
+        services.AddSingleton<IOrganizationIdentityDeletion, DynamoDbOrganizationIdentityDeletion>();
 
         services.AddSingleton<IPasswordHasher, BcryptPasswordHasher>();
         services.AddSingleton<IClock, SystemClock>();
@@ -134,7 +136,11 @@ public static class DependencyInjection
 
         services.AddSingleton<IAmazonS3>(_ => new AmazonS3Client());
         services.AddSingleton<IInvoiceRepository, DynamoDbInvoiceRepository>();
-        services.AddSingleton<IDocumentStore, S3DocumentStore>();
+        services.AddSingleton<S3DocumentStore>();
+        services.AddSingleton<IDocumentStore>(sp => sp.GetRequiredService<S3DocumentStore>());
+        // Deleting an organisation: its documents, and its items in the invoice table.
+        services.AddSingleton<IOrganizationDocumentDeletion>(sp => sp.GetRequiredService<S3DocumentStore>());
+        services.AddSingleton<IOrganizationRecordDeletion, DynamoDbOrganizationRecordDeletion>();
         services.AddSingleton<IRelationRepository, DynamoDbRelationRepository>();
         services.AddScoped<RelationService>();
         services.AddSingleton<ILearningStore, DynamoDbLearningStore>();
@@ -212,6 +218,10 @@ public static class DependencyInjection
         services.AddSingleton(sp => new BillingSettings(
             sp.GetRequiredService<Microsoft.Extensions.Options.IOptions<EmailOptions>>().Value.AppUrl.TrimEnd('/')));
         services.AddScoped<BillingService>();
+
+        // Deleting an organisation refuses while its subscription runs, so it
+        // is composed where the billing store is (and not in the Worker).
+        services.AddScoped<OrganizationDeletionService>();
 
         return services;
     }
