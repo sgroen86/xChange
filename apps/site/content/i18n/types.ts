@@ -176,10 +176,12 @@ export type Dictionary = {
     title: string;
     lead: string;
     trialNote: string;
+    signupCta: string;
+    pricingText: string;
+    pricingCta: string;
     loginText: string;
     loginCta: string;
-    contactText: string;
-    contactCta: string;
+    appLanguageNote: string;
   };
   login: {
     meta: PageMeta;

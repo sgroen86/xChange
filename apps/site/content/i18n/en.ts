@@ -391,16 +391,18 @@ export const en: Dictionary = {
   signup: {
     meta: {
       title: "Sign up",
-      description: "Registration for xChange opens soon.",
+      description: "Create your xChange account and start for free, or pick a plan straight away.",
     },
     eyebrow: "Sign up",
-    title: "Registration opens soon",
-    lead: "We are putting the finishing touches to self sign-up. Don't want to wait? Get in touch and we will set up your account for you.",
-    trialNote: "You will start with {n} free conversions, no card needed.",
+    title: "Create your account",
+    lead: "You create your account in the xChange app. You confirm your email address, set up two-step verification and can get started right away.",
+    trialNote: "You start with {n} free conversions, no card needed.",
+    signupCta: "Create account",
+    pricingText: "Rather start on a plan? Choose it on the pricing page; after confirming you go straight to payment.",
+    pricingCta: "See pricing",
     loginText: "Already have an account?",
     loginCta: "Log in",
-    contactText: "Want to start now, or have a question?",
-    contactCta: "Get in touch",
+    appLanguageNote: "The app is available in English and Dutch.",
   },
   login: {
     meta: {

@@ -11,7 +11,7 @@ import { pricing } from "../../../../content/pricing";
 import { fill } from "../../../../lib/format";
 import { resolveLang } from "../../../../lib/lang";
 import { pageMetadata } from "../../../../lib/metadata";
-import { href } from "../../../../lib/routes";
+import { appSignupHref, href } from "../../../../lib/routes";
 
 type Props = { params: Promise<{ lang: string; slug: string }> };
 
@@ -99,7 +99,7 @@ export default async function ArticlePage({ params }: Props) {
       <CtaBand
         title={t.cta.title}
         text={fill(t.cta.text, { n: pricing.trialConversions })}
-        primary={{ href: href(lang, "signup"), label: t.cta.button }}
+        primary={{ href: appSignupHref(lang), label: t.cta.button }}
         secondary={{ href: href(lang, "resources"), label: t.backToResources }}
       />
     </>

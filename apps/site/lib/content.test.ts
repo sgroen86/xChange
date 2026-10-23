@@ -8,7 +8,8 @@ import { langs } from "../content/langs.ts";
 import { legal } from "../content/legal/index.ts";
 import { pricePerConversionCents, pricing } from "../content/pricing.ts";
 import { fill, formatEuroCents } from "./format.ts";
-import { switchLang } from "./routes.ts";
+import { appUrl } from "./config.ts";
+import { appSignupHref, switchLang } from "./routes.ts";
 
 /**
  * Every leaf path of a value: object keys and array indices, so two
@@ -103,4 +104,13 @@ test("switching language keeps the page", () => {
   assert.equal(switchLang("/nl/resources/what-is-peppol", "en"), "/en/resources/what-is-peppol/");
   assert.equal(switchLang("/en", "nl"), "/nl/");
   assert.equal(switchLang("/", "fr"), "/fr/");
+});
+
+test("sign-up links go to the app, with the plan and an app language", () => {
+  assert.equal(appSignupHref("nl"), `${appUrl}/signup/?lang=nl`);
+  assert.equal(appSignupHref("en", "pro"), `${appUrl}/signup/?plan=pro&lang=en`);
+  assert.equal(appSignupHref("nl", "credits"), `${appUrl}/signup/?plan=credits&lang=nl`);
+  // The app has no French yet: French visitors get English.
+  assert.equal(appSignupHref("fr", "business"), `${appUrl}/signup/?plan=business&lang=en`);
+  for (const plan of pricing.plans) assert.match(appSignupHref("nl", plan.id), new RegExp(`[?&]plan=${plan.id}&`));
 });

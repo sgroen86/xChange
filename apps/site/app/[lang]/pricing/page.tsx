@@ -1,5 +1,4 @@
 import type { Metadata } from "next";
-import Link from "next/link";
 
 import { CtaBand } from "../../../components/CtaBand";
 import { FaqList } from "../../../components/FaqList";
@@ -10,7 +9,7 @@ import { pricePerConversionCents, pricing } from "../../../content/pricing";
 import { fill, formatEuroCents, formatNumber } from "../../../lib/format";
 import { resolveLang, type LangParams } from "../../../lib/lang";
 import { pageMetadata } from "../../../lib/metadata";
-import { href } from "../../../lib/routes";
+import { appSignupHref, href } from "../../../lib/routes";
 
 export async function generateMetadata({ params }: LangParams): Promise<Metadata> {
   const lang = await resolveLang(params);
@@ -26,7 +25,8 @@ export default async function PricingPage({ params }: LangParams) {
   const dict = getDictionary(lang);
   const t = dict.pricing;
   const n = pricing.trialConversions;
-  const signup = href(lang, "signup");
+  // Every button goes to sign-up in the app; with a plan, payment follows the confirmation.
+  const trialSignup = appSignupHref(lang);
 
   return (
     <>
@@ -55,12 +55,12 @@ export default async function PricingPage({ params }: LangParams) {
                   <Icon name="fileCheck" />
                   {fill(t.conversionsPerMonth, { n: formatNumber(plan.includedConversions, lang) })}
                 </p>
-                <Link
-                  href={signup}
+                <a
+                  href={appSignupHref(lang, plan.id)}
                   className={plan.highlighted ? "btn btn--primary btn--block" : "btn btn--secondary btn--block"}
                 >
                   {fill(t.choosePlan, { plan: plan.name })}
-                </Link>
+                </a>
               </li>
             ))}
           </ul>
@@ -83,9 +83,9 @@ export default async function PricingPage({ params }: LangParams) {
                 </li>
               ))}
             </ul>
-            <Link href={signup} className="btn btn--secondary">
+            <a href={appSignupHref(lang, "credits")} className="btn btn--secondary">
               {t.payg.cta}
-            </Link>
+            </a>
           </div>
 
           <ul className="price-notes">
@@ -133,7 +133,7 @@ export default async function PricingPage({ params }: LangParams) {
       <CtaBand
         title={dict.home.cta.title}
         text={fill(dict.home.cta.text, { n })}
-        primary={{ href: signup, label: t.trial.cta }}
+        primary={{ href: trialSignup, label: t.trial.cta }}
         secondary={{ href: href(lang, "faq"), label: dict.nav.faq }}
       />
     </>

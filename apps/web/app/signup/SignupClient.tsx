@@ -1,21 +1,32 @@
 "use client";
 
 import Link from "next/link";
+import { useSearchParams } from "next/navigation";
 import { useEffect, useState } from "react";
 
 import { Icon } from "../../components/Icon";
 import { ApiError } from "../../lib/api";
-import { useText } from "../../lib/i18n";
+import { currentLanguage, setLanguage, useLang, useText } from "../../lib/i18n";
 import { listCountries, signupStatus, startSignup, type CountryOption } from "../../lib/auth";
+import { formatMoney } from "../../lib/money";
+import { SIGNUP_PLANS, forgetPlan, parseLang, parsePlan, rememberPlan, type SignupPlan } from "../../lib/signupPlan";
 
 type State = { status: "loading" } | { status: "closed" } | { status: "open"; trial: number } | { status: "sent"; email: string };
 
 /**
  * Self sign-up: details in, a confirmation mail out. Nothing exists until the
  * link in that mail is opened. Closed until the platform administrator opens it.
+ *
+ * The website links here with ?plan=<id>&lang=<nl|en>. The chosen plan is
+ * shown and remembered in this browser, so Checkout can start for it once the
+ * account is confirmed (see lib/signupPlan.ts and the settings page).
  */
 export default function SignupClient() {
   const t = useText();
+  const searchParams = useSearchParams();
+  const urlLang = parseLang(searchParams.get("lang"));
+  const planId = parsePlan(searchParams.get("plan"));
+  const plan = planId ? SIGNUP_PLANS[planId] : null;
   const [state, setState] = useState<State>({ status: "loading" });
   const [countries, setCountries] = useState<CountryOption[]>([]);
   const [form, setForm] = useState({ name: "", email: "", password: "", organizationName: "", countryCode: "NL" });
@@ -33,6 +44,24 @@ export default function SignupClient() {
       cancelled = true;
     };
   }, []);
+
+  // The website's language, when the app has it (French visitors get English).
+  useEffect(() => {
+    if (urlLang && urlLang !== currentLanguage()) setLanguage(urlLang);
+  }, [urlLang]);
+
+  // Arriving without a plan means the trial, also after an earlier choice.
+  useEffect(() => {
+    if (planId) rememberPlan(planId);
+    else forgetPlan();
+  }, [planId]);
+
+  const startWithTrial = () => {
+    const params = new URLSearchParams(searchParams.toString());
+    params.delete("plan");
+    const query = params.toString();
+    window.history.replaceState(null, "", `${window.location.pathname}${query ? `?${query}` : ""}`);
+  };
 
   const set = (key: keyof typeof form) => (event: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) =>
     setForm((current) => ({ ...current, [key]: event.target.value }));
@@ -60,7 +89,7 @@ export default function SignupClient() {
             <Icon name="user" /> {t.auth.signup.title}
           </h1>
           <p className="page-header__subtitle">
-            {state.status === "open" ? t.auth.signup.trial(state.trial) : "xChange"}
+            {state.status !== "open" ? "xChange" : plan ? t.auth.signup.withPlan : t.auth.signup.trial(state.trial)}
           </p>
         </div>
       </div>
@@ -99,6 +128,7 @@ export default function SignupClient() {
       {state.status === "open" && (
         <div className="card">
           <div className="card__body">
+            {plan && <ChosenPlan plan={plan} onRemove={startWithTrial} />}
             <form className="form" onSubmit={submit}>
               <div className="form-group">
                 <label className="form-label" htmlFor="name">{t.auth.fields.yourName}</label>
@@ -156,6 +186,32 @@ export default function SignupClient() {
           </div>
         </div>
       )}
+    </div>
+  );
+}
+
+function ChosenPlan({ plan, onRemove }: { plan: SignupPlan; onRemove: () => void }) {
+  const t = useText();
+  const s = t.auth.signup;
+  const b = t.settings.billing;
+  const lang = useLang();
+  const count = plan.conversions.toLocaleString(lang === "en" ? "en-GB" : "nl-NL");
+
+  return (
+    <div className="stat-card" style={{ marginBottom: "var(--space-5)", borderColor: "var(--color-primary)" }}>
+      <div className="stat-card__label">{plan.oneOff ? s.chosenCredits : s.chosenPlan}</div>
+      <div className="stat-card__value">{plan.name ?? s.creditsName(plan.conversions)}</div>
+      <p className="text-sm" style={{ margin: "var(--space-2) 0" }}>
+        <strong>{formatMoney(plan.amount, plan.currency, lang)}</strong> {plan.oneOff ? b.oneOff : b.perMonth}
+        {" · "}
+        {plan.oneOff ? s.creditsNeverExpire : b.conversionsPerMonth(count)}
+      </p>
+      <div className="form-help">
+        <Icon name="info" /> {s.payNext}
+      </div>
+      <button type="button" className="btn btn--ghost btn--sm" style={{ marginTop: "var(--space-3)" }} onClick={onRemove}>
+        <Icon name="x" /> {s.useTrial}
+      </button>
     </div>
   );
 }

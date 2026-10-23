@@ -7,7 +7,7 @@ import { useState } from "react";
 import type { Dictionary } from "../content/i18n/types";
 import type { Lang } from "../content/langs";
 import { appUrl } from "../lib/config";
-import { href } from "../lib/routes";
+import { appSignupHref, href } from "../lib/routes";
 import { Icon } from "./Icon";
 import { LanguageSwitcher } from "./LanguageSwitcher";
 import { Logo } from "./Logo";
@@ -65,9 +65,9 @@ export function SiteHeader({ lang, nav }: { lang: Lang; nav: Dictionary["nav"] }
             <a href={appUrl} className="btn btn--ghost">
               {nav.login}
             </a>
-            <Link href={href(lang, "signup")} className="btn btn--primary" onClick={close}>
+            <a href={appSignupHref(lang)} className="btn btn--primary" onClick={close}>
               {nav.signup}
-            </Link>
+            </a>
           </div>
         </div>
       </div>

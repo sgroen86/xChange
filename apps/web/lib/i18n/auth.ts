@@ -38,6 +38,14 @@ const nl = {
     sentTo: "We hebben een e-mail gestuurd naar",
     sentNext: "Open de link daarin om je account te activeren; hij is 24 uur geldig. Geen mail gezien? Kijk ook in je spammap.",
     haveAccount: "Al een account?",
+    withPlan: "Maak je account aan; direct daarna reken je je keuze af.",
+    chosenPlan: "Gekozen abonnement",
+    chosenCredits: "Gekozen tegoed",
+    creditsName: (conversions: number) => `${conversions} conversies`,
+    creditsNeverExpire: "Vervallen nooit",
+    payNext:
+      "Na het bevestigen van je e-mailadres en het instellen van tweestapsverificatie ga je meteen door naar de betaling. Open de bevestigingslink in deze browser; anders begin je met de gratis proefperiode en kies je je abonnement onder Instellingen.",
+    useTrial: "Liever eerst de gratis proefperiode",
   },
   confirm: {
     title: "Account activeren",
@@ -86,6 +94,14 @@ const en: typeof nl = {
     sentTo: "We have sent an email to",
     sentNext: "Open the link in it to activate your account; it is valid for 24 hours. No email? Check your spam folder too.",
     haveAccount: "Already have an account?",
+    withPlan: "Create your account; you pay for your choice right after.",
+    chosenPlan: "Chosen plan",
+    chosenCredits: "Chosen credits",
+    creditsName: (conversions: number) => `${conversions} ${conversions === 1 ? "conversion" : "conversions"}`,
+    creditsNeverExpire: "Never expire",
+    payNext:
+      "You'll go to payment right after confirming your email address and setting up two-step verification. Open the confirmation link in this browser; otherwise you start on the free trial and choose your plan under Settings.",
+    useTrial: "Start with the free trial instead",
   },
   confirm: {
     title: "Activate account",

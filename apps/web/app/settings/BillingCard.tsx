@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 
 import { Icon } from "../../components/Icon";
 import { useToast } from "../../components/Toast";
@@ -16,6 +16,7 @@ import {
 } from "../../lib/billing";
 import { text, useLang, useText } from "../../lib/i18n";
 import { formatMoney } from "../../lib/money";
+import { checkoutPurchase, forgetPlan, parsePlan } from "../../lib/signupPlan";
 
 /** After returning from Stripe: how often, and how long, to look for the webhook's result. */
 const POLL_EVERY_MS = 4000;
@@ -26,6 +27,9 @@ const POLL_TIMES = 8;
  * plan, buying credits and managing the subscription, for an admin. Payment
  * happens at Stripe. Coming back from there proves nothing - only Stripe's
  * webhook changes the plan - so after a payment this polls for a short while.
+ *
+ * Right after sign-up with a plan chosen on the website, the confirmation
+ * sends the new admin here with ?checkout=<plan>, and Checkout starts for it.
  */
 export function BillingCard({ canEdit }: { canEdit: boolean }) {
   const t = useText();
@@ -39,6 +43,9 @@ export function BillingCard({ canEdit }: { canEdit: boolean }) {
   const [plansFailed, setPlansFailed] = useState(false);
   const [busy, setBusy] = useState<string | null>(null);
   const [waiting, setWaiting] = useState(false);
+  const [autoCheckout, setAutoCheckout] = useState<{ going: true } | { going: false; error: string } | null>(null);
+  // Starts once; React's development double-run must not open two checkouts.
+  const autoStarted = useRef(false);
 
   useEffect(() => {
     if (!isApiConfigured) return;
@@ -99,11 +106,43 @@ export function BillingCard({ canEdit }: { canEdit: boolean }) {
     };
   }, [showToast]);
 
+  // Just signed up with a plan chosen on the website: straight on to Checkout.
+  // Read from the URL once, then removed from it, as is the remembered choice.
+  useEffect(() => {
+    if (!isApiConfigured || !canEdit || autoStarted.current) return;
+    const params = new URLSearchParams(window.location.search);
+    if (!params.has("checkout")) return;
+    autoStarted.current = true;
+
+    const plan = parsePlan(params.get("checkout"));
+    params.delete("checkout");
+    const query = params.toString();
+    window.history.replaceState(null, "", `${window.location.pathname}${query ? `?${query}` : ""}#billing`);
+    forgetPlan();
+    if (!plan) return;
+
+    getBilling()
+      .then((loaded) => {
+        // A running plan is changed in the portal, not with a second Checkout.
+        if (plan !== "credits" && loaded.plan !== null) return;
+        setAutoCheckout({ going: true });
+        setBusy(plan);
+        return startCheckout(checkoutPurchase(plan));
+      })
+      .catch((cause: unknown) => {
+        setBusy(null);
+        setAutoCheckout({ going: false, error: cause instanceof Error ? cause.message : text().common.apiStatus(0) });
+      });
+  }, [canEdit]);
+
   // Back from Stripe with the browser's back button: the page may come from
   // the back-forward cache with its buttons still waiting for the redirect.
   useEffect(() => {
     const restore = (event: PageTransitionEvent) => {
-      if (event.persisted) setBusy(null);
+      if (event.persisted) {
+        setBusy(null);
+        setAutoCheckout(null);
+      }
     };
     window.addEventListener("pageshow", restore);
     return () => window.removeEventListener("pageshow", restore);
@@ -148,6 +187,16 @@ export function BillingCard({ canEdit }: { canEdit: boolean }) {
         </span>
       </div>
       <div className="card__body">
+        {autoCheckout && (
+          <div
+            className={`alert ${autoCheckout.going ? "alert--info" : "alert--danger"}`}
+            style={{ marginBottom: "var(--space-4)" }}
+          >
+            <Icon name={autoCheckout.going ? "clock" : "x"} />
+            <div>{autoCheckout.going ? b.toPayment : b.toPaymentFailed(autoCheckout.error)}</div>
+          </div>
+        )}
+
         {waiting && (
           <div className="alert alert--info" style={{ marginBottom: "var(--space-4)" }}>
             <Icon name="clock" />

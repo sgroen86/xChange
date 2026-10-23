@@ -22,10 +22,18 @@ export function CtaBand({
             <p>{text}</p>
           </div>
           <div className="cta-band__actions">
-            <Link href={primary.href} className="btn btn--primary btn--lg">
-              {primary.label}
-              <Icon name="arrowRight" />
-            </Link>
+            {/* Sign-up lives in the app, on another origin: a plain link. */}
+            {/^https?:\/\//.test(primary.href) ? (
+              <a href={primary.href} className="btn btn--primary btn--lg">
+                {primary.label}
+                <Icon name="arrowRight" />
+              </a>
+            ) : (
+              <Link href={primary.href} className="btn btn--primary btn--lg">
+                {primary.label}
+                <Icon name="arrowRight" />
+              </Link>
+            )}
             {secondary && (
               <Link href={secondary.href} className="btn btn--secondary btn--lg">
                 {secondary.label}

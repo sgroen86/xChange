@@ -391,16 +391,18 @@ export const nl: Dictionary = {
   signup: {
     meta: {
       title: "Aanmelden",
-      description: "Registratie voor xChange opent binnenkort.",
+      description: "Maak je xChange-account aan en begin gratis, of kies meteen een abonnement.",
     },
     eyebrow: "Aanmelden",
-    title: "Registratie opent binnenkort",
-    lead: "We leggen de laatste hand aan het zelf aanmaken van een account. Wil je niet wachten? Neem contact op, dan zetten we je account voor je klaar.",
-    trialNote: "Straks begin je met {n} gratis conversies, zonder creditcard.",
+    title: "Maak je account aan",
+    lead: "Je account maak je aan in de xChange-app. Je bevestigt je e-mailadres, stelt tweestapsverificatie in en kunt meteen aan de slag.",
+    trialNote: "Je begint met {n} gratis conversies, zonder creditcard.",
+    signupCta: "Account aanmaken",
+    pricingText: "Liever meteen een abonnement? Kies het op de prijspagina; na het bevestigen ga je direct door naar de betaling.",
+    pricingCta: "Bekijk de prijzen",
     loginText: "Heb je al een account?",
     loginCta: "Inloggen",
-    contactText: "Meteen beginnen of een vraag?",
-    contactCta: "Neem contact op",
+    appLanguageNote: "De app is beschikbaar in het Nederlands en het Engels.",
   },
   login: {
     meta: {

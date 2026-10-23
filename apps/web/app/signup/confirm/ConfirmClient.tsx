@@ -10,11 +10,22 @@ import { useToast } from "../../../components/Toast";
 import { ApiError } from "../../../lib/api";
 import { text, useText } from "../../../lib/i18n";
 import { confirmSignup, type Session } from "../../../lib/auth";
+import { rememberedPlan } from "../../../lib/signupPlan";
+
+/**
+ * Where a new admin goes once signed in: to the upload page, or - with a plan
+ * chosen on the website and remembered in this browser - to the settings page,
+ * which starts Checkout for it.
+ */
+function landing(): string {
+  const plan = rememberedPlan();
+  return plan ? `/settings/?checkout=${plan}` : "/upload";
+}
 
 /**
  * Opens the confirmation link: the organisation and the account are created.
  * The new user is its Admin, for whom two-step verification is mandatory, so
- * they set it up here before they are signed in and sent to the upload page.
+ * they set it up here before they are signed in and sent on (see landing()).
  */
 export default function ConfirmClient() {
   const router = useRouter();
@@ -34,7 +45,7 @@ export default function ConfirmClient() {
       .then((result) => {
         if (result.kind === "session") {
           showToast(text().auth.confirm.welcome(result.session.user.name), "success");
-          router.replace("/upload");
+          router.replace(landing());
         } else {
           setMfaStep(result);
         }
@@ -51,7 +62,7 @@ export default function ConfirmClient() {
         account=""
         onSignedIn={(session: Session) => {
           showToast(text().auth.confirm.welcome(session.user.name), "success");
-          router.replace("/upload");
+          router.replace(landing());
         }}
         // The account exists now; what remains is an ordinary login.
         onRestart={() => router.replace("/login")}

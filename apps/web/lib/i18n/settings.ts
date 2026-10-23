@@ -119,6 +119,8 @@ const nl = {
     redirecting: "Doorsturen naar Stripe…",
     paymentReceived: "Betaling ontvangen. Je abonnement wordt binnen een minuut bijgewerkt.",
     paymentCancelled: "Betalen afgebroken. Er is niets veranderd.",
+    toPayment: "Je wordt doorgestuurd naar de betaling…",
+    toPaymentFailed: (message: string) => `De betaling kon niet worden gestart: ${message} Kies hieronder opnieuw.`,
   },
 };
 
@@ -241,6 +243,8 @@ const en: typeof nl = {
     redirecting: "Taking you to Stripe…",
     paymentReceived: "Payment received. Your plan updates within a minute.",
     paymentCancelled: "Payment cancelled. Nothing has changed.",
+    toPayment: "Taking you to payment…",
+    toPaymentFailed: (message: string) => `Payment could not be started: ${message} Please choose again below.`,
   },
 };
 

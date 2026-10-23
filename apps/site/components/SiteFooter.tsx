@@ -4,7 +4,7 @@ import { company } from "../content/company";
 import type { Dictionary } from "../content/i18n/types";
 import type { Lang } from "../content/langs";
 import { appUrl } from "../lib/config";
-import { href } from "../lib/routes";
+import { appSignupHref, href } from "../lib/routes";
 import { LanguageSwitcher } from "./LanguageSwitcher";
 import { Logo } from "./Logo";
 
@@ -35,7 +35,7 @@ export function SiteFooter({ lang, dict }: { lang: Lang; dict: Dictionary }) {
             <li><Link href={href(lang, "contact")}>{footer.contact}</Link></li>
             <li><a href={`mailto:${company.contactEmail}`}>{company.contactEmail}</a></li>
             <li><a href={appUrl}>{nav.login}</a></li>
-            <li><Link href={href(lang, "signup")}>{nav.signup}</Link></li>
+            <li><a href={appSignupHref(lang)}>{nav.signup}</a></li>
           </ul>
         </nav>
 

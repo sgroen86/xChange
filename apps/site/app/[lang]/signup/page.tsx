@@ -8,9 +8,12 @@ import { appUrl } from "../../../lib/config";
 import { fill } from "../../../lib/format";
 import { resolveLang, type LangParams } from "../../../lib/lang";
 import { pageMetadata } from "../../../lib/metadata";
-import { href } from "../../../lib/routes";
+import { appSignupHref, href } from "../../../lib/routes";
 
-/* Self sign-up is being built separately; until then this page says so. */
+/*
+ * Sign-up itself happens in the app; the site's buttons link there directly.
+ * This page stays for old links and explains where to go.
+ */
 
 export async function generateMetadata({ params }: LangParams): Promise<Metadata> {
   const lang = await resolveLang(params);
@@ -32,11 +35,15 @@ export default async function SignupPage({ params }: LangParams) {
             <Icon name="sparkles" />
             {fill(t.trialNote, { n: pricing.trialConversions })}
           </p>
+          <a href={appSignupHref(lang)} className="btn btn--primary btn--lg">
+            {t.signupCta}
+            <Icon name="arrowRight" />
+          </a>
           <div className="focus-card__rows">
             <div className="focus-card__row">
-              <span>{t.contactText}</span>
-              <Link href={href(lang, "contact")} className="btn btn--primary">
-                {t.contactCta}
+              <span>{t.pricingText}</span>
+              <Link href={href(lang, "pricing")} className="btn btn--secondary">
+                {t.pricingCta}
               </Link>
             </div>
             <div className="focus-card__row">
@@ -46,6 +53,7 @@ export default async function SignupPage({ params }: LangParams) {
               </a>
             </div>
           </div>
+          <p className="focus-card__alt">{t.appLanguageNote}</p>
         </div>
       </div>
     </section>

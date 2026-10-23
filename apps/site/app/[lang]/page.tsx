@@ -9,7 +9,7 @@ import { pricing } from "../../content/pricing";
 import { fill } from "../../lib/format";
 import { resolveLang, type LangParams } from "../../lib/lang";
 import { pageMetadata } from "../../lib/metadata";
-import { href } from "../../lib/routes";
+import { appSignupHref, href } from "../../lib/routes";
 
 export async function generateMetadata({ params }: LangParams): Promise<Metadata> {
   const lang = await resolveLang(params);
@@ -31,10 +31,10 @@ export default async function HomePage({ params }: LangParams) {
             <h1>{home.hero.title}</h1>
             <p className="lead">{home.hero.lead}</p>
             <div className="hero__actions">
-              <Link href={href(lang, "signup")} className="btn btn--primary btn--lg">
+              <a href={appSignupHref(lang)} className="btn btn--primary btn--lg">
                 {home.hero.primaryCta}
                 <Icon name="arrowRight" />
-              </Link>
+              </a>
               <Link href="#how-it-works" className="btn btn--secondary btn--lg">
                 {home.hero.secondaryCta}
               </Link>
@@ -165,7 +165,7 @@ export default async function HomePage({ params }: LangParams) {
       <CtaBand
         title={home.cta.title}
         text={fill(home.cta.text, { n })}
-        primary={{ href: href(lang, "signup"), label: home.cta.primary }}
+        primary={{ href: appSignupHref(lang), label: home.cta.primary }}
         secondary={{ href: href(lang, "pricing"), label: home.cta.secondary }}
       />
     </>

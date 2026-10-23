@@ -1,12 +1,11 @@
 import type { Metadata } from "next";
-import Link from "next/link";
 
 import { Icon } from "../../../components/Icon";
 import { getDictionary } from "../../../content/i18n";
 import { appUrl } from "../../../lib/config";
 import { resolveLang, type LangParams } from "../../../lib/lang";
 import { pageMetadata } from "../../../lib/metadata";
-import { href } from "../../../lib/routes";
+import { appSignupHref } from "../../../lib/routes";
 
 /* The login itself lives in the app (NEXT_PUBLIC_APP_URL); this page points there. */
 
@@ -33,7 +32,7 @@ export default async function LoginPage({ params }: LangParams) {
             <Icon name="arrowRight" />
           </a>
           <p className="focus-card__alt">
-            {t.noAccount} <Link href={href(lang, "signup")}>{t.signupCta}</Link>
+            {t.noAccount} <a href={appSignupHref(lang)}>{t.signupCta}</a>
           </p>
         </div>
       </div>
