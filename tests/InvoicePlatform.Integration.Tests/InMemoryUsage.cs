@@ -53,7 +53,7 @@ public sealed class InMemoryUsage : IUsageMeter, IBillingStore
         lock (_orgs)
         {
             var a = Get(organizationId);
-            return Task.FromResult(new UsageSummary(a.Used, a.Limit, a.TrialPlan && !a.PaidOnce));
+            return Task.FromResult(new UsageSummary(a.Used, a.Limit, a.TrialPlan && !a.PaidOnce, a.SubscribedOnce));
         }
     }
 

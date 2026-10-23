@@ -248,8 +248,10 @@ export interface Usage {
   /** Null: no limit. */
   limit: number | null;
   remaining: number | null;
-  /** On a trial: everything can be checked, but downloading needs a plan. */
+  /** On the trial and never paid; for showing the trial only. */
   trial: boolean;
+  /** May download (and later send) e-invoices: a running plan, credits left, or no limit. */
+  canExport: boolean;
 }
 
 export function getUsage(): Promise<Usage> {

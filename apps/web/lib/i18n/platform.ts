@@ -56,7 +56,7 @@ const nl = {
     configDefault: "Standaard uit de configuratie",
     saved: "Instellingen opgeslagen.",
     help: "Geldt voor alle organisaties, voor elke volgende upload en import. Het aantal tokens per factuur staat in de logboeken, zodat het effect op de kosten te meten is.",
-    signupOpen: "Zelf aanmelden open (nieuwe organisaties krijgen een proefperiode)",
+    signupOpen: "Zelf aanmelden open (nieuwe organisaties krijgen 1 gratis conversie)",
     signupHelp: "Pas openzetten bij de lancering: tot dan kan niemand zelf een account aanmaken.",
   },
 };
@@ -117,7 +117,7 @@ const en: typeof nl = {
     configDefault: "Default from configuration",
     saved: "Settings saved.",
     help: "Applies to all organisations, for every upload and import from now on. The token count per invoice is in the logs, so the effect on cost can be measured.",
-    signupOpen: "Self sign-up open (new organisations get a trial)",
+    signupOpen: "Self sign-up open (new organisations get 1 free conversion)",
     signupHelp: "Only open this at launch: until then nobody can create an account themselves.",
   },
 };

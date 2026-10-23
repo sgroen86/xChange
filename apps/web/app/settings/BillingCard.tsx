@@ -248,6 +248,8 @@ export function BillingCard({ canEdit }: { canEdit: boolean }) {
           </div>
         )}
 
+        {!status.canExport && <p className="text-soft text-sm" style={{ marginTop: "var(--space-4)" }}>{b.downloadNeedsPlan}</p>}
+
         {plans && (
           <>
             <h4 style={{ marginTop: "var(--space-5)", marginBottom: "var(--space-3)" }}>{b.choosePlan}</h4>

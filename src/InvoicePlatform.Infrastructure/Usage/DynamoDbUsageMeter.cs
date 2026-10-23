@@ -148,9 +148,10 @@ internal sealed class DynamoDbUsageMeter(IAmazonDynamoDB dynamo, IOptions<Invoic
         var used = AllowanceItem.Int(item, "used") ?? 0;
         var limit = AllowanceItem.Int(item, "limit");
 
-        // Paying once - a subscription or a credit pack - ends the trial for good.
+        // Paying once - a subscription or a credit pack - ends showing the trial.
+        // It grants nothing by itself: downloading is ExportEntitlement's call.
         var trial = item.TryGetValue("plan", out var p) && p.S == "trial" && !AllowanceItem.Bool(item, "paidOnce");
-        return new UsageSummary(used, limit, trial);
+        return new UsageSummary(used, limit, trial, AllowanceItem.Bool(item, "subscribedOnce"));
     }
 
     public Task SetLimitAsync(string organizationId, int? limit, bool trial = false, CancellationToken cancellationToken = default)
@@ -203,7 +204,7 @@ internal sealed class DynamoDbUsageMeter(IAmazonDynamoDB dynamo, IOptions<Invoic
 ///     used, limit, plan="trial"           the trial or limit; no limit: unlimited
 ///     periodAllowance, periodUsed          the subscription's conversions this period
 ///     credits                              purchased credits left
-///     subscribedOnce, paidOnce             ever subscribed / ever paid (ends unlimited / the trial)
+///     subscribedOnce, paidOnce             ever subscribed / ever paid (ends unlimited / showing the trial)
 ///     stripeCustomerId, stripeSubscriptionId, subscriptionPlan, subscriptionStatus,
 ///     periodStart, periodEnd, periodResetFrom, cancelAtPeriodEnd, subscriptionEventAt
 ///

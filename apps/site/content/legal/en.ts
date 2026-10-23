@@ -181,7 +181,8 @@ export const legalEn: LegalContent = {
       {
         heading: "Free trial",
         paragraphs: [
-          "New Customers can try the Service with 10 free Conversions. No payment card is needed and there is no obligation to continue.",
+          "New Customers can try the Service with 1 free Conversion. No payment card is needed and there is no obligation to continue.",
+          "Downloading the e-invoice file (and, once available, sending it) requires a running Plan or purchased Credits. When your Plan has ended and your Credits are used up, downloading stops.",
           "We may end or change the trial conditions for new sign-ups.",
         ],
       },

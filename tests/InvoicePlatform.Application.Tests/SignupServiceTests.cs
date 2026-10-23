@@ -67,7 +67,7 @@ public class SignupServiceTests
         Assert.Equal(UserRole.Admin, (await _identity.FindByEmailAsync("anna@bakkerij.be"))!.Role);
         var organization = Assert.Single(await _platform.ListOrganizationsAsync());
         Assert.Equal(("Bakkerij Peeters", "BE"), (organization.Name, organization.CountryCode));
-        Assert.Equal(new UsageSummary(0, SignupService.TrialConversions, Trial: true), await _usage.GetAsync(organization.OrganizationId));
+        Assert.Equal(new UsageSummary(0, 1, Trial: true), await _usage.GetAsync(organization.OrganizationId));
     }
 
     [Fact]
@@ -156,7 +156,8 @@ public class SignupServiceTests
         Assert.Equal("Confirm your xChange sign-up", mail.Subject);
         Assert.StartsWith("Hello Anna Peeters,", mail.Body, StringComparison.Ordinal);
         Assert.Contains("for Bakkerij Peeters", mail.Body, StringComparison.Ordinal);
-        Assert.Contains("You get 10 free conversions", mail.Body, StringComparison.Ordinal);
+        Assert.Contains("You get 1 free conversion to try xChange.", mail.Body, StringComparison.Ordinal);
+        Assert.Contains("Downloading the e-invoice requires a plan or purchased credits.", mail.Body, StringComparison.Ordinal);
         Assert.Contains("https://app.example.test/signup/confirm/?code=", mail.Body, StringComparison.Ordinal);
         Assert.DoesNotContain("Bevestig", mail.Body, StringComparison.Ordinal);
 

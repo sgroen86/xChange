@@ -282,7 +282,11 @@ public sealed class BillingService(
 }
 
 /// <summary>What the settings page shows.</summary>
-public sealed record BillingStatus(BillingAccount Account, UsageSummary Usage);
+public sealed record BillingStatus(BillingAccount Account, UsageSummary Usage)
+{
+    /// <summary>May download (and later send) e-invoices; see <see cref="ExportEntitlement"/>.</summary>
+    public bool CanExport => ExportEntitlement.Allows(Account, Usage);
+}
 
 public sealed record OfferedPlan(BillingPlan Plan, BillingPrice? Price);
 

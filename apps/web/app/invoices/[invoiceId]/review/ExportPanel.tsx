@@ -18,8 +18,8 @@ interface Props {
   defaultNote: string | null;
   /** Set when the buyer is on a network and does not accept the chosen format. */
   receiverWarning: string | null;
-  /** On a trial: everything is checked, but the file cannot be downloaded. */
-  trial: boolean;
+  /** False without a running plan or credits: everything is checked, but the file cannot be downloaded. */
+  canExport: boolean;
   /** Numbers the server cannot read yet; they come before anything else. */
   localIssues: LocalIssue[];
   violations: RuleViolation[];
@@ -46,8 +46,8 @@ export function ExportPanel(props: Props) {
   const t = useText();
   const text = t.review.export;
 
-  const blockedReason = props.trial
-    ? text.blockedTrial
+  const blockedReason = !props.canExport
+    ? text.blockedNoPlan
     : ruleset
     ? !props.apiConfigured
       ? text.blockedNoApi
@@ -102,7 +102,7 @@ export function ExportPanel(props: Props) {
         {blockedReason && (
           <p className="text-soft text-sm">
             {blockedReason}
-            {props.trial && (
+            {!props.canExport && (
               <>
                 {" "}
                 <Link href="/settings/#billing">{text.choosePlan}</Link>

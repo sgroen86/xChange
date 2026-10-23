@@ -26,8 +26,10 @@ export interface BillingStatus {
   periodUsed: number;
   /** Purchased credits left; used after the month's conversions, never expire. */
   credits: number;
-  /** On the trial and never paid: downloading needs a plan or credits. */
+  /** On the trial and never paid; for showing the trial. Downloading is `canExport`. */
   trial: boolean;
+  /** May download (and later send) e-invoices: a running plan, credits left, or no limit. */
+  canExport: boolean;
   /** The trial's conversions (or a set limit); null: no limit. */
   baseLimit: number | null;
   baseUsed: number;

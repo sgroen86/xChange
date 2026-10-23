@@ -25,8 +25,8 @@ public interface IUsageMeter
 
     /// <param name="limit">Null removes the limit.</param>
     /// <param name="trial">
-    /// A trial may read and check invoices but not take the result away:
-    /// downloading (and later sending) needs a plan or purchased credits.
+    /// Marks the limit as the sign-up trial, for showing it. Downloading (and
+    /// later sending) is decided by <see cref="Billing.ExportEntitlement"/>.
     /// </param>
     Task SetLimitAsync(string organizationId, int? limit, bool trial = false, CancellationToken cancellationToken = default);
 }
@@ -46,10 +46,17 @@ public enum ConversionBucket
 
 /// <param name="Used">Conversions counted against the trial or limit (or in total, without a limit).</param>
 /// <param name="Limit">Null: no limit.</param>
-/// <param name="Trial">On a trial and never paid: no downloading or sending.</param>
-public sealed record UsageSummary(int Used, int? Limit, bool Trial = false)
+/// <param name="Trial">
+/// On a trial and never paid. For showing the trial only: whether the
+/// organisation may download is <see cref="Billing.ExportEntitlement"/>'s call.
+/// </param>
+/// <param name="SubscribedOnce">Ever had a plan; ends "no limit" for good, as in <see cref="ConversionRules"/>.</param>
+public sealed record UsageSummary(int Used, int? Limit, bool Trial = false, bool SubscribedOnce = false)
 {
     public int? Remaining => Limit is { } limit ? Math.Max(0, limit - Used) : null;
+
+    /// <summary>No limit and never subscribed: the platform's own organisations and those its administrator created.</summary>
+    public bool Unlimited => Limit is null && !SubscribedOnce;
 }
 
 /// <summary>

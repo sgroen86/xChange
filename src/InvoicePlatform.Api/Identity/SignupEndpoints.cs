@@ -1,6 +1,6 @@
 using System.Text.Json.Serialization;
+using InvoicePlatform.Application.Billing;
 using InvoicePlatform.Application.Identity;
-using InvoicePlatform.Application.Usage;
 
 namespace InvoicePlatform.Api.Identity;
 
@@ -72,10 +72,18 @@ public static class SignupEndpoints
             : Results.Problem(detail: result.Error, title: IdentityApiText.Current.AccountNotCreated, statusCode: StatusCodes.Status400BadRequest);
     }
 
-    private static async Task<IResult> UsageAsync(HttpContext context, IUsageMeter usage, CancellationToken cancellationToken)
+    private static async Task<IResult> UsageAsync(HttpContext context, BillingService billing, CancellationToken cancellationToken)
     {
         var user = context.GetAuthenticatedUser()!;
-        var summary = await usage.GetAsync(user.OrganizationId, cancellationToken).ConfigureAwait(false);
-        return Results.Ok(new { used = summary.Used, limit = summary.Limit, remaining = summary.Remaining, trial = summary.Trial });
+        var status = await billing.GetStatusAsync(user.OrganizationId, cancellationToken).ConfigureAwait(false);
+        var summary = status.Usage;
+        return Results.Ok(new
+        {
+            used = summary.Used,
+            limit = summary.Limit,
+            remaining = summary.Remaining,
+            trial = summary.Trial,
+            canExport = status.CanExport,
+        });
     }
 }

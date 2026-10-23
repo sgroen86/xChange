@@ -51,7 +51,7 @@ export const nl: Dictionary = {
       lead: "Je maakt je facturen al. xChange leest je PDF, laat je alles controleren en levert een PEPPOL BIS 3.0- of NLCIUS-bestand dat de officiële validatieregels doorstaat — zonder nieuw boekhoudpakket.",
       primaryCta: "Gratis proberen",
       secondaryCta: "Zo werkt het",
-      note: "{n} gratis conversies, geen creditcard nodig.",
+      note: "{n} gratis conversie, geen creditcard nodig. Downloaden met een abonnement of tegoed.",
     },
     mock: {
       label: "Voorbeeld: een PDF-factuur die xChange omzet naar een gevalideerde e-factuur",
@@ -208,7 +208,7 @@ export const nl: Dictionary = {
     },
     cta: {
       title: "Probeer het met je eigen facturen",
-      text: "{n} gratis conversies, geen creditcard nodig. Je ziet meteen of je klant e-facturen kan ontvangen.",
+      text: "{n} gratis conversie, geen creditcard nodig. Je ziet meteen of je klant e-facturen kan ontvangen. De e-factuur downloaden doe je met een abonnement of tegoed.",
       primary: "Gratis proberen",
       secondary: "Bekijk de prijzen",
     },
@@ -217,7 +217,7 @@ export const nl: Dictionary = {
     meta: {
       title: "Prijzen",
       description:
-        "Abonnementen met inbegrepen conversies, of betaal per conversie met tegoed. Start met {n} gratis conversies, zonder creditcard.",
+        "Abonnementen met inbegrepen conversies, of betaal per conversie met tegoed. Probeer {n} conversie gratis, zonder creditcard.",
     },
     eyebrow: "Prijzen",
     title: "Eenvoudige prijzen, per factuur",
@@ -233,7 +233,7 @@ export const nl: Dictionary = {
     },
     trial: {
       title: "Gratis proberen",
-      text: "Begin met {n} gratis conversies. Geen creditcard, geen verplichtingen.",
+      text: "Begin met {n} gratis conversie en controleer het resultaat. Geen creditcard, geen verplichtingen. De e-factuur downloaden kan met een abonnement of tegoed.",
       cta: "Gratis proberen",
     },
     payg: {
@@ -274,8 +274,8 @@ export const nl: Dictionary = {
           a: "Eén PDF die door xChange wordt gelezen en omgezet in een factuur. Corrigeren en opnieuw exporteren in een ander formaat telt niet opnieuw.",
         },
         {
-          q: "Heb ik een creditcard nodig voor de proefperiode?",
-          a: "Nee. Je krijgt {n} gratis conversies zonder betaalgegevens. Je betaalt pas als je een abonnement of tegoed kiest.",
+          q: "Heb ik een creditcard nodig om te proberen?",
+          a: "Nee. Je krijgt {n} gratis conversie zonder betaalgegevens en kunt het resultaat volledig controleren. Om de e-factuur te downloaden kies je een abonnement of koop je tegoed.",
         },
         {
           q: "Kan ik van abonnement wisselen of opzeggen?",
@@ -303,7 +303,7 @@ export const nl: Dictionary = {
     breadcrumb: "Kruimelpad",
     cta: {
       title: "Zelf aan de slag?",
-      text: "Zet je eerste PDF-facturen gratis om en zie meteen of je klant e-facturen kan ontvangen.",
+      text: "Zet je eerste PDF-factuur gratis om en zie meteen of je klant e-facturen kan ontvangen.",
       button: "Gratis proberen",
     },
   },
@@ -355,7 +355,7 @@ export const nl: Dictionary = {
       },
       {
         q: "Kan ik gratis proberen?",
-        a: "Ja. Je krijgt {n} gratis conversies, zonder creditcard. Daarna kies je een abonnement of koop je tegoed.",
+        a: "Ja. Je krijgt {n} gratis conversie, zonder creditcard, en kunt alles controleren. De e-factuur downloaden (en straks versturen) kan alleen met een lopend abonnement of gekocht tegoed.",
       },
       {
         q: "Kan ik op elk moment opzeggen?",
@@ -396,7 +396,7 @@ export const nl: Dictionary = {
     eyebrow: "Aanmelden",
     title: "Maak je account aan",
     lead: "Je account maak je aan in de xChange-app. Je bevestigt je e-mailadres, stelt tweestapsverificatie in en kunt meteen aan de slag.",
-    trialNote: "Je begint met {n} gratis conversies, zonder creditcard.",
+    trialNote: "Je begint met {n} gratis conversie, zonder creditcard. De e-factuur downloaden kan met een abonnement of tegoed.",
     signupCta: "Account aanmaken",
     pricingText: "Liever meteen een abonnement? Kies het op de prijspagina; na het bevestigen ga je direct door naar de betaling.",
     pricingCta: "Bekijk de prijzen",

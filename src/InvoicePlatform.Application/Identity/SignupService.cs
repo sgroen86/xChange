@@ -37,7 +37,8 @@ public sealed record SignupResult(SignupOutcome Outcome, string? Error = null);
 /// <summary>
 /// Self sign-up. Someone enters their details; xChange mails a link; the link
 /// creates their organisation with them as admin, on a trial of
-/// <see cref="TrialConversions"/> conversions, and - after they set up MFA,
+/// <see cref="TrialConversions"/> conversion (downloading needs a plan or
+/// credits, see <see cref="Billing.ExportEntitlement"/>), and - after they set up MFA,
 /// mandatory for admins - signs them in. Closed until
 /// the platform administrator opens it.
 ///
@@ -59,7 +60,8 @@ public sealed class SignupService(
     AuthService auth,
     SignupSettings settings)
 {
-    public const int TrialConversions = 10;
+    /// <summary>A self-signed-up organisation's free conversions. Existing organisations keep the limit they have.</summary>
+    public const int TrialConversions = 1;
 
     public async Task<bool> IsOpenAsync(CancellationToken cancellationToken = default)
         => (await platform.GetSettingsAsync(cancellationToken).ConfigureAwait(false)).SignupOpen;

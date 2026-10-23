@@ -1,3 +1,4 @@
+using InvoicePlatform.Application.Billing;
 using InvoicePlatform.Application.Usage;
 using System.Text;
 using System.Text.RegularExpressions;
@@ -24,7 +25,8 @@ public sealed partial class ExportInvoiceService(
     UblInvoiceWriter writer,
     IOfficialValidator officialValidator,
     IPlatformStore platform,
-    IUsageMeter usage)
+    IUsageMeter usage,
+    IBillingStore billing)
 {
     public const string MediaType = "application/xml";
 
@@ -61,8 +63,8 @@ public sealed partial class ExportInvoiceService(
             return ExportOutcome.UnknownRuleset;
         }
 
-        // A trial checks everything but takes nothing away: the file needs a plan.
-        if ((await usage.GetAsync(organizationId, cancellationToken).ConfigureAwait(false)).Trial)
+        // Checking is free; the file is for a running plan or purchased credits.
+        if (!await ExportEntitlement.AllowsAsync(billing, usage, organizationId, cancellationToken).ConfigureAwait(false))
         {
             return ExportOutcome.PlanRequired;
         }
@@ -150,7 +152,7 @@ public enum ExportOutcomeKind
     /// <summary>The official validator could not be asked; no file is handed out.</summary>
     ValidationUnavailable,
 
-    /// <summary>The organisation is on a trial: checking is free, the file needs a plan.</summary>
+    /// <summary>No running plan, no credits and not unlimited: checking is free, the file needs a plan or credits.</summary>
     PlanRequired,
 
     /// <summary>The invoice is a saved concept; it is exported once booked.</summary>

@@ -118,7 +118,8 @@ internal sealed class IdentityTextNl : IIdentityText
 
         {link}
 
-        De link is 24 uur geldig. Je krijgt {trialConversions} gratis conversies om xChange te proberen.
+        De link is 24 uur geldig. Je krijgt {trialConversions} gratis {(trialConversions == 1 ? "conversie" : "conversies")} om xChange te proberen.
+        De e-factuur downloaden kan met een abonnement of gekocht tegoed.
 
         Heb jij je niet aangemeld? Dan kun je deze e-mail negeren; er wordt niets aangemaakt.
         """;
@@ -196,7 +197,8 @@ internal sealed class IdentityTextEn : IIdentityText
 
         {link}
 
-        The link is valid for 24 hours. You get {trialConversions} free conversions to try xChange.
+        The link is valid for 24 hours. You get {trialConversions} free {(trialConversions == 1 ? "conversion" : "conversions")} to try xChange.
+        Downloading the e-invoice requires a plan or purchased credits.
 
         Didn't sign up? Then you can ignore this email; nothing will be created.
         """;

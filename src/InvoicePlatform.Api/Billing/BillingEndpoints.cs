@@ -58,6 +58,7 @@ public static class BillingEndpoints
             PeriodUsed = account.PeriodUsed,
             Credits = account.Credits,
             Trial = status.Usage.Trial,
+            CanExport = status.CanExport,
             BaseLimit = status.Usage.Limit,
             BaseUsed = status.Usage.Used,
             HasCustomer = account.CustomerId is not null,

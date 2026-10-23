@@ -51,7 +51,7 @@ export const en: Dictionary = {
       lead: "You already make your invoices. xChange reads your PDF, lets you check everything and delivers a PEPPOL BIS 3.0 or NLCIUS file that passes the official validation rules — no new accounting software required.",
       primaryCta: "Try it free",
       secondaryCta: "See how it works",
-      note: "{n} free conversions, no card needed.",
+      note: "{n} free conversion, no card needed. Download with a plan or credits.",
     },
     mock: {
       label: "Example: a PDF invoice that xChange turns into a validated e-invoice",
@@ -208,7 +208,7 @@ export const en: Dictionary = {
     },
     cta: {
       title: "Try it with your own invoices",
-      text: "{n} free conversions, no card needed. You will see straight away whether your customer can receive e-invoices.",
+      text: "{n} free conversion, no card needed. You will see straight away whether your customer can receive e-invoices. Downloading the e-invoice takes a plan or credits.",
       primary: "Try it free",
       secondary: "See pricing",
     },
@@ -217,7 +217,7 @@ export const en: Dictionary = {
     meta: {
       title: "Pricing",
       description:
-        "Subscriptions with included conversions, or pay per conversion with credits. Start with {n} free conversions, no card needed.",
+        "Subscriptions with included conversions, or pay per conversion with credits. Try {n} conversion for free, no card needed.",
     },
     eyebrow: "Pricing",
     title: "Simple pricing, per invoice",
@@ -233,7 +233,7 @@ export const en: Dictionary = {
     },
     trial: {
       title: "Try it free",
-      text: "Start with {n} free conversions. No card, no commitment.",
+      text: "Start with {n} free conversion and check the result. No card, no commitment. Downloading the e-invoice takes a plan or credits.",
       cta: "Try it free",
     },
     payg: {
@@ -274,8 +274,8 @@ export const en: Dictionary = {
           a: "One PDF that xChange reads and turns into an invoice. Correcting it, or exporting it again in another format, does not count again.",
         },
         {
-          q: "Do I need a card for the trial?",
-          a: "No. You get {n} free conversions without any payment details. You only pay once you choose a plan or buy credits.",
+          q: "Do I need a card to try it?",
+          a: "No. You get {n} free conversion without any payment details and can check the result in full. To download the e-invoice, you choose a plan or buy credits.",
         },
         {
           q: "Can I change plans or cancel?",
@@ -303,7 +303,7 @@ export const en: Dictionary = {
     breadcrumb: "Breadcrumb",
     cta: {
       title: "Ready to get started?",
-      text: "Convert your first PDF invoices for free and see straight away whether your customer can receive e-invoices.",
+      text: "Convert your first PDF invoice for free and see straight away whether your customer can receive e-invoices.",
       button: "Try it free",
     },
   },
@@ -355,7 +355,7 @@ export const en: Dictionary = {
       },
       {
         q: "Can I try it for free?",
-        a: "Yes. You get {n} free conversions, no card needed. After that you choose a plan or buy credits.",
+        a: "Yes. You get {n} free conversion, no card needed, and can check everything. Downloading the e-invoice (and, soon, sending it) requires a running plan or purchased credits.",
       },
       {
         q: "Can I cancel at any time?",
@@ -396,7 +396,7 @@ export const en: Dictionary = {
     eyebrow: "Sign up",
     title: "Create your account",
     lead: "You create your account in the xChange app. You confirm your email address, set up two-step verification and can get started right away.",
-    trialNote: "You start with {n} free conversions, no card needed.",
+    trialNote: "You start with {n} free conversion, no card needed. Downloading the e-invoice takes a plan or credits.",
     signupCta: "Create account",
     pricingText: "Rather start on a plan? Choose it on the pricing page; after confirming you go straight to payment.",
     pricingCta: "See pricing",

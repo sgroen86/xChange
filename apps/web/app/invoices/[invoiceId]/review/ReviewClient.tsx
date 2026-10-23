@@ -100,7 +100,8 @@ export default function ReviewClient() {
   const [settings, setSettings] = useState<OrganizationSettings>(FALLBACK_SETTINGS);
   const [chosenFormat, setChosenFormat] = useState<string | null>(null);
   const [relations, setRelations] = useState<Relation[]>([]);
-  const [trial, setTrial] = useState(false);
+  // Assumed until the usage arrives; the server refuses with 402 either way.
+  const [canExport, setCanExport] = useState(true);
 
   /* A known customer with its own format opens on that one (piece 4); the
      buyer is matched as the server does it, so editing the VAT number counts. */
@@ -237,7 +238,7 @@ export default function ReviewClient() {
     if (isApiConfigured) {
       getUsage()
         .then((usage) => {
-          if (!cancelled) setTrial(usage.trial);
+          if (!cancelled) setCanExport(usage.canExport);
         })
         .catch(() => undefined);
     }
@@ -479,8 +480,8 @@ export default function ReviewClient() {
         result.warnings.length > 0 ? "warning" : "success",
       );
     } catch (cause) {
-      // A trial (or a plan that ended since the page loaded): show the way to a plan.
-      if (cause instanceof ApiError && cause.status === 402) setTrial(true);
+      // No plan or credits (or a plan that ended since the page loaded): show the way to one.
+      if (cause instanceof ApiError && cause.status === 402) setCanExport(false);
       showToast(cause instanceof Error ? cause.message : text.toast.exportFailed, "danger");
     } finally {
       setDownloading(false);
@@ -593,7 +594,7 @@ export default function ReviewClient() {
                   ? text.formatNote.receiver
                   : null
             }
-            trial={trial}
+            canExport={canExport}
             receiverWarning={
               isRuleset && receiver?.status === "found" && !receiver.acceptedRulesetIds.includes(format)
                 ? receiver.acceptedRulesetIds.length > 0

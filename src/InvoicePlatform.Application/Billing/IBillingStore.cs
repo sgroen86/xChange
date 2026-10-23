@@ -23,7 +23,7 @@ public interface IBillingStore
     /// <exception cref="InvalidOperationException">The customer already belongs to another organisation.</exception>
     Task<string> LinkCustomerAsync(string organizationId, string customerId, CancellationToken cancellationToken = default);
 
-    /// <summary>Adds purchased credits, and lifts the trial.</summary>
+    /// <summary>Adds purchased credits, and ends showing the trial.</summary>
     Task<BillingWrite> AddCreditsAsync(string organizationId, int credits, string idempotencyKey, CancellationToken cancellationToken = default);
 
     /// <summary>

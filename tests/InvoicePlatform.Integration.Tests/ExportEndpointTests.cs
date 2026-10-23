@@ -45,6 +45,51 @@ public class ExportEndpointTests : IClassFixture<SignedInFactory>
     }
 
     [Fact]
+    public async Task Downloading_needs_a_running_plan_or_credits_and_stops_when_the_plan_ends()
+    {
+        using var factory = new SignedInFactory();
+        await factory.Usage.SetLimitAsync(SignedInFactory.OrgB, 1, trial: true);
+        var id = await factory.SeedInvoiceAsync(SignedInFactory.OrgB, TestInvoices.Complete());
+        var client = factory.As("admin-b");
+
+        async Task<HttpResponseMessage> Export(string language = "nl")
+        {
+            var request = new HttpRequestMessage(HttpMethod.Get, $"/api/v1/invoices/{id}/export");
+            request.Headers.TryAddWithoutValidation("Accept-Language", language);
+            return await client.SendAsync(request);
+        }
+
+        async Task<bool> CanExport()
+            => (await client.GetFromJsonAsync<JsonElement>("/api/v1/organization/usage")).GetProperty("canExport").GetBoolean();
+
+        // The trial: refused, in the user's language.
+        var refused = await Export("en");
+        Assert.Equal(HttpStatusCode.PaymentRequired, refused.StatusCode);
+        var problem = await refused.Content.ReadFromJsonAsync<JsonElement>();
+        Assert.Contains("running plan or purchased credits", problem.GetProperty("detail").GetString(), StringComparison.Ordinal);
+        Assert.Contains("abonnement of gekocht tegoed", (await (await Export("nl")).Content.ReadFromJsonAsync<JsonElement>()).GetProperty("detail").GetString(), StringComparison.Ordinal);
+        Assert.False(await CanExport());
+
+        // A running plan.
+        var org = factory.Usage.For(SignedInFactory.OrgB);
+        org.Status = "active";
+        org.SubscribedOnce = true;
+        org.PaidOnce = true;
+        Assert.Equal(HttpStatusCode.OK, (await Export()).StatusCode);
+        Assert.True(await CanExport());
+
+        // The plan ended; having paid once is not enough.
+        org.Status = "canceled";
+        Assert.Equal(HttpStatusCode.PaymentRequired, (await Export()).StatusCode);
+        Assert.False(await CanExport());
+
+        // Credits left.
+        org.Credits = 2;
+        Assert.Equal(HttpStatusCode.OK, (await Export()).StatusCode);
+        Assert.True(await CanExport());
+    }
+
+    [Fact]
     public async Task A_read_only_account_may_export()
     {
         var id = await _factory.SeedInvoiceAsync(SignedInFactory.OrgA, TestInvoices.Complete());

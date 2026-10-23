@@ -128,34 +128,41 @@ public class BillingServiceTests
     // ---- trial --------------------------------------------------------------
 
     [Fact]
-    public async Task Buying_credits_ends_the_trial()
+    public async Task Buying_credits_ends_the_trial_and_allows_downloading_while_they_last()
     {
-        await _store.SetLimitAsync(OrgA, 10, trial: true);
+        await _store.SetLimitAsync(OrgA, 1, trial: true);
         await _store.LinkCustomerAsync(OrgA, "cus_a");
         Assert.True((await _store.GetAsync(OrgA)).Trial);
+        Assert.False((await _billing.GetStatusAsync(OrgA)).CanExport);
 
         await Webhook(Checkout("evt_1", "cs_1", paid: true));
 
         Assert.False((await _store.GetAsync(OrgA)).Trial);
+        Assert.True((await _billing.GetStatusAsync(OrgA)).CanExport);
+
+        _store[OrgA].Credits = 0;
+        Assert.False((await _billing.GetStatusAsync(OrgA)).CanExport);
     }
 
     [Fact]
-    public async Task A_plan_ends_the_trial_and_it_stays_ended_after_cancelling()
+    public async Task A_plan_ends_the_trial_for_good_but_downloading_only_while_it_runs()
     {
-        await _store.SetLimitAsync(OrgA, 10, trial: true);
+        await _store.SetLimitAsync(OrgA, 1, trial: true);
         await _store.LinkCustomerAsync(OrgA, "cus_a");
 
         await Webhook(Subscription("evt_1", "active", "xchange_pro_monthly"));
         Assert.False((await _store.GetAsync(OrgA)).Trial);
+        Assert.True((await _billing.GetStatusAsync(OrgA)).CanExport);
 
         await Webhook(Subscription("evt_2", "canceled", "xchange_pro_monthly", created: T0.AddDays(40)));
         Assert.False((await _store.GetAsync(OrgA)).Trial);
+        Assert.False((await _billing.GetStatusAsync(OrgA)).CanExport);
     }
 
     [Fact]
     public async Task An_unpaid_one_off_checkout_gives_no_credits_until_its_payment_succeeds()
     {
-        await _store.SetLimitAsync(OrgA, 10, trial: true);
+        await _store.SetLimitAsync(OrgA, 1, trial: true);
         await _store.LinkCustomerAsync(OrgA, "cus_a");
 
         await Webhook(Checkout("evt_1", "cs_1", paid: false));

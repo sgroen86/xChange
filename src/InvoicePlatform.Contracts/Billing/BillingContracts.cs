@@ -34,9 +34,13 @@ public sealed record BillingStatusResponse
     [JsonPropertyName("credits")]
     public int Credits { get; init; }
 
-    /// <summary>On the trial and never paid: downloading needs a plan or credits.</summary>
+    /// <summary>On the trial and never paid; for showing the trial. Downloading is <see cref="CanExport"/>.</summary>
     [JsonPropertyName("trial")]
     public bool Trial { get; init; }
+
+    /// <summary>May download (and later send) e-invoices: a running plan, credits left, or no limit.</summary>
+    [JsonPropertyName("canExport")]
+    public bool CanExport { get; init; }
 
     /// <summary>The trial's (or a set limit's) conversions; null without a limit.</summary>
     [JsonPropertyName("baseLimit")]

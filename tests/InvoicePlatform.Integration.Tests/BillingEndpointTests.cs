@@ -25,14 +25,15 @@ public class BillingEndpointTests : IClassFixture<SignedInFactory>
     [Fact]
     public async Task Everyone_signed_in_sees_the_status_and_nobody_else()
     {
-        await _factory.Usage.SetLimitAsync(SignedInFactory.OrgB, 10, trial: true);
+        await _factory.Usage.SetLimitAsync(SignedInFactory.OrgB, 1, trial: true);
 
         var anonymous = await _factory.CreateClient().GetAsync("/api/v1/billing");
         var status = await _factory.As("admin-b").GetFromJsonAsync<JsonElement>("/api/v1/billing");
 
         Assert.Equal(HttpStatusCode.Unauthorized, anonymous.StatusCode);
         Assert.True(status.GetProperty("trial").GetBoolean());
-        Assert.Equal(10, status.GetProperty("baseLimit").GetInt32());
+        Assert.Equal(1, status.GetProperty("baseLimit").GetInt32());
+        Assert.False(status.GetProperty("canExport").GetBoolean());
         Assert.Equal(JsonValueKind.Null, status.GetProperty("plan").ValueKind);
         Assert.False(status.GetProperty("hasCustomer").GetBoolean());
         Assert.Equal(HttpStatusCode.OK, (await _factory.As("readonly-a").GetAsync("/api/v1/billing")).StatusCode);

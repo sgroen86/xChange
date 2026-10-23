@@ -1,4 +1,5 @@
 using System.Text;
+using InvoicePlatform.Application.Billing;
 using InvoicePlatform.Application.Invoices;
 using InvoicePlatform.Application.Organizations;
 using InvoicePlatform.Application.Relations;
@@ -27,7 +28,7 @@ public class ExportInvoiceServiceTests
     {
         var registry = new InvoiceRulesetRegistry([new PeppolBisBilling30Ruleset(), new RenamedPeppol()]);
         var relations = new RelationService(_relations, new TestClock(DateTimeOffset.UnixEpoch), registry);
-        _service = new ExportInvoiceService(_invoices, _settings, registry, new InvoiceEnrichment(_settings, relations), new UblInvoiceWriter(), _official, _platform, _usage);
+        _service = new ExportInvoiceService(_invoices, _settings, registry, new InvoiceEnrichment(_settings, relations), new UblInvoiceWriter(), _official, _platform, _usage, _usage);
     }
 
     private async Task<string> Book(CanonicalInvoiceDraft draft, string organizationId = OrgA)
@@ -48,7 +49,7 @@ public class ExportInvoiceServiceTests
     [Fact]
     public async Task A_trial_checks_everything_but_cannot_download_the_file()
     {
-        await _usage.SetLimitAsync(OrgA, 10, trial: true);
+        await _usage.SetLimitAsync(OrgA, 1, trial: true);
         var id = await Book(CompleteInvoice.Create());
 
         var outcome = await _service.ExportAsync(OrgA, id, null);
@@ -58,6 +59,47 @@ public class ExportInvoiceServiceTests
         Assert.Null(outcome.Content);
         Assert.True(check.RulesetFound);
         Assert.Empty(check.Violations);
+    }
+
+    [Theory]
+    [InlineData(SubscriptionStatuses.Active)]
+    [InlineData(SubscriptionStatuses.Trialing)]
+    [InlineData(SubscriptionStatuses.PastDue)]
+    public async Task A_running_subscription_downloads(string status)
+    {
+        await _usage.SetLimitAsync(OrgA, 1, trial: true);
+        _usage[OrgA].Status = status;
+        var id = await Book(CompleteInvoice.Create());
+
+        Assert.Equal(ExportOutcomeKind.Exported, (await _service.ExportAsync(OrgA, id, null)).Kind);
+    }
+
+    [Fact]
+    public async Task Purchased_credits_download_and_used_up_credits_do_not()
+    {
+        await _usage.SetLimitAsync(OrgA, 1, trial: true);
+        _usage[OrgA].Credits = 1;
+        _usage[OrgA].PaidOnce = true;
+        var id = await Book(CompleteInvoice.Create());
+
+        Assert.Equal(ExportOutcomeKind.Exported, (await _service.ExportAsync(OrgA, id, null)).Kind);
+
+        _usage[OrgA].Credits = 0;
+        Assert.Equal(ExportOutcomeKind.PlanRequired, (await _service.ExportAsync(OrgA, id, null)).Kind);
+    }
+
+    [Theory]
+    [InlineData("canceled")]
+    [InlineData(SubscriptionStatuses.Unpaid)]
+    public async Task An_ended_subscription_without_credits_stops_downloading(string status)
+    {
+        await _usage.SetLimitAsync(OrgA, 1, trial: true);
+        _usage[OrgA].Status = status;
+        _usage[OrgA].SubscribedOnce = true;
+        _usage[OrgA].PaidOnce = true;
+        var id = await Book(CompleteInvoice.Create());
+
+        Assert.Equal(ExportOutcomeKind.PlanRequired, (await _service.ExportAsync(OrgA, id, null)).Kind);
     }
 
     [Fact]
@@ -86,7 +128,7 @@ public class ExportInvoiceServiceTests
         });
         var service = new ExportInvoiceService(
             _invoices, _settings, new InvoiceRulesetRegistry(), new InvoiceEnrichment(_settings, new RelationService(new FakeRelationStore(), new TestClock(DateTimeOffset.UnixEpoch), new InvoiceRulesetRegistry())),
-            new UblInvoiceWriter(), _official, _platform, _usage);
+            new UblInvoiceWriter(), _official, _platform, _usage, _usage);
         var id = await Book(CompleteInvoice.Singapore());
 
         var first = await service.ExportAsync(OrgA, id, null);

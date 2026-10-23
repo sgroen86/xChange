@@ -30,6 +30,7 @@ public class SignupEndpointTests
         var attempt = await client.PostAsJsonAsync("/api/v1/signup", Request("anna@bakkerij.be"));
 
         Assert.False(status.GetProperty("open").GetBoolean());
+        Assert.Equal(1, status.GetProperty("trialConversions").GetInt32());
         Assert.Equal(HttpStatusCode.Forbidden, attempt.StatusCode);
         Assert.Empty(factory.Mail.Sent);
     }
@@ -59,7 +60,10 @@ public class SignupEndpointTests
         var me = await factory.As(token).GetFromJsonAsync<JsonElement>("/api/v1/auth/me");
         Assert.Equal("Admin", me.GetProperty("role").GetString());
         var organizationId = me.GetProperty("organizationId").GetString()!;
-        Assert.Equal(new InvoicePlatform.Application.Usage.UsageSummary(0, 10, Trial: true), await factory.Usage.GetAsync(organizationId));
+        Assert.Equal(new InvoicePlatform.Application.Usage.UsageSummary(0, 1, Trial: true), await factory.Usage.GetAsync(organizationId));
+        var usage = await factory.As(token).GetFromJsonAsync<JsonElement>("/api/v1/organization/usage");
+        Assert.Equal(1, usage.GetProperty("limit").GetInt32());
+        Assert.False(usage.GetProperty("canExport").GetBoolean());
     }
 
     [Fact]
@@ -80,5 +84,6 @@ public class SignupEndpointTests
         var usage = await factory.As("readonly-a").GetFromJsonAsync<JsonElement>("/api/v1/organization/usage");
 
         Assert.Equal(JsonValueKind.Null, usage.GetProperty("limit").ValueKind);
+        Assert.True(usage.GetProperty("canExport").GetBoolean());
     }
 }

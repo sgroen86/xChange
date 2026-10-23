@@ -30,8 +30,12 @@ export type CreditPack = {
 
 export const pricing = {
   currency: "EUR",
-  /** Free trial: conversions included, no payment card needed. */
-  trialConversions: 10,
+  /**
+   * Free conversions for a new sign-up, no payment card needed; the app's
+   * SignupService.TrialConversions. The texts are written for one ("1 gratis
+   * conversie"). Downloading the e-invoice needs a plan or credits.
+   */
+  trialConversions: 1,
   plans: [
     { id: "starter", name: "Starter", monthlyPriceCents: 1900, includedConversions: 50, highlighted: false },
     { id: "pro", name: "Pro", monthlyPriceCents: 4900, includedConversions: 250, highlighted: true },

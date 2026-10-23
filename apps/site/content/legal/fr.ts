@@ -195,7 +195,8 @@ export const legalFr: LegalContent = {
       {
         heading: "Essai gratuit",
         paragraphs: [
-          `Un essai gratuit vous donne droit à 10 Conversions, sans carte de paiement et sans engagement.`,
+          `Un essai gratuit vous donne droit à 1 Conversion, sans carte de paiement et sans engagement.`,
+          `Le téléchargement du fichier de facture électronique (et, dès qu’il sera disponible, son envoi) nécessite un abonnement en cours ou des Crédits achetés. Lorsque votre abonnement a pris fin et que vos Crédits sont épuisés, le téléchargement n’est plus possible.`,
           `Nous pouvons mettre fin aux conditions de l’essai gratuit ou les modifier pour les nouvelles inscriptions.`,
         ],
       },

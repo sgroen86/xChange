@@ -52,7 +52,7 @@ export const fr: Dictionary = {
       lead: "Vous créez déjà vos factures. xChange lit votre PDF, vous laisse tout vérifier et produit un fichier PEPPOL BIS 3.0 ou NLCIUS conforme aux règles de validation officielles — sans changer de logiciel comptable.",
       primaryCta: "Essayer gratuitement",
       secondaryCta: "Comment ça marche",
-      note: "{n} conversions gratuites, sans carte bancaire.",
+      note: "{n} conversion gratuite, sans carte bancaire. Téléchargement avec un abonnement ou des crédits.",
     },
     mock: {
       label: "Exemple : une facture PDF que xChange transforme en facture électronique validée",
@@ -209,7 +209,7 @@ export const fr: Dictionary = {
     },
     cta: {
       title: "Essayez avec vos propres factures",
-      text: "{n} conversions gratuites, sans carte bancaire. Vous voyez immédiatement si votre client peut recevoir des factures électroniques.",
+      text: "{n} conversion gratuite, sans carte bancaire. Vous voyez immédiatement si votre client peut recevoir des factures électroniques. Le téléchargement de la facture électronique nécessite un abonnement ou des crédits.",
       primary: "Essayer gratuitement",
       secondary: "Voir les tarifs",
     },
@@ -218,7 +218,7 @@ export const fr: Dictionary = {
     meta: {
       title: "Tarifs",
       description:
-        "Des abonnements avec conversions incluses, ou un paiement à la conversion grâce aux crédits. Commencez avec {n} conversions gratuites, sans carte bancaire.",
+        "Des abonnements avec conversions incluses, ou un paiement à la conversion grâce aux crédits. Essayez {n} conversion gratuite, sans carte bancaire.",
     },
     eyebrow: "Tarifs",
     title: "Des tarifs simples, à la facture",
@@ -234,7 +234,7 @@ export const fr: Dictionary = {
     },
     trial: {
       title: "Essai gratuit",
-      text: "Commencez avec {n} conversions gratuites. Sans carte bancaire, sans engagement.",
+      text: "Commencez avec {n} conversion gratuite et vérifiez le résultat. Sans carte bancaire, sans engagement. Le téléchargement de la facture électronique nécessite un abonnement ou des crédits.",
       cta: "Essayer gratuitement",
     },
     payg: {
@@ -275,8 +275,8 @@ export const fr: Dictionary = {
           a: "Un PDF que xChange lit et transforme en facture. Le corriger, ou l’exporter à nouveau dans un autre format, ne compte pas une seconde fois.",
         },
         {
-          q: "Faut-il une carte bancaire pour l’essai ?",
-          a: "Non. Vous recevez {n} conversions gratuites sans données de paiement. Vous ne payez qu’une fois un abonnement ou des crédits choisis.",
+          q: "Faut-il une carte bancaire pour essayer ?",
+          a: "Non. Vous recevez {n} conversion gratuite sans données de paiement et pouvez vérifier entièrement le résultat. Pour télécharger la facture électronique, vous choisissez un abonnement ou achetez des crédits.",
         },
         {
           q: "Puis-je changer d’abonnement ou résilier ?",
@@ -304,7 +304,7 @@ export const fr: Dictionary = {
     breadcrumb: "Fil d’Ariane",
     cta: {
       title: "Prêt à vous lancer ?",
-      text: "Convertissez gratuitement vos premières factures PDF et voyez immédiatement si votre client peut recevoir des factures électroniques.",
+      text: "Convertissez gratuitement votre première facture PDF et voyez immédiatement si votre client peut recevoir des factures électroniques.",
       button: "Essayer gratuitement",
     },
   },
@@ -356,7 +356,7 @@ export const fr: Dictionary = {
       },
       {
         q: "Puis-je essayer gratuitement ?",
-        a: "Oui. Vous recevez {n} conversions gratuites, sans carte bancaire. Ensuite, vous choisissez un abonnement ou achetez des crédits.",
+        a: "Oui. Vous recevez {n} conversion gratuite, sans carte bancaire, et pouvez tout vérifier. Le téléchargement de la facture électronique (et bientôt son envoi) nécessite un abonnement en cours ou des crédits achetés.",
       },
       {
         q: "Puis-je résilier à tout moment ?",
@@ -397,7 +397,7 @@ export const fr: Dictionary = {
     eyebrow: "Inscription",
     title: "Créez votre compte",
     lead: "Votre compte se crée dans l’application xChange. Vous confirmez votre adresse e-mail, configurez la vérification en deux étapes et pouvez commencer tout de suite.",
-    trialNote: "Vous commencez avec {n} conversions gratuites, sans carte bancaire.",
+    trialNote: "Vous commencez avec {n} conversion gratuite, sans carte bancaire. Le téléchargement de la facture électronique nécessite un abonnement ou des crédits.",
     signupCta: "Créer un compte",
     pricingText: "Vous préférez un abonnement d’emblée ? Choisissez-le sur la page des tarifs ; après la confirmation, vous passez directement au paiement.",
     pricingCta: "Voir les tarifs",

@@ -59,7 +59,7 @@ internal sealed class FakeUsageMeter : IUsageMeter, IBillingStore
     public Task<UsageSummary> GetAsync(string organizationId, CancellationToken cancellationToken = default)
     {
         var a = Get(organizationId);
-        return Task.FromResult(new UsageSummary(a.Used, a.Limit, a.TrialPlan && !a.PaidOnce));
+        return Task.FromResult(new UsageSummary(a.Used, a.Limit, a.TrialPlan && !a.PaidOnce, a.SubscribedOnce));
     }
 
     public Task SetLimitAsync(string organizationId, int? limit, bool trial = false, CancellationToken cancellationToken = default)

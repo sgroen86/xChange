@@ -50,7 +50,7 @@ internal sealed class InvoiceApiTextNl : IInvoiceApiText
 
     public string PlanRequiredTitle => "Abonnement nodig";
 
-    public string PlanRequiredDetail => "In de proefperiode kun je alles controleren, maar het bestand downloaden kan met een abonnement of gekocht tegoed.";
+    public string PlanRequiredDetail => "Je kunt alles controleren, maar de e-factuur downloaden kan alleen met een lopend abonnement of gekocht tegoed.";
 
     public string NotBookedTitle => "Nog niet geboekt";
 
@@ -79,7 +79,7 @@ internal sealed class InvoiceApiTextEn : IInvoiceApiText
 
     public string PlanRequiredTitle => "Plan required";
 
-    public string PlanRequiredDetail => "During the trial you can check everything, but downloading the file requires a plan or purchased credits.";
+    public string PlanRequiredDetail => "You can check everything, but downloading the e-invoice requires a running plan or purchased credits.";
 
     public string NotBookedTitle => "Not booked yet";
 

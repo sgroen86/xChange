@@ -33,7 +33,8 @@ const nl = {
   },
   signup: {
     title: "Aanmelden",
-    trial: (conversions: number) => `Probeer xChange gratis: ${conversions} conversies, geen betaalgegevens nodig.`,
+    trial: (conversions: number) =>
+      `Probeer xChange gratis: ${conversions} ${conversions === 1 ? "conversie" : "conversies"}, geen betaalgegevens nodig. De e-factuur downloaden kan met een abonnement of gekocht tegoed.`,
     closed: "Aanmelden is nog niet open. Heb je al een account?",
     sentTo: "We hebben een e-mail gestuurd naar",
     sentNext: "Open de link daarin om je account te activeren; hij is 24 uur geldig. Geen mail gezien? Kijk ook in je spammap.",
@@ -44,14 +45,14 @@ const nl = {
     creditsName: (conversions: number) => `${conversions} conversies`,
     creditsNeverExpire: "Vervallen nooit",
     payNext:
-      "Na het bevestigen van je e-mailadres en het instellen van tweestapsverificatie ga je meteen door naar de betaling. Open de bevestigingslink in deze browser; anders begin je met de gratis proefperiode en kies je je abonnement onder Instellingen.",
-    useTrial: "Liever eerst de gratis proefperiode",
+      "Na het bevestigen van je e-mailadres en het instellen van tweestapsverificatie ga je meteen door naar de betaling. Open de bevestigingslink in deze browser; anders begin je met je gratis conversie en kies je je abonnement onder Instellingen.",
+    useTrial: "Liever eerst gratis proberen",
   },
   payment: {
     title: "Betalen",
     going: "Je wordt doorgestuurd naar de beveiligde betaalpagina…",
     retry: "Opnieuw proberen",
-    trialInstead: "Eerst de gratis proefperiode",
+    trialInstead: "Eerst gratis proberen",
   },
   confirm: {
     title: "Account activeren",
@@ -95,7 +96,7 @@ const en: typeof nl = {
   signup: {
     title: "Sign up",
     trial: (conversions: number) =>
-      `Try xChange for free: ${conversions} ${conversions === 1 ? "conversion" : "conversions"}, no payment details needed.`,
+      `Try xChange for free: ${conversions} ${conversions === 1 ? "conversion" : "conversions"}, no payment details needed. Downloading the e-invoice requires a plan or purchased credits.`,
     closed: "Sign-up is not open yet. Already have an account?",
     sentTo: "We have sent an email to",
     sentNext: "Open the link in it to activate your account; it is valid for 24 hours. No email? Check your spam folder too.",
@@ -106,14 +107,14 @@ const en: typeof nl = {
     creditsName: (conversions: number) => `${conversions} ${conversions === 1 ? "conversion" : "conversions"}`,
     creditsNeverExpire: "Never expire",
     payNext:
-      "You'll go to payment right after confirming your email address and setting up two-step verification. Open the confirmation link in this browser; otherwise you start on the free trial and choose your plan under Settings.",
-    useTrial: "Start with the free trial instead",
+      "You'll go to payment right after confirming your email address and setting up two-step verification. Open the confirmation link in this browser; otherwise you start with your free conversion and choose your plan under Settings.",
+    useTrial: "Try it for free first instead",
   },
   payment: {
     title: "Payment",
     going: "Taking you to the secure payment page…",
     retry: "Try again",
-    trialInstead: "Start with the free trial",
+    trialInstead: "Try it for free first",
   },
   confirm: {
     title: "Activate account",

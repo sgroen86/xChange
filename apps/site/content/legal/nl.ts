@@ -202,7 +202,8 @@ export const legalNl: LegalContent = {
       {
         heading: "Gratis proefperiode",
         paragraphs: [
-          "Je kunt xChange gratis uitproberen met 10 conversies. Je hebt daarvoor geen betaalkaart nodig en je zit nergens aan vast.",
+          "Je kunt xChange gratis uitproberen met 1 conversie. Je hebt daarvoor geen betaalkaart nodig en je zit nergens aan vast.",
+          "Het e-factuurbestand downloaden (en, zodra beschikbaar, versturen) kan alleen met een lopend abonnement of gekocht tegoed. Is je abonnement afgelopen en je tegoed op, dan kun je niet meer downloaden.",
           "We kunnen de proefperiode voor nieuwe aanmeldingen beëindigen of de voorwaarden ervan wijzigen.",
         ],
       },
