@@ -198,7 +198,8 @@ jobs:
               ArtifactKey="${{ steps.package.outputs.key }}" \
               ValidatorArtifactKey="${{ steps.package.outputs.validator_key }}" \
               WorkerArtifactKey="${{ steps.package.outputs.worker_key }}" \
-              AnthropicSecretArn="${{ steps.secret.outputs.arn }}"
+              AnthropicSecretArn="${{ steps.secret.outputs.arn }}" \
+              AppUrl="https://app.xchangeinvoice.com"
 
           URL=$(aws cloudformation describe-stacks --stack-name "$SERVICE_STACK" \
                   --query "Stacks[0].Outputs[?OutputKey=='ServiceUrl'].OutputValue" --output text)
