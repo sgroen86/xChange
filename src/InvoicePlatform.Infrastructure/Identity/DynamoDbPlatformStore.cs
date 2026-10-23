@@ -165,7 +165,12 @@ internal sealed class DynamoDbPlatformStore(
     public async Task<PlatformSettings> GetSettingsAsync(CancellationToken cancellationToken = default)
     {
         var item = await GetItemAsync(PlatformKey, "SETTINGS", cancellationToken).ConfigureAwait(false);
-        return new PlatformSettings { ExtractionModel = item is null ? null : Optional(item, "extractionModel") };
+        return new PlatformSettings
+        {
+            ExtractionModel = item is null ? null : Optional(item, "extractionModel"),
+            // Closed unless explicitly opened: a missing attribute (older items) means closed.
+            SignupOpen = item is not null && item.TryGetValue("signupOpen", out var open) && open.BOOL == true,
+        };
     }
 
     public Task SaveSettingsAsync(PlatformSettings settings, CancellationToken cancellationToken = default)
@@ -176,6 +181,7 @@ internal sealed class DynamoDbPlatformStore(
                 Item = new Dictionary<string, AttributeValue>(Key(PlatformKey, "SETTINGS"))
                 {
                     ["extractionModel"] = Nullable(settings.ExtractionModel),
+                    ["signupOpen"] = new AttributeValue { BOOL = settings.SignupOpen },
                 },
             },
             cancellationToken);
