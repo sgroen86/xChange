@@ -22,9 +22,11 @@ function landing(): string {
 }
 
 /**
- * Opens the confirmation link: the organisation and the account are created.
- * The new user is its Admin, for whom two-step verification is mandatory, so
- * they set it up here before they are signed in and sent on (see landing()).
+ * Opens the confirmation link: the organisation and the account are created
+ * and its new Admin is signed in straight away - two-step verification is
+ * optional for customers (owner's decision, 2026-10-23), so nothing stands
+ * between sign-up and payment. Both paths go on to landing(); the second step
+ * is still handled should the server ever ask for one.
  */
 export default function ConfirmClient() {
   const router = useRouter();

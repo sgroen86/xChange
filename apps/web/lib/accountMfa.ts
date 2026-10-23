@@ -1,7 +1,7 @@
 /**
  * Two-step verification from the settings, for the signed-in user. Turning it
- * off is refused by the API for admins and platform administrators, for whom
- * it is mandatory.
+ * off is refused by the API for platform administrators, for whom it is
+ * mandatory; for everyone else it is optional (owner's decision, 2026-10-23).
  */
 
 import { API_BASE_URL, ApiError, isApiConfigured } from "./api";
@@ -10,7 +10,7 @@ import { text } from "./i18n";
 
 export interface MfaStatus {
   enabled: boolean;
-  /** Admins and platform administrators: it cannot be turned off. */
+  /** Platform administrators only: it cannot be turned off. */
   mandatory: boolean;
   recoveryCodesLeft: number;
 }

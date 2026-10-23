@@ -321,7 +321,8 @@ public class AuthServiceTests
     public async Task A_right_password_does_not_clear_the_failure_count_while_mfa_is_still_to_come()
     {
         // Otherwise every new challenge would hand out a fresh set of guesses at the code.
-        await SeedUserAsync("admin@example.nl", UserRole.Admin);
+        var admin = await SeedUserAsync("admin@example.nl", UserRole.Admin);
+        _store.MakePlatformAdmin(admin.Id);
 
         for (var attempt = 0; attempt < LoginAttempts.MaxAttempts - 1; attempt++)
         {
@@ -335,15 +336,12 @@ public class AuthServiceTests
     }
 
     [Theory]
-    [InlineData(UserRole.Admin, false)]
-    [InlineData(UserRole.User, true)]
-    public async Task Admins_and_platform_administrators_get_an_mfa_setup_challenge_instead_of_a_session(UserRole role, bool platformAdmin)
+    [InlineData(UserRole.Admin)]
+    [InlineData(UserRole.User)]
+    public async Task A_platform_administrator_without_mfa_gets_a_setup_challenge_instead_of_a_session(UserRole role)
     {
         var user = await SeedUserAsync("boss@example.nl", role);
-        if (platformAdmin)
-        {
-            _store.MakePlatformAdmin(user.Id);
-        }
+        _store.MakePlatformAdmin(user.Id);
 
         var result = await _auth.LoginAsync("boss@example.nl", Password, "1.2.3.4");
 
@@ -358,6 +356,19 @@ public class AuthServiceTests
         Assert.Equal(MfaChallenge.HashOf(result.Mfa.Challenge), stored.TokenHash);
         Assert.Equal((user.Id, MfaChallengePurpose.Setup), (stored.UserId, stored.Purpose));
         Assert.Equal(_clock.UtcNow + TimeSpan.FromMinutes(15), stored.ExpiresAt);
+    }
+
+    [Fact]
+    public async Task A_company_admin_without_mfa_gets_a_session_straight_away()
+    {
+        // The owner's rule of 2026-10-23: optional for customers, admins included.
+        await SeedUserAsync("boss@example.nl", UserRole.Admin);
+
+        var result = await _auth.LoginAsync("boss@example.nl", Password, "1.2.3.4");
+
+        Assert.NotNull(result.Token);
+        Assert.Null(result.Mfa);
+        Assert.Empty(_mfa.Challenges);
     }
 
     [Fact]
@@ -511,15 +522,16 @@ public class AuthServiceTests
     }
 
     [Fact]
-    public async Task Accepting_an_invitation_makes_an_admin_of_that_organisation_who_sets_up_mfa_first()
+    public async Task Accepting_an_invitation_makes_an_admin_of_that_organisation_and_signs_them_in()
     {
         var (organizationId, code) = await InviteAsync();
 
         var result = await _auth.AcceptInvitationAsync(code, "Jan Tan", "a-long-enough-password", "10.0.0.1");
 
         Assert.True(result.Succeeded);
-        Assert.Null(result.Token);
-        Assert.True(result.Mfa!.SetupRequired);
+        Assert.NotNull(result.Token);
+        Assert.Null(result.Mfa);
+        Assert.Equal(UserRole.Admin, result.User!.Role);
         var user = await _store.FindByEmailAsync("jan@klant.sg");
         Assert.Equal(organizationId, user!.OrganizationId);
         Assert.Equal(UserRole.Admin, user.Role);

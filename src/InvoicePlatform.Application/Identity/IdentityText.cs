@@ -134,7 +134,7 @@ internal sealed class IdentityTextNl : IIdentityText
 
     public string MfaNotEnabled => "Tweestapsverificatie staat niet aan.";
 
-    public string MfaMandatory => "Tweestapsverificatie is verplicht voor beheerders en kan niet uit.";
+    public string MfaMandatory => "Tweestapsverificatie is verplicht voor platformbeheerders en kan niet uit.";
 
     public string MfaSetupNotStarted => "Begin opnieuw met het instellen.";
 
@@ -213,7 +213,7 @@ internal sealed class IdentityTextEn : IIdentityText
 
     public string MfaNotEnabled => "Two-step verification is not on.";
 
-    public string MfaMandatory => "Two-step verification is mandatory for administrators and cannot be turned off.";
+    public string MfaMandatory => "Two-step verification is mandatory for platform administrators and cannot be turned off.";
 
     public string MfaSetupNotStarted => "Start the setup again.";
 

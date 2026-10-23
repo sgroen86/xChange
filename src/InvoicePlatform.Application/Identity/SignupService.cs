@@ -38,8 +38,8 @@ public sealed record SignupResult(SignupOutcome Outcome, string? Error = null);
 /// Self sign-up. Someone enters their details; xChange mails a link; the link
 /// creates their organisation with them as admin, on a trial of
 /// <see cref="TrialConversions"/> conversion (downloading needs a plan or
-/// credits, see <see cref="Billing.ExportEntitlement"/>), and - after they set up MFA,
-/// mandatory for admins - signs them in. Closed until
+/// credits, see <see cref="Billing.ExportEntitlement"/>), and signs them in
+/// straight away (MFA is optional for them). Closed until
 /// the platform administrator opens it.
 ///
 /// The answer to a sign-up is the same whether the address is new or already
@@ -153,8 +153,8 @@ public sealed class SignupService(
 
     /// <summary>
     /// The link in the mail: creates the organisation (trial) and its first
-    /// user (admin). An admin sets up MFA first, so this returns the setup
-    /// challenge; <see cref="MfaService"/> issues the session.
+    /// user (admin), and returns the session: MFA is optional for a company
+    /// admin, see <see cref="UserMfa.IsMandatoryFor"/>.
     /// </summary>
     public async Task<AuthResult> ConfirmAsync(string code, string clientKey, CancellationToken cancellationToken = default)
     {

@@ -105,6 +105,13 @@
 .alert__title { font-weight: 600; margin-bottom: 2px; }
 .alert__list { margin: 0; padding-left: var(--space-4); }
 
+/* -- The nudge towards two-step verification, above the page content -- */
+.mfa-nudge { align-items: center; margin-bottom: var(--space-4); }
+.mfa-nudge svg { margin-top: 0; }
+.mfa-nudge__text { flex: 1; min-width: 0; }
+.mfa-nudge__link { color: inherit; font-weight: 600; text-decoration: underline; }
+.mfa-nudge .btn { color: inherit; flex-shrink: 0; }
+
 /* -- Mock processing progress -- */
 .progress {
   height: 6px;

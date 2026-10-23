@@ -42,10 +42,10 @@ public class MfaEndpointTests
     }
 
     [Fact]
-    public async Task An_admin_sets_up_mfa_at_login_and_from_then_on_needs_a_code()
+    public async Task A_platform_administrator_sets_up_mfa_at_login_and_from_then_on_needs_a_code()
     {
         using var factory = new SignedInFactory();
-        await factory.AddUserAsync("boss@a", Password, UserRole.Admin);
+        await factory.AddUserAsync("boss@a", Password, UserRole.Admin, platformAdmin: true);
         var client = factory.CreateClient();
 
         var first = await LoginAsync(client, "boss@a");
@@ -81,7 +81,7 @@ public class MfaEndpointTests
     public async Task A_used_or_unknown_challenge_means_logging_in_again()
     {
         using var factory = new SignedInFactory();
-        await factory.AddUserAsync("boss@a", Password, UserRole.Admin);
+        await factory.AddUserAsync("boss@a", Password, UserRole.Admin, platformAdmin: true);
         var client = factory.CreateClient();
         var challenge = (await LoginAsync(client, "boss@a")).GetProperty("challenge").GetString()!;
         await FinishSetupAsync(client, challenge);
@@ -97,7 +97,7 @@ public class MfaEndpointTests
     public async Task The_wrong_code_message_follows_the_callers_language()
     {
         using var factory = new SignedInFactory();
-        await factory.AddUserAsync("boss@a", Password, UserRole.Admin);
+        await factory.AddUserAsync("boss@a", Password, UserRole.Admin, platformAdmin: true);
         var client = factory.CreateClient();
         var challenge = (await LoginAsync(client, "boss@a")).GetProperty("challenge").GetString()!;
         await client.PostAsJsonAsync("/api/v1/auth/mfa/setup", new { challenge });
@@ -113,16 +113,20 @@ public class MfaEndpointTests
         Assert.Equal("Verification failed", problem.GetProperty("title").GetString());
     }
 
-    [Fact]
-    public async Task An_ordinary_user_still_logs_in_with_the_password_alone()
+    [Theory]
+    [InlineData(UserRole.User)]
+    [InlineData(UserRole.Admin)]
+    public async Task A_customer_without_mfa_logs_in_with_the_password_alone(UserRole role)
     {
+        // The owner's rule of 2026-10-23: optional for company admins too.
         using var factory = new SignedInFactory();
-        await factory.AddUserAsync("piet@a", Password, UserRole.User);
+        await factory.AddUserAsync("piet@a", Password, role);
 
         var session = await LoginAsync(factory.CreateClient(), "piet@a");
 
         Assert.False(string.IsNullOrEmpty(session.GetProperty("token").GetString()));
-        Assert.Equal("User", session.GetProperty("user").GetProperty("role").GetString());
+        Assert.Equal(role.ToString(), session.GetProperty("user").GetProperty("role").GetString());
+        Assert.False(session.TryGetProperty("mfaSetupRequired", out _));
     }
 
     [Fact]
@@ -162,10 +166,26 @@ public class MfaEndpointTests
     }
 
     [Fact]
-    public async Task An_admin_cannot_turn_mfa_off()
+    public async Task A_company_admin_may_turn_mfa_off()
     {
         using var factory = new SignedInFactory();
         var client = factory.As("admin-a");
+        var secret = (await (await client.PostAsync("/api/v1/account/mfa/setup", null)).Content.ReadFromJsonAsync<JsonElement>())
+            .GetProperty("secret").GetString()!;
+        await client.PostAsJsonAsync("/api/v1/account/mfa/confirm", new { code = CodeFor(secret) });
+        Assert.False((await client.GetFromJsonAsync<JsonElement>("/api/v1/account/mfa")).GetProperty("mandatory").GetBoolean());
+
+        var disable = await client.PostAsJsonAsync("/api/v1/account/mfa/disable", new { code = CodeFor(secret, ahead: 1) });
+
+        Assert.Equal(HttpStatusCode.NoContent, disable.StatusCode);
+        Assert.False((await client.GetFromJsonAsync<JsonElement>("/api/v1/account/mfa")).GetProperty("enabled").GetBoolean());
+    }
+
+    [Fact]
+    public async Task A_platform_administrator_cannot_turn_mfa_off()
+    {
+        using var factory = new SignedInFactory();
+        var client = factory.As("platform-a");
         var secret = (await (await client.PostAsync("/api/v1/account/mfa/setup", null)).Content.ReadFromJsonAsync<JsonElement>())
             .GetProperty("secret").GetString()!;
         await client.PostAsJsonAsync("/api/v1/account/mfa/confirm", new { code = CodeFor(secret) });

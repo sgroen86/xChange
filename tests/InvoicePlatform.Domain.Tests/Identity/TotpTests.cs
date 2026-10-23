@@ -133,14 +133,16 @@ public class RecoveryCodeTests
     }
 
     [Fact]
-    public void Mfa_is_mandatory_for_admins_and_platform_administrators_only()
+    public void Mfa_is_mandatory_for_platform_administrators_only()
     {
         User Make(UserRole role, bool platform = false) => new()
         {
             Id = "u", OrganizationId = "o", Email = "e", PasswordHash = "-", Name = "n", Role = role, IsPlatformAdmin = platform,
         };
 
-        Assert.True(UserMfa.IsMandatoryFor(Make(UserRole.Admin)));
+        // The owner's rule of 2026-10-23: company admins choose for themselves.
+        Assert.False(UserMfa.IsMandatoryFor(Make(UserRole.Admin)));
+        Assert.True(UserMfa.IsMandatoryFor(Make(UserRole.Admin, platform: true)));
         Assert.True(UserMfa.IsMandatoryFor(Make(UserRole.User, platform: true)));
         Assert.False(UserMfa.IsMandatoryFor(Make(UserRole.User)));
         Assert.False(UserMfa.IsMandatoryFor(Make(UserRole.ReadOnly)));

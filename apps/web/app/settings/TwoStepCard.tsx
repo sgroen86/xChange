@@ -16,6 +16,7 @@ import {
 } from "../../lib/accountMfa";
 import { isApiConfigured } from "../../lib/api";
 import { useText } from "../../lib/i18n";
+import { rememberMfaEnabled } from "../../lib/mfaNudge";
 
 type Panel =
   | { kind: "none" }
@@ -27,9 +28,13 @@ type Panel =
 /**
  * Two-step verification for the signed-in user: whether it is on, turning it
  * on, new recovery codes, and turning it off - which is not offered (and the
- * API refuses it) where it is mandatory.
+ * API refuses it) where it is mandatory, which is for platform administrators
+ * only. For everyone else it is recommended (owner's decision, 2026-10-23).
+ *
+ * The in-app notice links here as /settings/#two-step; the card appears only
+ * once its status is loaded, so it scrolls itself into view then.
  */
-export function TwoStepCard({ email }: { email: string }) {
+export function TwoStepCard({ userId, email }: { userId: string; email: string }) {
   const t = useText();
   const m = t.mfa.settings;
   const showToast = useToast();
@@ -41,9 +46,13 @@ export function TwoStepCard({ email }: { email: string }) {
   const reload = useCallback(
     () =>
       getMfaStatus()
-        .then(setStatus)
+        .then((loaded) => {
+          setStatus(loaded);
+          // Keeps the in-app notice in step: it disappears once MFA is on.
+          rememberMfaEnabled(userId, loaded.enabled);
+        })
         .catch(() => setStatus(null)),
-    [],
+    [userId],
   );
 
   useEffect(() => {
@@ -51,13 +60,21 @@ export function TwoStepCard({ email }: { email: string }) {
     let cancelled = false;
     getMfaStatus()
       .then((loaded) => {
+        rememberMfaEnabled(userId, loaded.enabled);
         if (!cancelled) setStatus(loaded);
       })
       .catch(() => undefined);
     return () => {
       cancelled = true;
     };
-  }, []);
+  }, [userId]);
+
+  const loaded = status !== null;
+  useEffect(() => {
+    if (loaded && window.location.hash === "#two-step") {
+      document.getElementById("two-step")?.scrollIntoView({ block: "start" });
+    }
+  }, [loaded]);
 
   if (!status) return null;
 
@@ -91,11 +108,11 @@ export function TwoStepCard({ email }: { email: string }) {
   };
 
   return (
-    <div className="card" style={{ marginTop: "var(--space-4)" }}>
+    <div id="two-step" className="card" style={{ marginTop: "var(--space-4)", scrollMarginTop: "calc(var(--header-height) + var(--space-4))" }}>
       <div className="card__header">
         <h3>{m.title}</h3>
         <div style={{ display: "flex", gap: "var(--space-2)" }}>
-          {status.mandatory && <span className="badge badge--info">{m.mandatory}</span>}
+          <span className="badge badge--info">{status.mandatory ? m.mandatory : m.recommended}</span>
           <span className={`badge ${status.enabled ? "badge--success" : "badge--neutral"}`}>{status.enabled ? m.on : m.off}</span>
         </div>
       </div>

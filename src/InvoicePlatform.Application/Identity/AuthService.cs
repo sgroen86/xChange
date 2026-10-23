@@ -350,7 +350,7 @@ public sealed class AuthService(
                 cancellationToken).ConfigureAwait(false);
         }
 
-        // The invitation proved who this is; the new Admin still sets up MFA before the first session.
+        // The invitation proved who this is; MFA is optional for the new Admin, so this is the session.
         await attempts.ClearAsync(clientKey, cancellationToken).ConfigureAwait(false);
         return await ContinueSignInAsync(user, clientKey, cancellationToken).ConfigureAwait(false);
     }
@@ -375,8 +375,8 @@ public sealed class AuthService(
 
     /// <summary>
     /// Signs a user in that was just created elsewhere (self sign-up), clearing
-    /// the address's attempts. Such a user is an Admin, so this returns the MFA
-    /// setup challenge rather than a session.
+    /// the address's attempts. MFA is optional for such a user, so this returns
+    /// the session.
     /// </summary>
     internal async Task<AuthResult> SignInAsync(User user, string clientKey, CancellationToken cancellationToken)
     {

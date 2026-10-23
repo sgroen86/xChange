@@ -53,7 +53,7 @@ public class SignupServiceTests
     }
 
     [Fact]
-    public async Task Confirming_creates_an_organisation_on_trial_whose_admin_sets_up_mfa_before_a_session()
+    public async Task Confirming_creates_an_organisation_on_trial_and_signs_its_admin_in_without_an_mfa_step()
     {
         await Open();
 
@@ -61,9 +61,10 @@ public class SignupServiceTests
         Assert.Contains("https://app.example.test/signup/confirm/?code=", _mail.Sent[0].Body, StringComparison.Ordinal);
         var result = await _signup.ConfirmAsync(CodeFromMail(), Client);
 
+        // Sign-up runs on to payment without an authenticator app: MFA is optional for a company admin.
         Assert.True(result.Succeeded);
-        Assert.Null(result.Token);
-        Assert.True(result.Mfa!.SetupRequired);
+        Assert.NotNull(result.Token);
+        Assert.Null(result.Mfa);
         Assert.Equal(UserRole.Admin, (await _identity.FindByEmailAsync("anna@bakkerij.be"))!.Role);
         var organization = Assert.Single(await _platform.ListOrganizationsAsync());
         Assert.Equal(("Bakkerij Peeters", "BE"), (organization.Name, organization.CountryCode));

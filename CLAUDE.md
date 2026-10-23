@@ -8,8 +8,9 @@ Last updated 2026-10-23. Running in production on `app.xchangeinvoice.com`:
 
 - **Identity** — xChange's own accounts (email + bcrypt), sessions stored only as a SHA-256 hash,
   lockout per client address and per account, two-step verification (TOTP + recovery codes;
-  mandatory for admins and platform admins, secrets encrypted with KMS), invitations, and self
-  sign-up with a trial of 10 conversions (closed until launch; the platform admin opens it).
+  optional and recommended for customers, mandatory for platform admins; secrets encrypted with
+  KMS), invitations, and self sign-up with one free conversion (closed until launch; the platform
+  admin opens it). Downloading an e-invoice needs a running plan or purchased credits.
 - **Extraction** — a PDF is read by Claude (model chosen on the Platform page) into a
   `CanonicalInvoiceDraft` with per-field evidence and arithmetic warnings. A single upload is read
   inside the request; batch uploads and PDFs mailed to an organisation's inbox address go through an

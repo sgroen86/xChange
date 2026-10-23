@@ -33,10 +33,12 @@ public sealed record UserMfa
     public bool IsEnabled => ProtectedSecret is not null;
 
     /// <summary>
-    /// The owner's rule: optional for everyone, mandatory for whoever can manage
-    /// an organisation or the platform.
+    /// The owner's rule (2026-10-23): optional for customers, company admins
+    /// included, so self sign-up runs to payment without an authenticator app;
+    /// mandatory only for the platform administrator, who can reach every
+    /// organisation.
     /// </summary>
-    public static bool IsMandatoryFor(User user) => user.Role == UserRole.Admin || user.IsPlatformAdmin;
+    public static bool IsMandatoryFor(User user) => user.IsPlatformAdmin;
 
     /// <summary>What a secret is bound to when protected, so it cannot be moved to another account.</summary>
     public static string ProtectionContext(string organizationId, string userId) => $"{organizationId}/{userId}";
@@ -47,7 +49,7 @@ public enum MfaChallengePurpose
     /// <summary>The password was right and MFA is on: a code completes the login.</summary>
     SignIn,
 
-    /// <summary>The password was right and MFA is mandatory but not set up: setting it up completes the login.</summary>
+    /// <summary>The password was right and MFA is mandatory (platform administrator) but not set up: setting it up completes the login.</summary>
     Setup,
 }
 

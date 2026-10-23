@@ -19,7 +19,7 @@ type Stage =
  * Setting up an authenticator app: an explanation, the QR code of the
  * otpauth URI (drawn here in the browser - the static site has no server),
  * the secret as text for typing in by hand, the first code to confirm, and
- * then the recovery codes, once. Used during login (when MFA is mandatory)
+ * then the recovery codes, once. Used during login (when MFA is mandatory, for platform administrators)
  * and from the settings.
  */
 export function MfaSetup({

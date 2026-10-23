@@ -71,7 +71,7 @@ public sealed class SignedInFactory : WebApplicationFactory<Program>
     internal SignedInIdentity Identity { get; } = new();
 
     /// <summary>Adds an account that logs in with a real password, checked as the API checks it.</summary>
-    public async Task<User> AddUserAsync(string email, string password, UserRole role, string organizationId = OrgA)
+    public async Task<User> AddUserAsync(string email, string password, UserRole role, string organizationId = OrgA, bool platformAdmin = false)
     {
         var hasher = Services.GetRequiredService<IPasswordHasher>();
         var user = new User
@@ -82,6 +82,7 @@ public sealed class SignedInFactory : WebApplicationFactory<Program>
             PasswordHash = hasher.Hash(password),
             Name = email,
             Role = role,
+            IsPlatformAdmin = platformAdmin,
         };
         await Identity.AddAsync(user);
         return user;

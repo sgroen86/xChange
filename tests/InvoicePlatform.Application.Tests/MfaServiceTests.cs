@@ -7,7 +7,7 @@ namespace InvoicePlatform.Application.Tests;
 /// <summary>
 /// Two-step verification: the parts where a mistake lets someone in with the
 /// password alone - challenges that live too long or too often, codes that work
-/// twice, an Admin who can switch it off.
+/// twice, a platform administrator who can switch it off.
 /// </summary>
 public class MfaServiceTests
 {
@@ -27,7 +27,7 @@ public class MfaServiceTests
         _mfa = new MfaService(_users, _store, new FakeProtector(), _users, _clock, _auth);
     }
 
-    private async Task<User> SeedAsync(string email, UserRole role)
+    private async Task<User> SeedAsync(string email, UserRole role, bool platformAdmin = false)
     {
         var user = new User
         {
@@ -37,10 +37,14 @@ public class MfaServiceTests
             PasswordHash = new AuthServiceTests.FakeHasher().Hash(Password),
             Name = email,
             Role = role,
+            IsPlatformAdmin = platformAdmin,
         };
         await _users.AddAsync(user);
         return user;
     }
+
+    /// <summary>The one kind of account for which MFA is mandatory: setting it up is part of its login.</summary>
+    private Task<User> SeedPlatformAdminAsync(string email) => SeedAsync(email, UserRole.Admin, platformAdmin: true);
 
     private async Task<string> ChallengeAsync(string email, string client = Client)
     {
@@ -64,9 +68,9 @@ public class MfaServiceTests
     private void NextStep() => _clock.UtcNow += TimeSpan.FromSeconds(Totp.PeriodSeconds);
 
     [Fact]
-    public async Task An_admin_sets_up_mfa_during_login_and_gets_a_session_and_ten_recovery_codes()
+    public async Task A_platform_administrator_sets_up_mfa_during_login_and_gets_a_session_and_ten_recovery_codes()
     {
-        var admin = await SeedAsync("admin@example.nl", UserRole.Admin);
+        var admin = await SeedPlatformAdminAsync("admin@example.nl");
         var challenge = await ChallengeAsync("admin@example.nl");
 
         var setup = await _mfa.StartLoginSetupAsync(challenge, Client);
@@ -89,7 +93,7 @@ public class MfaServiceTests
     [Fact]
     public async Task A_wrong_code_does_not_finish_the_setup()
     {
-        await SeedAsync("admin@example.nl", UserRole.Admin);
+        await SeedPlatformAdminAsync("admin@example.nl");
         var challenge = await ChallengeAsync("admin@example.nl");
         await _mfa.StartLoginSetupAsync(challenge, Client);
 
@@ -103,7 +107,7 @@ public class MfaServiceTests
     [Fact]
     public async Task With_mfa_on_a_login_needs_the_code_from_the_app()
     {
-        await SeedAsync("admin@example.nl", UserRole.Admin);
+        await SeedPlatformAdminAsync("admin@example.nl");
         var (secret, _, _) = await SetUpDuringLoginAsync("admin@example.nl");
         NextStep();
 
@@ -120,7 +124,7 @@ public class MfaServiceTests
     [Fact]
     public async Task A_code_works_one_step_either_side_but_never_twice()
     {
-        await SeedAsync("admin@example.nl", UserRole.Admin);
+        await SeedPlatformAdminAsync("admin@example.nl");
         var (secret, _, _) = await SetUpDuringLoginAsync("admin@example.nl");
         NextStep();
         var code = Authenticator.CodeFor(secret, _clock.UtcNow, stepOffset: -1);
@@ -136,7 +140,7 @@ public class MfaServiceTests
     [Fact]
     public async Task A_challenge_expires_after_five_minutes()
     {
-        await SeedAsync("admin@example.nl", UserRole.Admin);
+        await SeedPlatformAdminAsync("admin@example.nl");
         var (secret, _, _) = await SetUpDuringLoginAsync("admin@example.nl");
         var challenge = await ChallengeAsync("admin@example.nl");
 
@@ -150,7 +154,7 @@ public class MfaServiceTests
     [Fact]
     public async Task Five_wrong_codes_end_the_challenge_even_from_different_addresses()
     {
-        await SeedAsync("admin@example.nl", UserRole.Admin);
+        await SeedPlatformAdminAsync("admin@example.nl");
         var (secret, _, _) = await SetUpDuringLoginAsync("admin@example.nl");
         NextStep();
         var challenge = await ChallengeAsync("admin@example.nl");
@@ -171,7 +175,7 @@ public class MfaServiceTests
     [Fact]
     public async Task Wrong_codes_count_towards_the_address_lockout_across_challenges()
     {
-        await SeedAsync("admin@example.nl", UserRole.Admin);
+        await SeedPlatformAdminAsync("admin@example.nl");
         await SetUpDuringLoginAsync("admin@example.nl");
 
         for (var i = 0; i < LoginAttempts.MaxAttempts - 1; i++)
@@ -190,7 +194,7 @@ public class MfaServiceTests
     public async Task Wrong_codes_from_many_addresses_lock_the_account()
     {
         // Each address and each challenge stays under its own limit; the account does not.
-        await SeedAsync("admin@example.nl", UserRole.Admin);
+        await SeedPlatformAdminAsync("admin@example.nl");
         var (secret, _, _) = await SetUpDuringLoginAsync("admin@example.nl");
         NextStep();
         var earlier = await ChallengeAsync("admin@example.nl", "10.8.8.8");
@@ -244,7 +248,7 @@ public class MfaServiceTests
     [Fact]
     public async Task A_challenge_is_used_once()
     {
-        await SeedAsync("admin@example.nl", UserRole.Admin);
+        await SeedPlatformAdminAsync("admin@example.nl");
         var (secret, _, _) = await SetUpDuringLoginAsync("admin@example.nl");
         NextStep();
         var challenge = await ChallengeAsync("admin@example.nl");
@@ -259,7 +263,7 @@ public class MfaServiceTests
     [Fact]
     public async Task A_setup_challenge_cannot_complete_a_code_login_and_the_other_way_round()
     {
-        await SeedAsync("admin@example.nl", UserRole.Admin);
+        await SeedPlatformAdminAsync("admin@example.nl");
         var setupChallenge = await ChallengeAsync("admin@example.nl");
 
         Assert.True((await _mfa.VerifyLoginAsync(setupChallenge, "123456", null, Client)).ChallengeGone);
@@ -284,7 +288,7 @@ public class MfaServiceTests
     [Fact]
     public async Task A_recovery_code_signs_in_once_and_says_how_many_remain()
     {
-        await SeedAsync("admin@example.nl", UserRole.Admin);
+        await SeedPlatformAdminAsync("admin@example.nl");
         var (_, codes, _) = await SetUpDuringLoginAsync("admin@example.nl");
 
         var first = await _mfa.VerifyLoginAsync(await ChallengeAsync("admin@example.nl"), null, codes[3].ToUpperInvariant(), Client);
@@ -297,9 +301,9 @@ public class MfaServiceTests
     }
 
     [Fact]
-    public async Task An_admin_cannot_turn_mfa_off_and_keeps_the_recovery_code_offered()
+    public async Task A_platform_administrator_cannot_turn_mfa_off_and_keeps_the_recovery_code_offered()
     {
-        var admin = await SeedAsync("admin@example.nl", UserRole.Admin);
+        var admin = await SeedPlatformAdminAsync("admin@example.nl");
         var (_, codes, _) = await SetUpDuringLoginAsync("admin@example.nl");
 
         var result = await _mfa.DisableAsync("org-1", admin.Id, codes[0], Client);
@@ -307,6 +311,25 @@ public class MfaServiceTests
         Assert.False(result.Succeeded);
         Assert.Contains("verplicht", result.Error);
         Assert.Equal(new MfaStatus(true, true, RecoveryCodes.Count), await _mfa.GetStatusAsync("org-1", admin.Id));
+    }
+
+    [Fact]
+    public async Task A_company_admin_signs_in_without_mfa_and_may_turn_it_on_and_off()
+    {
+        // The owner's rule of 2026-10-23: mandatory only for the platform administrator.
+        var admin = await SeedAsync("baas@example.nl", UserRole.Admin);
+        Assert.NotNull((await _auth.LoginAsync("baas@example.nl", Password, Client)).Token);
+        Assert.Equal(new MfaStatus(false, false, 0), await _mfa.GetStatusAsync("org-1", admin.Id));
+
+        var setup = await _mfa.StartAccountSetupAsync("org-1", admin.Id);
+        var codes = (await _mfa.ConfirmAccountSetupAsync("org-1", admin.Id, Authenticator.CodeFor(setup.Setup!.Secret, _clock.UtcNow), Client)).RecoveryCodes!;
+        Assert.False((await _auth.LoginAsync("baas@example.nl", Password, Client)).Mfa!.SetupRequired);
+
+        var off = await _mfa.DisableAsync("org-1", admin.Id, codes[0], Client);
+
+        Assert.True(off.Succeeded);
+        Assert.Equal(new MfaStatus(false, false, 0), await _mfa.GetStatusAsync("org-1", admin.Id));
+        Assert.NotNull((await _auth.LoginAsync("baas@example.nl", Password, "198.51.100.1")).Token);
     }
 
     [Fact]
@@ -357,7 +380,7 @@ public class MfaServiceTests
     [Fact]
     public async Task New_recovery_codes_replace_the_old_ones()
     {
-        var admin = await SeedAsync("admin@example.nl", UserRole.Admin);
+        var admin = await SeedPlatformAdminAsync("admin@example.nl");
         var (secret, oldCodes, _) = await SetUpDuringLoginAsync("admin@example.nl");
         NextStep();
 
@@ -369,9 +392,9 @@ public class MfaServiceTests
     }
 
     [Fact]
-    public async Task The_platform_reset_turns_mfa_off_and_an_admin_sets_it_up_again_at_the_next_login()
+    public async Task The_platform_reset_turns_mfa_off_and_a_platform_administrator_sets_it_up_again_at_the_next_login()
     {
-        var admin = await SeedAsync("admin@example.nl", UserRole.Admin);
+        var admin = await SeedPlatformAdminAsync("admin@example.nl");
         await SetUpDuringLoginAsync("admin@example.nl");
 
         var reset = await _mfa.ResetAsync("Admin@Example.nl");
@@ -384,25 +407,24 @@ public class MfaServiceTests
     }
 
     [Fact]
-    public async Task An_invited_admin_finishes_the_mfa_setup_and_is_signed_in()
+    public async Task An_invited_admin_is_signed_in_without_an_mfa_step()
     {
         var platform = new PlatformService(_platform, _users, _clock);
         var created = await platform.CreateOrganizationAsync("platform-admin", "Klant Pte Ltd", "SG", "Jan", "jan@klant.sg");
-        var accepted = await _auth.AcceptInvitationAsync(created.InvitationCode!, "Jan Tan", "a-long-enough-password", Client);
+        var session = await _auth.AcceptInvitationAsync(created.InvitationCode!, "Jan Tan", "a-long-enough-password", Client);
 
-        var setup = await _mfa.StartLoginSetupAsync(accepted.Mfa!.Challenge, Client);
-        var session = await _mfa.ConfirmLoginSetupAsync(accepted.Mfa.Challenge, Authenticator.CodeFor(setup.Setup!.Secret, _clock.UtcNow), Client);
-
+        Assert.Null(session.Mfa);
+        Assert.NotNull(session.Token);
         Assert.Equal(created.Organization!.OrganizationId, session.User!.OrganizationId);
         Assert.Equal(UserRole.Admin, session.User.Role);
-        Assert.NotNull(session.Token);
+        Assert.Empty(_store.Challenges);
     }
 
     [Fact]
     public async Task A_session_from_before_mfa_stays_valid_until_it_ends()
     {
         // Enforcement happens at the next login, not by cutting live sessions.
-        var admin = await SeedAsync("admin@example.nl", UserRole.Admin);
+        var admin = await SeedPlatformAdminAsync("admin@example.nl");
         await _users.SaveAsync(new AuthSession(AuthSession.HashOf("existing"), admin.Id, "org-1", _clock.UtcNow, _clock.UtcNow + AuthSession.Lifetime));
 
         Assert.NotNull(await _auth.ValidateAsync("existing"));
@@ -411,7 +433,7 @@ public class MfaServiceTests
     [Fact]
     public async Task A_deactivated_account_cannot_finish_the_second_step()
     {
-        await SeedAsync("admin@example.nl", UserRole.Admin);
+        await SeedPlatformAdminAsync("admin@example.nl");
         var (secret, _, _) = await SetUpDuringLoginAsync("admin@example.nl");
         NextStep();
         var challenge = await ChallengeAsync("admin@example.nl");

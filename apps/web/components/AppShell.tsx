@@ -20,6 +20,7 @@ import {
 } from "../lib/auth";
 import { Icon } from "./Icon";
 import { LanguageSwitch } from "./LanguageSwitch";
+import { MfaNudge } from "./MfaNudge";
 import { useText, type Dictionary } from "../lib/i18n";
 import type { PageKey } from "../lib/i18n/shell";
 import { isSection, navStructure, type NavItem } from "./nav";
@@ -231,7 +232,11 @@ export function AppShell({ children }: { children: React.ReactNode }) {
         </header>
 
         <main className="content">
-          <div className="content__inner">{children}</div>
+          <div className="content__inner">
+            {/* Not on the settings page, where the card itself is. */}
+            {user && !pathname.startsWith("/settings") && <MfaNudge userId={user.id} />}
+            {children}
+          </div>
         </main>
       </div>
     </div>

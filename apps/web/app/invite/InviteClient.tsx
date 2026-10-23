@@ -32,7 +32,7 @@ export default function InviteClient() {
   const [password, setPassword] = useState("");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  // The invited user becomes Admin, for whom MFA is mandatory: set up before the session.
+  // Normally the answer is the session (MFA is optional for customers); a second step is still handled if the server asks.
   const [mfaStep, setMfaStep] = useState<{ kind: "mfa" | "mfaSetup"; challenge: string } | null>(null);
 
   useEffect(() => {

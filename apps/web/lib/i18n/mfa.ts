@@ -17,7 +17,7 @@ const nl = {
   setup: {
     title: "Tweestapsverificatie instellen",
     requiredIntro:
-      "Als beheerder log je in met je wachtwoord én een code uit een authenticator-app, zoals Google Authenticator, Microsoft Authenticator of 1Password. Stel het nu in; het duurt een minuut.",
+      "Als platformbeheerder log je in met je wachtwoord én een code uit een authenticator-app, zoals Google Authenticator, Microsoft Authenticator of 1Password. Stel het nu in; het duurt een minuut.",
     optionalIntro:
       "Log voortaan in met je wachtwoord én een code uit een authenticator-app, zoals Google Authenticator, Microsoft Authenticator of 1Password.",
     scan: "1. Scan deze QR-code met de app.",
@@ -45,10 +45,11 @@ const nl = {
     on: "Aan",
     off: "Uit",
     mandatory: "Verplicht",
-    help: "Naast je wachtwoord een code uit een authenticator-app bij elke login.",
+    recommended: "Aanbevolen",
+    help: "Aanbevolen: naast je wachtwoord een code uit een authenticator-app bij elke login. Je kunt het altijd weer uitzetten.",
     statusOn: (left: number) => `Staat aan. Je hebt nog ${left} herstelcode(s).`,
     statusOff: "Staat uit: je logt in met alleen je wachtwoord.",
-    mandatoryHelp: "Voor beheerders is tweestapsverificatie verplicht en kan het niet uit.",
+    mandatoryHelp: "Voor platformbeheerders is tweestapsverificatie verplicht en kan het niet uit.",
     enable: "Aanzetten",
     regenerate: "Nieuwe herstelcodes",
     regenerateHelp: "Voer een code uit de app of een herstelcode in. De oude herstelcodes werken daarna niet meer.",
@@ -62,11 +63,16 @@ const nl = {
   reset: {
     title: "Tweestapsverificatie herstellen",
     help:
-      "Voor een gebruiker die telefoon én herstelcodes kwijt is. Tweestapsverificatie gaat uit; voor beheerders is het verplicht, dus die stellen het bij de volgende login opnieuw in. Ga eerst na wie erom vraagt.",
+      "Voor een gebruiker die telefoon én herstelcodes kwijt is. Tweestapsverificatie gaat uit; voor platformbeheerders is het verplicht, dus die stellen het bij de volgende login opnieuw in. Ga eerst na wie erom vraagt.",
     email: "E-mailadres van de gebruiker",
     submit: "Herstellen",
     confirm: (email: string) => `Tweestapsverificatie van ${email} uitzetten?`,
     done: (email: string) => `Tweestapsverificatie van ${email} staat uit.`,
+  },
+  nudge: {
+    text: "Beveilig je account met tweestapsverificatie.",
+    action: "Nu instellen",
+    dismiss: "Verbergen",
   },
 };
 
@@ -87,7 +93,7 @@ const en: typeof nl = {
   setup: {
     title: "Set up two-step verification",
     requiredIntro:
-      "As an administrator you log in with your password and a code from an authenticator app, such as Google Authenticator, Microsoft Authenticator or 1Password. Set it up now; it takes a minute.",
+      "As a platform administrator you log in with your password and a code from an authenticator app, such as Google Authenticator, Microsoft Authenticator or 1Password. Set it up now; it takes a minute.",
     optionalIntro:
       "From now on, log in with your password and a code from an authenticator app, such as Google Authenticator, Microsoft Authenticator or 1Password.",
     scan: "1. Scan this QR code with the app.",
@@ -115,10 +121,11 @@ const en: typeof nl = {
     on: "On",
     off: "Off",
     mandatory: "Mandatory",
-    help: "A code from an authenticator app at every login, in addition to your password.",
+    recommended: "Recommended",
+    help: "Recommended: a code from an authenticator app at every login, in addition to your password. You can turn it off again at any time.",
     statusOn: (left: number) => `On. You have ${left} recovery ${left === 1 ? "code" : "codes"} left.`,
     statusOff: "Off: you log in with your password only.",
-    mandatoryHelp: "Two-step verification is mandatory for administrators and cannot be turned off.",
+    mandatoryHelp: "Two-step verification is mandatory for platform administrators and cannot be turned off.",
     enable: "Turn on",
     regenerate: "New recovery codes",
     regenerateHelp: "Enter a code from the app or a recovery code. The old recovery codes stop working.",
@@ -132,11 +139,16 @@ const en: typeof nl = {
   reset: {
     title: "Reset two-step verification",
     help:
-      "For a user who lost both phone and recovery codes. Two-step verification is turned off; it is mandatory for administrators, so they set it up again at their next login. Check first who is asking.",
+      "For a user who lost both phone and recovery codes. Two-step verification is turned off; it is mandatory for platform administrators, so they set it up again at their next login. Check first who is asking.",
     email: "User's email address",
     submit: "Reset",
     confirm: (email: string) => `Turn off two-step verification for ${email}?`,
     done: (email: string) => `Two-step verification for ${email} is off.`,
+  },
+  nudge: {
+    text: "Protect your account with two-step verification.",
+    action: "Set it up now",
+    dismiss: "Hide",
   },
 };
 

@@ -188,7 +188,7 @@ export default function SettingsClient() {
         </form>
       )}
 
-      {isApiConfigured && user && <TwoStepCard email={user.email} />}
+      {isApiConfigured && user && <TwoStepCard userId={user.id} email={user.email} />}
 
       <BillingCard canEdit={canEdit} />
 

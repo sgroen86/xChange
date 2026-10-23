@@ -2,11 +2,35 @@
 
 **Datum:** 2026-10-20
 **Status:** gevraagd door de eigenaar; beslissingen hieronder zijn de zijne, de uitwerking niet
-besproken
+besproken. **Beleid gewijzigd op 2026-10-23**, zie hieronder.
+
+## Wijziging 2026-10-23: optioneel voor klanten
+
+Besluit van de eigenaar: tweestapsverificatie is **optioneel voor klanten** (bedrijfsbeheerders én
+gebruikers) en blijft **verplicht alleen voor platformbeheerders** (`IsPlatformAdmin`). Reden: de
+zelfaanmelding moet lopen als website → aanmelden → bevestigen → betalen → app, zonder
+authenticator-app ertussen; het platformbeheerdersaccount (toegang tot elke organisatie) blijft
+beschermd.
+
+- `UserMfa.IsMandatoryFor(user)` is nu `user.IsPlatformAdmin`, niet meer ook rol `Admin`.
+- Inloggen: wie geen platformbeheerder is en MFA niet aan heeft, krijgt meteen een sessie; met MFA
+  aan blijft de codestap.
+- `/signup/confirm` en `/invitations/{code}/accept` geven een sessie in plaats van de
+  setup-challenge (die maken een bedrijfsbeheerder). `/auth/setup` maakt de platformbeheerder en
+  geeft dus nog steeds de setup-challenge.
+- Uitzetten mag voor iedereen behalve platformbeheerders; `mandatory` in `GET /account/mfa` volgt
+  de nieuwe regel.
+- Web: de kaart in Instellingen toont "Aanbevolen" in plaats van "Verplicht" en biedt uitzetten
+  aan. Wie ingelogd is zonder MFA ziet boven de inhoud een melding "Beveilig je account met
+  tweestapsverificatie" met een link naar `/settings/#two-step`; wegklikken geldt 30 dagen per
+  browser (localStorage). De status wordt één keer per sessie opgevraagd, niet in mock-modus.
+- Ongewijzigd: versleuteling, replay-bescherming, challenges, herstelcodes, lockout.
+
+Waar hieronder "verplicht voor beheerders" staat, lees "verplicht voor platformbeheerders".
 
 ## Beslissingen van de eigenaar
 
-- **Optioneel voor iedereen, verplicht voor beheerders**: rol `Admin` en platformbeheerders
+- ~~**Optioneel voor iedereen, verplicht voor beheerders**~~ (vervangen op 2026-10-23, zie boven): rol `Admin` en platformbeheerders
   (`IsPlatformAdmin`) stellen het in bij hun volgende login, en meteen na het bevestigen van een
   aanmelding, het aannemen van een uitnodiging en de eerste-account-setup (die maken allemaal een
   Admin).

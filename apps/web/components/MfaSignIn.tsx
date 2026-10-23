@@ -12,8 +12,8 @@ import { useToast } from "./Toast";
 
 /**
  * The second step of a login, after the password (or a confirmation link, or
- * an accepted invitation): a code from the app, or - when MFA is mandatory and
- * not set up yet - setting it up. Ends in a session, or sends the person back
+ * an accepted invitation): a code from the app, or - when MFA is mandatory
+ * (platform administrators) and not set up yet - setting it up. Ends in a session, or sends the person back
  * to the start when the challenge expired, ran out of attempts or the address
  * is locked out.
  */
