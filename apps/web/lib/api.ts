@@ -2,7 +2,7 @@
  * Client for the xChange extraction API.
  *
  * The base URL is configuration, not a constant: the frontend is a static
- * export served from greenitsolutions.net while the API runs on AWS, and the
+ * export served from app.xchangeinvoice.com while the API runs on Lambda, and the
  * two move independently. Set NEXT_PUBLIC_XCHANGE_API_URL at build time.
  *
  * With no base URL configured the app stays on mock data, so a build that has

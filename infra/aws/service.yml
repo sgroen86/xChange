@@ -59,13 +59,7 @@ Parameters:
     Type: String
     Default: claude-opus-5
 
-  AllowedOrigin:
-    Type: String
-    Default: https://greenitsolutions.net
 
-  AllowedOriginWww:
-    Type: String
-    Default: https://www.greenitsolutions.net
 
   # The app on its own domain (infra/aws/app.yml). www.xchangeinvoice.com is
   # the public website, which never calls the API.
@@ -341,9 +335,7 @@ Resources:
           Mfa__KmsKeyId: !GetAtt MfaKey.Arn
           InvoiceStorage__TableName: !Ref InvoiceTable
           InvoiceStorage__BucketName: !Ref DocumentBucket
-          Cors__AllowedOrigins__0: !Ref AllowedOrigin
-          Cors__AllowedOrigins__1: !Ref AllowedOriginWww
-          Cors__AllowedOrigins__2: !Ref AppOrigin
+          Cors__AllowedOrigins__0: !Ref AppOrigin
           OfficialValidation__FunctionName: !Ref ValidatorAlias
           Imports__QueueUrl: !Ref ImportQueue
           Inbox__Domain: !Ref NewInboxDomain

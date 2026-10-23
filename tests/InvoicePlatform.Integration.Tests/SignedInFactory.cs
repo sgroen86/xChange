@@ -114,7 +114,7 @@ public sealed class SignedInFactory : WebApplicationFactory<Program>
     {
         builder.UseSetting("Anthropic:ApiKey", "test-key-never-used");
         // The production origin, so CORS behaves as it does for the real site.
-        builder.UseSetting("Cors:AllowedOrigins:0", "https://greenitsolutions.net");
+        builder.UseSetting("Cors:AllowedOrigins:0", "https://app.xchangeinvoice.com");
 
         builder.ConfigureServices(services =>
         {

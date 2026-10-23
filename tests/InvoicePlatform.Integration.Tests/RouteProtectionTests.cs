@@ -21,7 +21,7 @@ namespace InvoicePlatform.Integration.Tests;
 /// </summary>
 public class RouteProtectionTests : IClassFixture<RouteProtectionTests.Factory>
 {
-    private const string TestOrigin = "https://greenitsolutions.net";
+    private const string TestOrigin = "https://app.xchangeinvoice.com";
 
     private readonly Factory _factory;
 
@@ -118,6 +118,21 @@ public class RouteProtectionTests : IClassFixture<RouteProtectionTests.Factory>
             : [];
 
         Assert.Single(origins);
+    }
+
+    [Theory]
+    [InlineData("https://greenitsolutions.net")]
+    [InlineData("https://www.greenitsolutions.net")]
+    public async Task The_retired_old_address_gets_no_cors_allowance(string origin)
+    {
+        // greenitsolutions.net/xchange was taken offline; that origin also hosts
+        // other apps, so it must not be able to call the API from a browser.
+        var request = new HttpRequestMessage(HttpMethod.Get, "/api/v1/auth/status");
+        request.Headers.Add("Origin", origin);
+
+        var response = await _factory.CreateClient().SendAsync(request);
+
+        Assert.False(response.Headers.Contains("Access-Control-Allow-Origin"));
     }
 
     [Fact]

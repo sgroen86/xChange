@@ -49,7 +49,7 @@ public class OfficialValidationEndpointTests : IDisposable
 
         var request = new HttpRequestMessage(HttpMethod.Get, $"/api/v1/invoices/{id}/export");
         request.Headers.Add("Authorization", "Bearer admin-a");
-        request.Headers.Add("Origin", "https://greenitsolutions.net");
+        request.Headers.Add("Origin", "https://app.xchangeinvoice.com");
         var response = await _factory.CreateClient().SendAsync(request);
 
         Assert.Equal(HttpStatusCode.OK, response.StatusCode);

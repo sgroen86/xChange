@@ -1,0 +1,47 @@
+name: Take the old xChange copy on Strato offline
+
+# One-off: greenitsolutions.net/xchange/ is retired (2026-10-23); the app lives on
+# https://app.xchangeinvoice.com/. Removes the directory the old Strato deploy
+# wrote (~/xchange and its .new/.old swap folders and archive), and nothing else.
+# Safe to run again: whatever is already gone is skipped.
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/retire-strato-xchange.yml'
+  workflow_dispatch:
+
+jobs:
+  retire:
+    runs-on: ubuntu-latest
+    environment: xchange-production
+    steps:
+      - name: Remove ~/xchange from the webspace
+        uses: appleboy/ssh-action@v1.0.3
+        with:
+          host: ${{ secrets.XCHANGE_SFTP_HOST }}
+          username: ${{ secrets.XCHANGE_SFTP_USERNAME }}
+          password: ${{ secrets.XCHANGE_SFTP_PASSWORD }}
+          script: |
+            set -e
+            cd ~
+            for dir in xchange xchange.new xchange.old; do
+              if [ -d "$dir" ]; then
+                # Only ever the xChange static export: refuse anything that does not look like it.
+                if [ -f "$dir/upload/index.html" ] || [ "$dir" != "xchange" ]; then
+                  rm -rf -- "$dir"
+                  echo "Removed ~/$dir"
+                else
+                  echo "~/$dir does not look like the xChange export - left alone"; exit 1
+                fi
+              fi
+            done
+            rm -f ~/xchange-ui.tar.gz ~/xchange-ui-*.tar.gz
+            echo "Done."
+
+      - name: Check the old address is gone
+        run: |
+          code=$(curl -s -o /dev/null -w '%{http_code}' -L --max-time 30 https://greenitsolutions.net/xchange/upload/)
+          echo "https://greenitsolutions.net/xchange/upload/ -> HTTP $code"
+          [ "$code" != "200" ] || { echo "Still served"; exit 1; }

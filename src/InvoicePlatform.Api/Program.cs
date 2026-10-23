@@ -36,7 +36,7 @@ builder.Services.Configure<Microsoft.AspNetCore.Http.Features.FormOptions>(optio
     options.MultipartBodyLengthLimit = ExtractInvoiceEndpoint.MaxUploadBytes;
 });
 
-// The frontend is served from a different origin (greenitsolutions.net) than
+// The frontend is served from a different origin (app.xchangeinvoice.com) than
 // the API, so the browser needs an explicit allow. Origins come from
 // configuration - never a wildcard, which would let any site post invoices here.
 var allowedOrigins = builder.Configuration
