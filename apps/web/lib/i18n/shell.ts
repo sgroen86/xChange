@@ -47,6 +47,7 @@ const nl = {
     platform: { title: "Platform", breadcrumb: "Beheer / Platform" },
     costs: { title: "Kosten", breadcrumb: "Beheer / Kosten" },
     invite: { title: "Uitnodiging", breadcrumb: "xChange / Account aanmaken" },
+    signup: { title: "Aanmelden", breadcrumb: "xChange / Account aanmaken" },
   },
   /** Errors created by lib/api.ts (API problem details are shown as they come). */
   api: {
@@ -109,6 +110,7 @@ const en: typeof nl = {
     platform: { title: "Platform", breadcrumb: "Administration / Platform" },
     costs: { title: "Costs", breadcrumb: "Administration / Costs" },
     invite: { title: "Invitation", breadcrumb: "xChange / Create account" },
+    signup: { title: "Sign up", breadcrumb: "xChange / Create account" },
   },
   api: {
     unreachableCors: "The API cannot be reached. Check the connection or the CORS setting.",

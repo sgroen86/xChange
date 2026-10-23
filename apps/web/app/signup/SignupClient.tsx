@@ -24,8 +24,13 @@ type State = { status: "loading" } | { status: "closed" } | { status: "open"; tr
 export default function SignupClient() {
   const t = useText();
   const searchParams = useSearchParams();
-  const urlLang = parseLang(searchParams.get("lang"));
-  const planId = parsePlan(searchParams.get("plan"));
+  // Read once on arrival: the address bar is cleaned right after, and the
+  // choice must not disappear with the query string.
+  const [arrival] = useState(() => ({
+    lang: parseLang(searchParams.get("lang")),
+    plan: parsePlan(searchParams.get("plan")),
+  }));
+  const [planId, setPlanId] = useState(arrival.plan);
   const plan = planId ? SIGNUP_PLANS[planId] : null;
   const [state, setState] = useState<State>({ status: "loading" });
   const [countries, setCountries] = useState<CountryOption[]>([]);
@@ -45,22 +50,19 @@ export default function SignupClient() {
     };
   }, []);
 
-  // The website's language, when the app has it (French visitors get English).
   useEffect(() => {
-    if (urlLang && urlLang !== currentLanguage()) setLanguage(urlLang);
-  }, [urlLang]);
-
-  // Arriving without a plan means the trial, also after an earlier choice.
-  useEffect(() => {
-    if (planId) rememberPlan(planId);
+    // The website's language, when the app has it (French visitors get English).
+    if (arrival.lang && arrival.lang !== currentLanguage()) setLanguage(arrival.lang);
+    // Arriving without a plan means the trial, also after an earlier choice.
+    if (arrival.plan) rememberPlan(arrival.plan);
     else forgetPlan();
-  }, [planId]);
+    // The choice is kept; the address bar shows just /signup/.
+    if (window.location.search) window.history.replaceState(null, "", window.location.pathname);
+  }, [arrival]);
 
   const startWithTrial = () => {
-    const params = new URLSearchParams(searchParams.toString());
-    params.delete("plan");
-    const query = params.toString();
-    window.history.replaceState(null, "", `${window.location.pathname}${query ? `?${query}` : ""}`);
+    forgetPlan();
+    setPlanId(null);
   };
 
   const set = (key: keyof typeof form) => (event: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) =>
