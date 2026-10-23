@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useCallback, useRef, useState } from "react";
 
@@ -33,6 +34,8 @@ export default function UploadPage() {
   const [batchDone, setBatchDone] = useState(0);
   const [importing, setImporting] = useState(false);
   const [errors, setErrors] = useState<string[]>([]);
+  // The API refused with 402: no conversions left, so the way on is a plan or credits.
+  const [outOfConversions, setOutOfConversions] = useState(false);
   const [dragging, setDragging] = useState(false);
   const [stageIndex, setStageIndex] = useState(-1);
   const [progress, setProgress] = useState(0);
@@ -113,6 +116,7 @@ export default function UploadPage() {
   const clearFile = () => {
     setFile(null);
     setErrors([]);
+    setOutOfConversions(false);
     if (inputRef.current) inputRef.current.value = "";
   };
 
@@ -167,6 +171,7 @@ export default function UploadPage() {
       setProgress(0);
       const message =
         cause instanceof ApiError ? cause.message : t.upload.unexpectedFailure;
+      setOutOfConversions(cause instanceof ApiError && cause.status === 402);
       setErrors([message]);
       showToast(message, "danger");
     }
@@ -305,6 +310,11 @@ export default function UploadPage() {
                         <li key={error}>{error}</li>
                       ))}
                     </ul>
+                    {outOfConversions && (
+                      <Link href="/settings/#billing" className="btn btn--primary btn--sm" style={{ marginTop: "var(--space-3)" }}>
+                        {t.upload.choosePlan}
+                      </Link>
+                    )}
                   </div>
                 </div>
               )}

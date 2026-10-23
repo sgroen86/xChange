@@ -30,6 +30,8 @@ using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using InvoicePlatform.Application.Quality;
 using InvoicePlatform.Infrastructure.Quality;
+using InvoicePlatform.Application.Billing;
+using InvoicePlatform.Infrastructure.Billing;
 
 namespace InvoicePlatform.Infrastructure;
 
@@ -187,6 +189,29 @@ public static class DependencyInjection
             .Bind(configuration.GetSection(PeppolOptions.SectionName));
         services.AddSingleton<IReceiverNetwork, PeppolNetwork>();
         services.AddScoped<ReceiverLookupService>();
+
+        return services;
+    }
+
+    /// <summary>
+    /// Plans and credits, sold through Stripe. The keys are read at runtime
+    /// (<see cref="StripeOptions"/>); without them the payment endpoints say
+    /// payments are unavailable and the webhook answers 503.
+    /// </summary>
+    public static IServiceCollection AddBilling(
+        this IServiceCollection services,
+        IConfiguration configuration)
+    {
+        services
+            .AddOptions<StripeOptions>()
+            .Bind(configuration.GetSection(StripeOptions.SectionName));
+
+        services.AddSingleton<StripeSecrets>();
+        services.AddSingleton<IBillingProvider, StripeBillingProvider>();
+        services.AddSingleton<IBillingStore, DynamoDbBillingStore>();
+        services.AddSingleton(sp => new BillingSettings(
+            sp.GetRequiredService<Microsoft.Extensions.Options.IOptions<EmailOptions>>().Value.AppUrl.TrimEnd('/')));
+        services.AddScoped<BillingService>();
 
         return services;
     }

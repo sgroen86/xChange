@@ -9,10 +9,10 @@ import { getServerUserSnapshot, getUserSnapshot, listCountries, subscribeToUser,
 import { text, useText } from "../../lib/i18n";
 import { FALLBACK_SETTINGS, getSettings, updateSettings, type OrganizationSettings } from "../../lib/settings";
 import { endpointSchemes } from "../invoices/[invoiceId]/review/fields";
+import { BillingCard } from "./BillingCard";
 import { InboxAddress } from "./InboxAddress";
 import { LearnedCorrections } from "./LearnedCorrections";
 import { TwoStepCard } from "./TwoStepCard";
-import { UsageCard } from "./UsageCard";
 
 /**
  * The organisation's settings: the format the export menu opens on, and the
@@ -190,7 +190,7 @@ export default function SettingsClient() {
 
       {isApiConfigured && user && <TwoStepCard email={user.email} />}
 
-      <UsageCard />
+      <BillingCard canEdit={canEdit} />
 
       <InboxAddress canEdit={canEdit} />
 

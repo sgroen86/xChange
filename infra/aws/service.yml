@@ -105,6 +105,19 @@ Resources:
                 Action: secretsmanager:GetSecretValue
                 Resource: !Ref AnthropicSecretArn
 
+        # Stripe's keys, {"secretKey": ..., "webhookSecret": ...}, read at
+        # runtime like the Anthropic key. Created by hand (tools/stripe-setup/
+        # README.md), so it is named rather than passed in: the six ?s are the
+        # random suffix Secrets Manager adds, which matches this secret only.
+        # Until it exists the payment endpoints answer 503.
+        - PolicyName: read-stripe-keys
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action: secretsmanager:GetSecretValue
+                Resource: !Sub arn:aws:secretsmanager:${AWS::Region}:${AWS::AccountId}:secret:xchange/stripe-??????
+
         - PolicyName: identity-table
           PolicyDocument:
             Version: '2012-10-17'
@@ -157,7 +170,9 @@ Resources:
                   # Booking takes the upload's extraction (read and delete in one call),
                   # and a reviewer can make xChange forget a correction.
                   - dynamodb:DeleteItem
-                  # Conversions are counted with one conditional update.
+                  # Conversions are counted with one conditional update. Billing
+                  # webhooks write their change and an idempotency marker in one
+                  # TransactWriteItems, which IAM authorises as these Put/Update.
                   - dynamodb:UpdateItem
                 Resource: !GetAtt InvoiceTable.Arn
               - Effect: Allow
@@ -335,6 +350,8 @@ Resources:
           Inbox__PreviousDomains__0: !Ref InboxDomain
           Email__From: !Sub "xChange <noreply@${NewInboxDomain}>"
           Email__AppUrl: !Ref AppUrl
+          # A name, not a value: the keys are read at runtime by this role.
+          Stripe__SecretId: xchange/stripe
       Tags:
         - Key: Project
           Value: xchange

@@ -41,10 +41,8 @@ public sealed class ExtractInvoiceService(
     {
         // One conversion per PDF read, counted before the model is asked and
         // given back if reading fails: a trial stops at its limit, not after it.
-        if (!await usage.TryConsumeAsync(organizationId, cancellationToken).ConfigureAwait(false))
-        {
-            throw new ConversionLimitReachedException();
-        }
+        var bucket = await usage.TryConsumeAsync(organizationId, cancellationToken).ConfigureAwait(false)
+            ?? throw new ConversionLimitReachedException();
 
         try
         {
@@ -52,7 +50,8 @@ public sealed class ExtractInvoiceService(
         }
         catch
         {
-            await usage.RefundAsync(organizationId, CancellationToken.None).ConfigureAwait(false);
+            // Back to where it came from: a failed read never costs a purchased credit.
+            await usage.RefundAsync(organizationId, bucket, CancellationToken.None).ConfigureAwait(false);
             throw;
         }
     }

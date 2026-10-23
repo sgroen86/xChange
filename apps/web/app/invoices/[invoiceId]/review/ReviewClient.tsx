@@ -6,7 +6,7 @@ import { useEffect, useMemo, useState, useSyncExternalStore } from "react";
 
 import { Icon } from "../../../../components/Icon";
 import { useToast } from "../../../../components/Toast";
-import { isApiConfigured } from "../../../../lib/api";
+import { ApiError, isApiConfigured } from "../../../../lib/api";
 import { getServerUserSnapshot, getUserSnapshot, subscribeToUser } from "../../../../lib/auth";
 import { useLang, useText } from "../../../../lib/i18n";
 import {
@@ -479,6 +479,8 @@ export default function ReviewClient() {
         result.warnings.length > 0 ? "warning" : "success",
       );
     } catch (cause) {
+      // A trial (or a plan that ended since the page loaded): show the way to a plan.
+      if (cause instanceof ApiError && cause.status === 402) setTrial(true);
       showToast(cause instanceof Error ? cause.message : text.toast.exportFailed, "danger");
     } finally {
       setDownloading(false);

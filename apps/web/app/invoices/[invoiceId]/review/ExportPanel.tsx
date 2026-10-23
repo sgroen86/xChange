@@ -1,5 +1,7 @@
 "use client";
 
+import Link from "next/link";
+
 import { Icon } from "../../../../components/Icon";
 import type { LocalIssue } from "../../../../lib/canonical";
 import { useText } from "../../../../lib/i18n";
@@ -97,7 +99,17 @@ export function ExportPanel(props: Props) {
             </button>
           </div>
         </div>
-        {blockedReason && <p className="text-soft text-sm">{blockedReason}</p>}
+        {blockedReason && (
+          <p className="text-soft text-sm">
+            {blockedReason}
+            {props.trial && (
+              <>
+                {" "}
+                <Link href="/settings/#billing">{text.choosePlan}</Link>
+              </>
+            )}
+          </p>
+        )}
         {props.receiverWarning && (
           <div className="alert alert--warning">
             <Icon name="info" />

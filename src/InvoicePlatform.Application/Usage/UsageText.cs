@@ -10,12 +10,12 @@ internal interface IUsageText
 
 internal sealed class UsageTextNl : IUsageText
 {
-    public string ConversionLimitReached => "Je gratis conversies zijn op. Kies een abonnement of koop tegoed om verder te gaan.";
+    public string ConversionLimitReached => "Je conversies zijn op. Kies een abonnement of koop tegoed om verder te gaan.";
 }
 
 internal sealed class UsageTextEn : IUsageText
 {
-    public string ConversionLimitReached => "You have used all your free conversions. Choose a plan or buy credit to continue.";
+    public string ConversionLimitReached => "You have used all your conversions. Choose a plan or buy credits to continue.";
 }
 
 internal static class UsageText

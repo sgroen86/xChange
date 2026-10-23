@@ -1,5 +1,6 @@
 using InvoicePlatform.Domain.Localization;
 using Amazon.Lambda.AspNetCoreServer.Hosting;
+using InvoicePlatform.Api.Billing;
 using InvoicePlatform.Api.Identity;
 using InvoicePlatform.Api.Imports;
 using InvoicePlatform.Api.Invoices;
@@ -60,6 +61,7 @@ builder.Services.AddCors(options =>
 builder.Services.AddInvoiceExtraction(builder.Configuration);
 builder.Services.AddIdentity(builder.Configuration);
 builder.Services.AddInvoiceStorage(builder.Configuration);
+builder.Services.AddBilling(builder.Configuration);
 
 var app = builder.Build();
 
@@ -121,6 +123,7 @@ api.MapLearningEndpoints();
 api.MapImportEndpoints();
 api.MapInboxEndpoints();
 api.MapSignupEndpoints();
+api.MapBillingEndpoints();
 
 app.Run();
 

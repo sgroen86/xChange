@@ -1,4 +1,5 @@
 using InvoicePlatform.Application.Quality;
+using InvoicePlatform.Application.Billing;
 using InvoicePlatform.Application.Identity;
 using InvoicePlatform.Application.Imports;
 using InvoicePlatform.Application.Invoices;
@@ -56,6 +57,7 @@ public sealed class SignedInFactory : WebApplicationFactory<Program>
 
     public CapturedMail Mail { get; } = new();
 
+    /// <summary>Conversions and billing state: one record per organisation, as in DynamoDB.</summary>
     public InMemoryUsage Usage { get; } = new();
 
     public InMemoryUsageLedger Ledger { get; } = new();
@@ -133,6 +135,7 @@ public sealed class SignedInFactory : WebApplicationFactory<Program>
             services.RemoveAll<ISignupStore>();
             services.RemoveAll<IEmailSender>();
             services.RemoveAll<IUsageMeter>();
+            services.RemoveAll<IBillingStore>();
             services.RemoveAll<IUsageLedger>();
             services.RemoveAll<IQualityLedger>();
             services.RemoveAll<IMfaStore>();
@@ -157,6 +160,7 @@ public sealed class SignedInFactory : WebApplicationFactory<Program>
             services.AddSingleton<ISignupStore>(Signups);
             services.AddSingleton<IEmailSender>(Mail);
             services.AddSingleton<IUsageMeter>(Usage);
+            services.AddSingleton<IBillingStore>(Usage);
             services.AddSingleton<IUsageLedger>(Ledger);
             services.AddSingleton<IQualityLedger>(Quality);
         });
@@ -624,57 +628,6 @@ public sealed class CapturedMail : IEmailSender
         lock (Sent)
         {
             Sent.Add((to, subject, body));
-        }
-
-        return Task.CompletedTask;
-    }
-}
-
-/// <summary>Conversions in memory: no limit unless one is set.</summary>
-public sealed class InMemoryUsage : IUsageMeter
-{
-    private readonly Dictionary<string, (int Used, int? Limit, bool Trial)> _usage = [];
-
-    public Task<bool> TryConsumeAsync(string organizationId, CancellationToken cancellationToken = default)
-    {
-        lock (_usage)
-        {
-            var (used, limit, trial) = _usage.GetValueOrDefault(organizationId);
-            if (limit is { } max && used >= max)
-            {
-                return Task.FromResult(false);
-            }
-
-            _usage[organizationId] = (used + 1, limit, trial);
-            return Task.FromResult(true);
-        }
-    }
-
-    public Task RefundAsync(string organizationId, CancellationToken cancellationToken = default)
-    {
-        lock (_usage)
-        {
-            var (used, limit, trial) = _usage.GetValueOrDefault(organizationId);
-            _usage[organizationId] = (Math.Max(0, used - 1), limit, trial);
-        }
-
-        return Task.CompletedTask;
-    }
-
-    public Task<UsageSummary> GetAsync(string organizationId, CancellationToken cancellationToken = default)
-    {
-        lock (_usage)
-        {
-            var (used, limit, trial) = _usage.GetValueOrDefault(organizationId);
-            return Task.FromResult(new UsageSummary(used, limit, trial));
-        }
-    }
-
-    public Task SetLimitAsync(string organizationId, int? limit, bool trial = false, CancellationToken cancellationToken = default)
-    {
-        lock (_usage)
-        {
-            _usage[organizationId] = (_usage.GetValueOrDefault(organizationId).Used, limit, trial && limit is not null);
         }
 
         return Task.CompletedTask;

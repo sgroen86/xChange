@@ -11,70 +11,109 @@ namespace InvoicePlatform.Infrastructure.Usage;
 /// <summary>
 /// Conversions per organisation, in the invoice table:
 ///
-///   pk = ORG#&lt;organizationId&gt;   sk = ALLOWANCE         used, limit (none: unlimited)
-///   pk = ORG#&lt;organizationId&gt;   sk = USAGE#&lt;yyyy-MM&gt;   conversions that month (for billing later)
+///   pk = ORG#&lt;organizationId&gt;   sk = ALLOWANCE         see <see cref="AllowanceItem"/>
+///   pk = ORG#&lt;organizationId&gt;   sk = USAGE#&lt;yyyy-MM&gt;   conversions that month
 ///
-/// Counting is one conditional update, so two uploads at once cannot both take
-/// the last conversion.
+/// A conversion is taken from the first bucket that has one, each with one
+/// conditional update, so two uploads at once cannot both take the last one:
+/// the subscription's period, then purchased credits, then the trial or limit
+/// as before billing existed. No read precedes them; the conditions decide.
 /// </summary>
 internal sealed class DynamoDbUsageMeter(IAmazonDynamoDB dynamo, IOptions<InvoiceStorageOptions> options, IClock clock) : IUsageMeter
 {
     private readonly string _table = options.Value.TableName;
 
-    public async Task<bool> TryConsumeAsync(string organizationId, CancellationToken cancellationToken = default)
+    public async Task<ConversionBucket?> TryConsumeAsync(string organizationId, CancellationToken cancellationToken = default)
     {
-        try
+        ConversionBucket? bucket = null;
+        // ConversionRules, as DynamoDB conditions: each bucket checked and counted in one step.
+        foreach (var candidate in ConversionRules.Order)
         {
-            await dynamo.UpdateItemAsync(
-                new UpdateItemRequest
-                {
-                    TableName = _table,
-                    Key = Key(organizationId, "ALLOWANCE"),
-                    UpdateExpression = "SET used = if_not_exists(used, :zero) + :one",
-                    ConditionExpression = "attribute_not_exists(#limit) OR used < #limit",
-                    ExpressionAttributeNames = new Dictionary<string, string> { ["#limit"] = "limit" },
-                    ExpressionAttributeValues = new Dictionary<string, AttributeValue>
-                    {
-                        [":zero"] = new AttributeValue { N = "0" },
-                        [":one"] = new AttributeValue { N = "1" },
-                    },
-                },
-                cancellationToken).ConfigureAwait(false);
+            if (await TryTakeAsync(organizationId, candidate, cancellationToken).ConfigureAwait(false))
+            {
+                bucket = candidate;
+                break;
+            }
         }
-        catch (ConditionalCheckFailedException)
+
+        if (bucket is null)
         {
-            return false;
+            return null;
         }
 
         await dynamo.UpdateItemAsync(
             new UpdateItemRequest
             {
                 TableName = _table,
-                Key = Key(organizationId, $"USAGE#{clock.UtcNow:yyyy-MM}"),
+                Key = AllowanceItem.Key(organizationId, $"USAGE#{clock.UtcNow:yyyy-MM}"),
                 UpdateExpression = "ADD conversions :one",
                 ExpressionAttributeValues = new Dictionary<string, AttributeValue> { [":one"] = new AttributeValue { N = "1" } },
             },
             cancellationToken).ConfigureAwait(false);
 
-        return true;
+        return bucket;
     }
 
-    public async Task RefundAsync(string organizationId, CancellationToken cancellationToken = default)
+    private async Task<bool> TryTakeAsync(string organizationId, ConversionBucket bucket, CancellationToken cancellationToken)
     {
+        var (update, condition) = bucket switch
+        {
+            ConversionBucket.Subscription => (
+                "SET periodUsed = periodUsed + :one",
+                "attribute_exists(periodAllowance) AND periodUsed < periodAllowance"),
+            ConversionBucket.Credits => (
+                "SET credits = credits - :one",
+                "credits > :zero"),
+
+            // As before billing: under the limit, or no limit at all - unless the
+            // organisation ever subscribed, after which its plan is what it has.
+            _ => (
+                "SET used = if_not_exists(used, :zero) + :one",
+                "(attribute_not_exists(#limit) AND attribute_not_exists(subscribedOnce)) OR used < #limit"),
+        };
+
         try
         {
             await dynamo.UpdateItemAsync(
                 new UpdateItemRequest
                 {
                     TableName = _table,
-                    Key = Key(organizationId, "ALLOWANCE"),
-                    UpdateExpression = "SET used = used - :one",
-                    ConditionExpression = "used > :zero",
-                    ExpressionAttributeValues = new Dictionary<string, AttributeValue>
-                    {
-                        [":zero"] = new AttributeValue { N = "0" },
-                        [":one"] = new AttributeValue { N = "1" },
-                    },
+                    Key = AllowanceItem.Key(organizationId),
+                    UpdateExpression = update,
+                    ConditionExpression = condition,
+                    ExpressionAttributeNames = bucket == ConversionBucket.Base
+                        ? new Dictionary<string, string> { ["#limit"] = "limit" }
+                        : null,
+                    ExpressionAttributeValues = Values(update + condition),
+                },
+                cancellationToken).ConfigureAwait(false);
+            return true;
+        }
+        catch (ConditionalCheckFailedException)
+        {
+            return false;
+        }
+    }
+
+    public async Task RefundAsync(string organizationId, ConversionBucket bucket, CancellationToken cancellationToken = default)
+    {
+        var (update, condition) = bucket switch
+        {
+            ConversionBucket.Subscription => ("SET periodUsed = periodUsed - :one", "periodUsed > :zero"),
+            ConversionBucket.Credits => ("ADD credits :one", (string?)null),
+            _ => ("SET used = used - :one", "used > :zero"),
+        };
+
+        try
+        {
+            await dynamo.UpdateItemAsync(
+                new UpdateItemRequest
+                {
+                    TableName = _table,
+                    Key = AllowanceItem.Key(organizationId),
+                    UpdateExpression = update,
+                    ConditionExpression = condition,
+                    ExpressionAttributeValues = Values(update + condition),
                 },
                 cancellationToken).ConfigureAwait(false);
 
@@ -82,7 +121,7 @@ internal sealed class DynamoDbUsageMeter(IAmazonDynamoDB dynamo, IOptions<Invoic
                 new UpdateItemRequest
                 {
                     TableName = _table,
-                    Key = Key(organizationId, $"USAGE#{clock.UtcNow:yyyy-MM}"),
+                    Key = AllowanceItem.Key(organizationId, $"USAGE#{clock.UtcNow:yyyy-MM}"),
                     UpdateExpression = "ADD conversions :minus",
                     ExpressionAttributeValues = new Dictionary<string, AttributeValue> { [":minus"] = new AttributeValue { N = "-1" } },
                 },
@@ -90,14 +129,14 @@ internal sealed class DynamoDbUsageMeter(IAmazonDynamoDB dynamo, IOptions<Invoic
         }
         catch (ConditionalCheckFailedException)
         {
-            // Nothing was counted; nothing to give back.
+            // Nothing was counted (or the period was reset since); nothing to give back.
         }
     }
 
     public async Task<UsageSummary> GetAsync(string organizationId, CancellationToken cancellationToken = default)
     {
         var response = await dynamo.GetItemAsync(
-            new GetItemRequest { TableName = _table, Key = Key(organizationId, "ALLOWANCE"), ConsistentRead = true },
+            new GetItemRequest { TableName = _table, Key = AllowanceItem.Key(organizationId), ConsistentRead = true },
             cancellationToken).ConfigureAwait(false);
 
         if (!response.IsItemSet)
@@ -105,9 +144,12 @@ internal sealed class DynamoDbUsageMeter(IAmazonDynamoDB dynamo, IOptions<Invoic
             return new UsageSummary(0, null);
         }
 
-        var used = response.Item.TryGetValue("used", out var u) ? int.Parse(u.N, CultureInfo.InvariantCulture) : 0;
-        int? limit = response.Item.TryGetValue("limit", out var l) && l.N is not null ? int.Parse(l.N, CultureInfo.InvariantCulture) : null;
-        var trial = response.Item.TryGetValue("plan", out var p) && p.S == "trial";
+        var item = response.Item;
+        var used = AllowanceItem.Int(item, "used") ?? 0;
+        var limit = AllowanceItem.Int(item, "limit");
+
+        // Paying once - a subscription or a credit pack - ends the trial for good.
+        var trial = item.TryGetValue("plan", out var p) && p.S == "trial" && !AllowanceItem.Bool(item, "paidOnce");
         return new UsageSummary(used, limit, trial);
     }
 
@@ -117,7 +159,7 @@ internal sealed class DynamoDbUsageMeter(IAmazonDynamoDB dynamo, IOptions<Invoic
                 ? new UpdateItemRequest
                 {
                     TableName = _table,
-                    Key = Key(organizationId, "ALLOWANCE"),
+                    Key = AllowanceItem.Key(organizationId),
                     UpdateExpression = "SET #limit = :limit, used = if_not_exists(used, :zero), #plan = :plan",
                     ExpressionAttributeNames = new Dictionary<string, string> { ["#limit"] = "limit", ["#plan"] = "plan" },
                     ExpressionAttributeValues = new Dictionary<string, AttributeValue>
@@ -130,15 +172,61 @@ internal sealed class DynamoDbUsageMeter(IAmazonDynamoDB dynamo, IOptions<Invoic
                 : new UpdateItemRequest
                 {
                     TableName = _table,
-                    Key = Key(organizationId, "ALLOWANCE"),
+                    Key = AllowanceItem.Key(organizationId),
                     UpdateExpression = "REMOVE #limit, #plan",
                     ExpressionAttributeNames = new Dictionary<string, string> { ["#limit"] = "limit", ["#plan"] = "plan" },
                 },
             cancellationToken);
 
-    private static Dictionary<string, AttributeValue> Key(string organizationId, string sk) => new()
+    /// <summary>Only the placeholders an expression uses: DynamoDB rejects unused ones.</summary>
+    private static Dictionary<string, AttributeValue> Values(string expressions)
+    {
+        var values = new Dictionary<string, AttributeValue>();
+        if (expressions.Contains(":one", StringComparison.Ordinal))
+        {
+            values[":one"] = new AttributeValue { N = "1" };
+        }
+
+        if (expressions.Contains(":zero", StringComparison.Ordinal))
+        {
+            values[":zero"] = new AttributeValue { N = "0" };
+        }
+
+        return values;
+    }
+}
+
+/// <summary>
+/// The organisation's allowance item, shared by the usage meter and billing:
+///
+///   pk = ORG#&lt;organizationId&gt;   sk = ALLOWANCE
+///     used, limit, plan="trial"           the trial or limit; no limit: unlimited
+///     periodAllowance, periodUsed          the subscription's conversions this period
+///     credits                              purchased credits left
+///     subscribedOnce, paidOnce             ever subscribed / ever paid (ends unlimited / the trial)
+///     stripeCustomerId, stripeSubscriptionId, subscriptionPlan, subscriptionStatus,
+///     periodStart, periodEnd, periodResetFrom, cancelAtPeriodEnd, subscriptionEventAt
+///
+/// One item, so one read shows everything and each step of counting is one
+/// conditional update. Times are Unix seconds.
+/// </summary>
+internal static class AllowanceItem
+{
+    public static Dictionary<string, AttributeValue> Key(string organizationId, string sk = "ALLOWANCE") => new()
     {
         ["pk"] = new($"ORG#{organizationId}"),
         ["sk"] = new(sk),
     };
+
+    public static int? Int(Dictionary<string, AttributeValue> item, string name)
+        => item.TryGetValue(name, out var value) && value.N is not null ? int.Parse(value.N, CultureInfo.InvariantCulture) : null;
+
+    public static long? Long(Dictionary<string, AttributeValue> item, string name)
+        => item.TryGetValue(name, out var value) && value.N is not null ? long.Parse(value.N, CultureInfo.InvariantCulture) : null;
+
+    public static string? String(Dictionary<string, AttributeValue> item, string name)
+        => item.TryGetValue(name, out var value) ? value.S : null;
+
+    public static bool Bool(Dictionary<string, AttributeValue> item, string name)
+        => item.TryGetValue(name, out var value) && value.BOOL == true;
 }
