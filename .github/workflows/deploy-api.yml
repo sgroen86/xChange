@@ -259,9 +259,13 @@ jobs:
           # Exactly one Access-Control-Allow-Origin for the site: the app is the
           # only CORS layer. A second one (say, a Cors block on the function URL)
           # makes browsers reject every call from the site.
-          origins=$(curl -sS -o /dev/null -D - --max-time 30                       -H "Origin: https://greenitsolutions.net" "$API_URL/health"                     | grep -ci '^access-control-allow-origin:' || true)
-          echo "Access-Control-Allow-Origin headers: $origins"
+          origins=$(curl -sS -o /dev/null -D - --max-time 30                       -H "Origin: https://app.xchangeinvoice.com" "$API_URL/health"                     | grep -ci '^access-control-allow-origin:' || true)
+          echo "Access-Control-Allow-Origin headers for the app: $origins"
           [ "$origins" = "1" ] || { echo "Expected exactly one Access-Control-Allow-Origin header."; exit 1; }
+
+          # The retired greenitsolutions.net/xchange origin must get none.
+          retired=$(curl -sS -o /dev/null -D - --max-time 30 -H "Origin: https://greenitsolutions.net" "$API_URL/health" | grep -ci '^access-control-allow-origin:' || true)
+          [ "$retired" = "0" ] || { echo "The retired origin greenitsolutions.net is still allowed."; exit 1; }
 
       - name: Summary
         if: always()
