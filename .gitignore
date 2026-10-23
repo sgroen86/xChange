@@ -23,3 +23,6 @@ TestResults/
 # Official validation: downloaded artefacts and the validator build
 validation/.cache/
 validator/build/
+
+# Claude Code working files (worktrees, local settings)
+.claude/
