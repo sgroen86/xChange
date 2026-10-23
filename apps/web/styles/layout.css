@@ -95,7 +95,10 @@
 
 /* Pages before the app proper: login, sign-up, payment, invitation. No menu. */
 .standalone {
-  min-height: 100vh;
+  /* The body is locked (the app scrolls its content column), so this page scrolls itself. */
+  height: 100vh;
+  height: 100dvh;
+  overflow-y: auto;
   display: flex;
   flex-direction: column;
   background: var(--color-surface-sunken);
