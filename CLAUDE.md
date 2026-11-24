@@ -12,7 +12,9 @@ Last updated 2026-10-23. Running in production on `app.xchangeinvoice.com`:
   KMS), invitations, and self sign-up with one free conversion (closed until launch; the platform
   admin opens it). Downloading an e-invoice needs a running plan or purchased credits.
 - **Extraction** — a PDF is read by Claude (model chosen on the Platform page) into a
-  `CanonicalInvoiceDraft` with per-field evidence and arithmetic warnings. A single upload is read
+  `CanonicalInvoiceDraft` with per-field evidence and arithmetic warnings: two calls at once, one
+  for the header and one for the lines, each with its own schema; a failed reading says why
+  (too large, timed out, declined, unreadable, service unavailable) in the user's language. A single upload is read
   inside the request; batch uploads and PDFs mailed to an organisation's inbox address go through an
   SQS queue to the Worker (mailed PDFs wait for a user's approval first). Corrections a reviewer
   made are learned and applied to the next invoice of that organisation.
