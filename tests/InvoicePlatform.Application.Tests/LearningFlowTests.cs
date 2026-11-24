@@ -37,7 +37,7 @@ public class LearningFlowTests
         var learning = new LearningService(_store, _clock);
         var relations = new RelationService(new FakeRelationStore(), _clock, new InvoiceRulesetRegistry());
         _extract = new ExtractInvoiceService(
-            _interpreter, new InvoiceEnrichment(_settings, relations), new InvoiceCalculationValidator(), new CanonicalInvoiceXmlSerializer(), learning, _platform, _usage, new FakeUsageLedger(), _clock, NullLogger<ExtractInvoiceService>.Instance);
+            _interpreter, new InvoiceEnrichment(TestProfiles.Over(_settings), relations), new InvoiceCalculationValidator(), new CanonicalInvoiceXmlSerializer(), learning, _platform, _usage, new FakeUsageLedger(), _clock, NullLogger<ExtractInvoiceService>.Instance);
         _book = new BookInvoiceService(_invoices, _invoices, _clock, relations, learning, new ReadingQualityService(new FakeQualityLedger(), _clock, NullLogger<ReadingQualityService>.Instance));
     }
 

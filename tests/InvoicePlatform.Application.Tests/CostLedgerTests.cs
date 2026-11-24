@@ -87,7 +87,7 @@ public class CostLedgerTests
         var relations = new RelationService(new FakeRelationStore(), _clock, new InvoiceRulesetRegistry());
         _extract = new ExtractInvoiceService(
             _interpreter,
-            new InvoiceEnrichment(new FakeSettingsStore(), relations),
+            new InvoiceEnrichment(TestProfiles.Over(), relations),
             new InvoiceCalculationValidator(),
             new CanonicalInvoiceXmlSerializer(),
             new LearningService(new FakeLearningStore(), _clock),

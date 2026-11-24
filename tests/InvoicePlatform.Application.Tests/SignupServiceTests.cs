@@ -241,7 +241,7 @@ public class ConversionLimitTests
     {
         var clock = new TestClock(DateTimeOffset.UnixEpoch);
         var relations = new RelationService(new FakeRelationStore(), clock, new InvoiceRulesetRegistry());
-        _extract = new ExtractInvoiceService(_reader, new InvoiceEnrichment(new FakeSettingsStore(), relations),
+        _extract = new ExtractInvoiceService(_reader, new InvoiceEnrichment(TestProfiles.Over(), relations),
             new InvoiceCalculationValidator(), new CanonicalInvoiceXmlSerializer(),
             new LearningService(new FakeLearningStore(), clock), new FakePlatformStore(), _usage, new FakeUsageLedger(), clock, NullLogger<ExtractInvoiceService>.Instance);
     }

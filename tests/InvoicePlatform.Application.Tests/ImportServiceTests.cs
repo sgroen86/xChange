@@ -30,7 +30,7 @@ public class ImportServiceTests
         var relations = new RelationService(new FakeRelationStore(), _clock, new InvoiceRulesetRegistry());
         var extraction = new ExtractInvoiceService(
             _interpreter,
-            new InvoiceEnrichment(new FakeSettingsStore(), relations),
+            new InvoiceEnrichment(TestProfiles.Over(), relations),
             new InvoiceCalculationValidator(),
             new CanonicalInvoiceXmlSerializer(),
             new LearningService(new FakeLearningStore(), _clock), new FakePlatformStore(), new FakeUsageMeter(), new FakeUsageLedger(), _clock, NullLogger<ExtractInvoiceService>.Instance);

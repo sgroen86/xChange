@@ -161,7 +161,7 @@ public class RelationServiceTests
     public async Task Enrichment_fills_only_the_empty_buyer_fields_and_says_so()
     {
         await Book(VanDijk(), OrgA);
-        var enrichment = new InvoiceEnrichment(new FakeSettingsStore(), _relations);
+        var enrichment = new InvoiceEnrichment(TestProfiles.Over(), _relations);
 
         var result = await enrichment.EnrichAsync(OrgA, new CanonicalInvoiceDraft
         {
@@ -181,7 +181,7 @@ public class RelationServiceTests
     public async Task A_conflict_keeps_the_document_value_and_warns()
     {
         await Book(VanDijk(), OrgA);
-        var enrichment = new InvoiceEnrichment(new FakeSettingsStore(), _relations);
+        var enrichment = new InvoiceEnrichment(TestProfiles.Over(), _relations);
 
         var result = await enrichment.EnrichAsync(OrgA, new CanonicalInvoiceDraft
         {
@@ -198,7 +198,7 @@ public class RelationServiceTests
     public async Task A_buyer_the_document_does_not_identify_is_left_alone()
     {
         await Book(VanDijk(), OrgA);
-        var enrichment = new InvoiceEnrichment(new FakeSettingsStore(), _relations);
+        var enrichment = new InvoiceEnrichment(TestProfiles.Over(), _relations);
 
         var result = await enrichment.EnrichAsync(OrgA, new CanonicalInvoiceDraft
         {

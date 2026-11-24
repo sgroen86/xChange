@@ -114,4 +114,25 @@ public class OrganizationProfileServiceTests
         Assert.Equal("NL", seller.CountryCode);
         Assert.Equal("Groen B.V.", seller.Profile.General.LegalName);
     }
+
+    [Fact]
+    public async Task Saving_clears_a_scheme_left_in_the_settings_without_an_id()
+    {
+        await _settings.SaveAsync(new OrganizationSettings { OrganizationId = "org-a", EndpointScheme = "0106" });
+
+        await _service.UpdateAsync("org-a", Profile());
+
+        Assert.Null((await _settings.GetAsync("org-a"))!.EndpointScheme);
+    }
+
+    [Fact]
+    public async Task For_invoices_without_a_saved_profile_the_peppol_id_comes_from_the_settings()
+    {
+        await OldPeppolIdInSettings();
+
+        var seller = await _service.ForInvoicesAsync("org-a");
+
+        Assert.Equal("87654321", seller.Profile.Peppol.EndpointId);
+        Assert.Null(seller.CountryCode);
+    }
 }

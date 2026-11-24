@@ -8,46 +8,37 @@ namespace InvoicePlatform.Application.Invoices;
 
 /// <summary>
 /// Fills fields the PDF usually lacks from what the organisation already told
-/// xChange: its own settings for the seller, its relations for the buyer.
-/// Only empty fields: a value read from the document is never overwritten, and
-/// where the document disagrees with a relation, the document wins and the
-/// reviewer is told. Deterministic - no model is involved.
+/// xChange: its company profile for the seller, its relations for the buyer.
+/// For the buyer only empty fields are filled; where the document disagrees with
+/// a relation, the document wins and the reviewer is told. For the seller see
+/// <see cref="SellerFill"/>. Deterministic - no model is involved.
 /// </summary>
-public sealed class InvoiceEnrichment(IOrganizationSettingsStore settings, RelationService relations)
+public sealed class InvoiceEnrichment(OrganizationProfileService profiles, RelationService relations)
 {
+    /// <summary>Checking and exporting: the profile fills empty seller fields only.</summary>
+    public Task<EnrichmentResult> EnrichAsync(
+        string organizationId,
+        CanonicalInvoiceDraft draft,
+        CancellationToken cancellationToken = default)
+        => EnrichAsync(organizationId, draft, SellerFill.OnlyEmpty, cancellationToken);
+
     public async Task<EnrichmentResult> EnrichAsync(
         string organizationId,
         CanonicalInvoiceDraft draft,
+        SellerFill sellerFill,
         CancellationToken cancellationToken = default)
     {
         ArgumentNullException.ThrowIfNull(draft);
 
         var notices = new List<ValidationWarning>();
 
-        draft = await FillSellerAsync(organizationId, draft, notices, cancellationToken).ConfigureAwait(false);
+        var seller = await profiles.ForInvoicesAsync(organizationId, cancellationToken).ConfigureAwait(false);
+        draft = SellerFromProfile.Apply(draft, seller, sellerFill, notices);
 
         var relation = await relations.FindForAsync(organizationId, draft.Buyer, cancellationToken).ConfigureAwait(false);
         draft = FillBuyer(draft, relation, notices);
 
         return new EnrichmentResult(draft, notices, relation);
-    }
-
-    /// <summary>The organisation is the seller: its own electronic address belongs there.</summary>
-    private async Task<CanonicalInvoiceDraft> FillSellerAsync(
-        string organizationId, CanonicalInvoiceDraft draft, List<ValidationWarning> notices, CancellationToken cancellationToken)
-    {
-        var organization = await settings.GetAsync(organizationId, cancellationToken).ConfigureAwait(false);
-        var seller = draft.Seller ?? new CanonicalParty();
-
-        if (!Empty(seller.ElectronicAddress)
-            || organization?.EndpointId is not { } endpoint
-            || organization.EndpointScheme is not { } scheme)
-        {
-            return draft;
-        }
-
-        notices.Add(Filled("ENRICH-ORGANIZATION", "seller.electronicAddress", EnrichmentText.Current.SellerEndpointFromSettings));
-        return draft with { Seller = seller with { ElectronicAddress = endpoint, ElectronicAddressScheme = scheme } };
     }
 
     private static CanonicalInvoiceDraft FillBuyer(CanonicalInvoiceDraft draft, Relation? relation, List<ValidationWarning> notices)
@@ -123,3 +114,13 @@ public sealed class InvoiceEnrichment(IOrganizationSettingsStore settings, Relat
 /// <param name="Notices">An Info warning per filled field and a Warning per conflict, for the review screen.</param>
 /// <param name="Relation">The known customer the buyer was recognised as, if any.</param>
 public sealed record EnrichmentResult(CanonicalInvoiceDraft Draft, IReadOnlyList<ValidationWarning> Notices, Relation? Relation = null);
+
+/// <summary>How the company profile meets what a document says about the seller.</summary>
+public enum SellerFill
+{
+    /// <summary>Checking and exporting: the profile fills empty fields only, so a booked invoice stays as booked.</summary>
+    OnlyEmpty,
+
+    /// <summary>Reading a new PDF: the profile's fixed details replace what the model read, with a warning.</summary>
+    ProfileWins,
+}

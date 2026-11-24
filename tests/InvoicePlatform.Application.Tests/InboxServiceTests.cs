@@ -32,7 +32,7 @@ public class InboxServiceTests
         var clock = new TestClock(DateTimeOffset.Parse("2026-10-19T09:00:00Z"));
         var relations = new RelationService(new FakeRelationStore(), clock, new InvoiceRulesetRegistry());
         var extraction = new ExtractInvoiceService(
-            new NeverCalled(), new InvoiceEnrichment(new FakeSettingsStore(), relations), new InvoiceCalculationValidator(),
+            new NeverCalled(), new InvoiceEnrichment(TestProfiles.Over(), relations), new InvoiceCalculationValidator(),
             new CanonicalInvoiceXmlSerializer(), new LearningService(new FakeLearningStore(), clock), new FakePlatformStore(), new FakeUsageMeter(), new FakeUsageLedger(), clock, NullLogger<ExtractInvoiceService>.Instance);
         var imports = new ImportService(_imports, _imports, new FakeInvoiceStore(), extraction, clock);
         _inbox = new InboxService(_directory, _mail, imports, new InboxSettings(Domain, [PreviousDomain]));

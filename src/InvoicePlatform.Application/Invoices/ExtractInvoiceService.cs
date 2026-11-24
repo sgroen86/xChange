@@ -89,7 +89,7 @@ public sealed class ExtractInvoiceService(
         var learned = await learning.ApplyAsync(organizationId, interpretation.Draft, cancellationToken)
             .ConfigureAwait(false);
 
-        var enriched = await enrichment.EnrichAsync(organizationId, learned.Draft, cancellationToken)
+        var enriched = await enrichment.EnrichAsync(organizationId, learned.Draft, SellerFill.ProfileWins, cancellationToken)
             .ConfigureAwait(false);
 
         // The model's own reading and what the reviewer will see, for booking

@@ -28,7 +28,7 @@ public class ExportInvoiceServiceTests
     {
         var registry = new InvoiceRulesetRegistry([new PeppolBisBilling30Ruleset(), new RenamedPeppol()]);
         var relations = new RelationService(_relations, new TestClock(DateTimeOffset.UnixEpoch), registry);
-        _service = new ExportInvoiceService(_invoices, _settings, registry, new InvoiceEnrichment(_settings, relations), new UblInvoiceWriter(), _official, _platform, _usage, _usage);
+        _service = new ExportInvoiceService(_invoices, _settings, registry, new InvoiceEnrichment(TestProfiles.Over(_settings), relations), new UblInvoiceWriter(), _official, _platform, _usage, _usage);
     }
 
     private async Task<string> Book(CanonicalInvoiceDraft draft, string organizationId = OrgA)
@@ -127,7 +127,7 @@ public class ExportInvoiceServiceTests
             CreatedAt = DateTimeOffset.UnixEpoch,
         });
         var service = new ExportInvoiceService(
-            _invoices, _settings, new InvoiceRulesetRegistry(), new InvoiceEnrichment(_settings, new RelationService(new FakeRelationStore(), new TestClock(DateTimeOffset.UnixEpoch), new InvoiceRulesetRegistry())),
+            _invoices, _settings, new InvoiceRulesetRegistry(), new InvoiceEnrichment(TestProfiles.Over(_settings), new RelationService(new FakeRelationStore(), new TestClock(DateTimeOffset.UnixEpoch), new InvoiceRulesetRegistry())),
             new UblInvoiceWriter(), _official, _platform, _usage, _usage);
         var id = await Book(CompleteInvoice.Singapore());
 
