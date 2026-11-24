@@ -80,6 +80,40 @@ internal static class SellerFromProfile
         };
     }
 
+    /// <summary>
+    /// The seller and payment fields the profile fixes: those <see cref="Apply"/> replaces when the
+    /// profile wins, because the profile has a value for them. Defaults (contact, payment means) and
+    /// fields the profile leaves empty are not in it. Keep it in step with <see cref="Apply"/>.
+    /// </summary>
+    public static IReadOnlySet<string> FixedPaths(SellerProfile source)
+    {
+        var profile = source.Profile.General;
+        var peppol = source.Profile.Peppol;
+        var paths = new HashSet<string>(StringComparer.Ordinal);
+
+        void Add(string? value, params string[] fields)
+        {
+            if (value is not null)
+            {
+                paths.UnionWith(fields);
+            }
+        }
+
+        Add(profile.LegalName, "seller.name");
+        Add(profile.VatIdentifier, "seller.vatIdentifier");
+        Add(profile.LegalRegistrationId, "seller.legalRegistrationId", "seller.legalRegistrationScheme");
+        Add(peppol.EndpointId, "seller.electronicAddress", "seller.electronicAddressScheme");
+        Add(profile.StreetName, "seller.address.streetName");
+        Add(profile.AdditionalStreetName, "seller.address.additionalStreetName");
+        Add(profile.PostalZone, "seller.address.postalZone");
+        Add(profile.CityName, "seller.address.cityName");
+        Add(source.CountryCode, "seller.address.countryCode");
+        Add(profile.Iban, "payment.iban");
+        Add(profile.Bic, "payment.bic");
+        Add(profile.AccountName, "payment.accountName");
+        return paths;
+    }
+
     /// <summary>Case and spacing do not make a different value.</summary>
     private static string? Loose(string? value)
         => value is null ? null : string.Join(' ', value.Split((char[]?)null, StringSplitOptions.RemoveEmptyEntries)).ToUpperInvariant();

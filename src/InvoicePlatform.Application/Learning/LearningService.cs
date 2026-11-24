@@ -63,8 +63,8 @@ public sealed class LearningService(ILearningStore store, IClock clock)
     /// </summary>
     /// <param name="seller">
     /// The organisation's company profile. Once saved it has the last word on
-    /// the seller, so a seller or payment field booked as the profile has it is
-    /// not learned: the profile supplied it, the reviewer did not correct it.
+    /// the fields it fixes whenever a PDF is read, so nothing is learned for
+    /// those: a correction there could never take effect.
     /// </param>
     /// <returns>
     /// The snapshot that was taken, so booking can measure the reading
@@ -89,16 +89,10 @@ public sealed class LearningService(ILearningStore store, IClock clock)
         var applied = memory.Where(c => snapshot.AppliedCorrectionIds.Contains(c.Id));
         var undone = CorrectionMemory.Undone(applied, booked).ToHashSet(StringComparer.Ordinal);
 
-        // The reading as the profile makes it when a PDF is read, and the
-        // booking in the profile's spelling where it holds the same value after
-        // normalising - so a retyped VAT number is not a correction either.
-        (CanonicalInvoiceDraft, CanonicalInvoiceDraft)? supplied = seller.Saved
-            ? (SellerFromProfile.Apply(snapshot.Extracted, seller, SellerFill.ProfileWins, []),
-               SellerFromProfile.Apply(booked, seller, SellerFill.OnlyEmpty, []))
-            : null;
+        var fixedByProfile = seller.Saved ? SellerFromProfile.FixedPaths(seller) : null;
 
         var kept = memory.Where(c => !undone.Contains(c.Id)).ToList();
-        var updated = CorrectionMemory.Merge(kept, CorrectionMemory.Learn(snapshot.Extracted, booked, clock.UtcNow, supplied));
+        var updated = CorrectionMemory.Merge(kept, CorrectionMemory.Learn(snapshot.Extracted, booked, clock.UtcNow, fixedByProfile));
 
         await store.SaveCorrectionsAsync(organizationId, updated, cancellationToken).ConfigureAwait(false);
         return snapshot;

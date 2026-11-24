@@ -167,7 +167,7 @@ public class LearningFlowTests
     }
 
     [Fact]
-    public async Task With_a_profile_what_it_leaves_empty_or_the_reviewer_overrides_is_still_learned()
+    public async Task With_a_profile_what_it_leaves_empty_is_still_learned()
     {
         await SaveProfileAsync();
         var complete = CompleteInvoice.Create();
@@ -177,13 +177,47 @@ public class LearningFlowTests
         };
         var extracted = await _extract.ExtractAsync(OrgA, new byte[] { 1 }, "user-1", UsageSources.Upload);
 
-        // The reviewer books the complete invoice: a VAT number other than the profile's.
         await _book.BookAsync(OrgA, "u", complete, new byte[] { 1 }, "a.pdf", "m", extractionId: extracted.InvoiceId);
 
         var learned = await _store.GetCorrectionsAsync(OrgA);
         Assert.Contains(learned, c => c is { Field: "seller.address.streetName", From: "Keizersgracht 6", To: "Keizersgracht 62" });
         Assert.Contains(learned, c => c is { Field: "buyerReference", From: null, To: "PO-2026-17" });
-        Assert.Contains(learned, c => c is { Field: "seller.vatIdentifier", From: null, To: "NL857231409B01" });
+    }
+
+    [Fact]
+    public async Task With_a_profile_a_vat_number_other_than_the_profiles_is_not_learned()
+    {
+        await SaveProfileAsync();
+        _interpreter.Next = CompleteInvoice.Create();
+        var extracted = await _extract.ExtractAsync(OrgA, new byte[] { 1 }, "user-1", UsageSources.Upload);
+
+        // The reviewer books the invoice's own VAT number over the profile's: the next reading would replace it again.
+        await _book.BookAsync(OrgA, "u", CompleteInvoice.Create(), new byte[] { 1 }, "a.pdf", "m", extractionId: extracted.InvoiceId);
+
+        Assert.Equal("NL123456789B01", extracted.Draft.Seller!.VatIdentifier);
+        Assert.DoesNotContain(await _store.GetCorrectionsAsync(OrgA), c => c.Field == "seller.vatIdentifier");
+    }
+
+    [Fact]
+    public async Task With_a_profile_undoing_an_applied_correction_still_makes_xchange_forget_it()
+    {
+        await SaveProfileAsync();
+        var complete = CompleteInvoice.Create();
+        var reading = complete with { Seller = complete.Seller! with { Address = complete.Seller.Address! with { StreetName = "Keizersgracht 6" } } };
+
+        _interpreter.Next = reading;
+        var first = await _extract.ExtractAsync(OrgA, new byte[] { 1 }, "user-1", UsageSources.Upload);
+        var corrected = first.Draft with { Seller = first.Draft.Seller! with { Address = complete.Seller.Address } };
+        await _book.BookAsync(OrgA, "u", corrected, new byte[] { 1 }, "a.pdf", "m", extractionId: first.InvoiceId);
+        Assert.Contains(await _store.GetCorrectionsAsync(OrgA), c => c.Field == "seller.address.streetName");
+
+        _interpreter.Next = reading;
+        var second = await _extract.ExtractAsync(OrgA, new byte[] { 1 }, "user-1", UsageSources.Upload);
+        Assert.Equal("Keizersgracht 62", second.Draft.Seller!.Address!.StreetName);
+        var undone = second.Draft with { Seller = second.Draft.Seller with { Address = reading.Seller.Address } };
+        await _book.BookAsync(OrgA, "u", undone, new byte[] { 1 }, "a.pdf", "m", extractionId: second.InvoiceId);
+
+        Assert.DoesNotContain(await _store.GetCorrectionsAsync(OrgA), c => c.Field == "seller.address.streetName");
     }
 
     [Fact]

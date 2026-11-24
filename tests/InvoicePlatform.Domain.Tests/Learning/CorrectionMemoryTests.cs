@@ -41,15 +41,21 @@ public class CorrectionMemoryTests
     }
 
     [Fact]
-    public void An_own_detail_the_organisations_details_supplied_is_not_learned()
+    public void An_own_detail_the_profile_fixes_is_not_learned()
     {
-        var supplied = (Read: Booked(), Booked: Booked());
-
-        var learned = CorrectionMemory.Learn(ReadByModel(), Booked(), Monday, supplied);
+        var learned = CorrectionMemory.Learn(ReadByModel(), Booked(), Monday, fixedByProfile: new HashSet<string> { "seller.vatIdentifier" });
 
         Assert.DoesNotContain(learned, c => c.Field == "seller.vatIdentifier");
         Assert.Contains(learned, c => c.Field == "buyerReference");
         Assert.Contains(learned, c => c.Field == "lines.tax");
+    }
+
+    [Fact]
+    public void An_own_detail_the_profile_does_not_fix_is_still_learned()
+    {
+        var learned = CorrectionMemory.Learn(ReadByModel(), Booked(), Monday, fixedByProfile: new HashSet<string> { "seller.name", "payment.iban" });
+
+        Assert.Contains(learned, c => c is { Field: "seller.vatIdentifier", From: null, To: "M2-1234567-K" });
     }
 
     [Fact]
