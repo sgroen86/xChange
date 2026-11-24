@@ -311,15 +311,17 @@
 .issue--action .issue__message,
 .issue--action .issue__path { display: block; }
 
-/* -- Invoice lines: seven editable columns in half a screen. Each input keeps
-      a readable width and .table-wrap scrolls sideways rather than clipping. -- */
+/* -- Invoice lines: nine editable columns in half a screen. Each input keeps
+      a readable width and .table-wrap scrolls sideways rather than clipping.
+      Columns: description, item code, quantity, unit, price, per, tax, tax %, net. -- */
 .lines-table .cell-input { min-width: 64px; }
 .lines-table td:nth-child(1) .cell-input { min-width: 240px; }
 .lines-table td:nth-child(2) .cell-input,
-.lines-table td:nth-child(4) .cell-input { min-width: 96px; }
 .lines-table td:nth-child(3) .cell-input,
-.lines-table td:nth-child(5) .cell-input { min-width: 84px; }
-.lines-table td:nth-child(7) { white-space: nowrap; }
+.lines-table td:nth-child(5) .cell-input { min-width: 96px; }
+.lines-table td:nth-child(4) .cell-input,
+.lines-table td:nth-child(7) .cell-input { min-width: 84px; }
+.lines-table td:nth-child(9) { white-space: nowrap; }
 
 /* NL | EN switch: in the header, and above the login and sign-up forms. */
 .lang-switch {

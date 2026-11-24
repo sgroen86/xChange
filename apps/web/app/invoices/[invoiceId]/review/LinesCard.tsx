@@ -36,9 +36,11 @@ export function LinesCard({ lines, nets, taxCategories, taxName, readOnly, onAdd
             <thead>
               <tr>
                 <th>{text.description}</th>
+                <th>{text.itemCode}</th>
                 <th>{text.quantity}</th>
                 <th>{text.unit}</th>
                 <th>{text.price}</th>
+                <th title={text.basePerHint}>{text.basePer}</th>
                 <th>{taxName}</th>
                 <th>{taxName} %</th>
                 <th className="cell-amount">{text.net}</th>
@@ -56,6 +58,9 @@ export function LinesCard({ lines, nets, taxCategories, taxName, readOnly, onAdd
                     )}
                   </td>
                   <td>
+                    <CellInput path={`lines[${index}].sellerItemIdentifier`} label={text.itemCode} />
+                  </td>
+                  <td>
                     <CellInput path={`lines[${index}].quantity`} label={text.quantity} amount />
                   </td>
                   <td>
@@ -63,6 +68,9 @@ export function LinesCard({ lines, nets, taxCategories, taxName, readOnly, onAdd
                   </td>
                   <td>
                     <CellInput path={`lines[${index}].unitPrice`} label={text.price} amount />
+                  </td>
+                  <td>
+                    <CellInput path={`lines[${index}].baseQuantity`} label={text.basePer} amount />
                   </td>
                   <td>
                     <CellSelect path={`lines[${index}].vatCategoryCode`} label={text.taxCategory(taxName)} options={taxCategories} />

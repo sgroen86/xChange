@@ -28,11 +28,19 @@ export function PartyCard({ side, title, children }: { side: "seller" | "buyer";
         </div>
         <div className="form__row">
           <TextField path={`${side}.address.streetName`} label={text.street} />
-          <TextField path={`${side}.address.postalZone`} label={text.postalCode} />
+          <TextField path={`${side}.address.additionalStreetName`} label={text.additionalStreet} />
         </div>
         <div className="form__row">
+          <TextField path={`${side}.address.postalZone`} label={text.postalCode} />
           <TextField path={`${side}.address.cityName`} label={text.city} />
+        </div>
+        <div className="form__row">
           <TextField path={`${side}.address.countryCode`} label={text.countryCode} placeholder="NL" />
+          <TextField path={`${side}.contactName`} label={text.contactName} />
+        </div>
+        <div className="form__row">
+          <TextField path={`${side}.contactEmail`} label={text.contactEmail} type="email" />
+          <TextField path={`${side}.contactPhone`} label={text.contactPhone} />
         </div>
       </div>
     </div>
