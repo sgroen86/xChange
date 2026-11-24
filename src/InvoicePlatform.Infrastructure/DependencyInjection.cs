@@ -91,6 +91,7 @@ public static class DependencyInjection
         services.AddSingleton<ISessionStore>(sp => sp.GetRequiredService<DynamoDbIdentityStore>());
         services.AddSingleton<ILoginAttemptStore>(sp => sp.GetRequiredService<DynamoDbIdentityStore>());
         services.AddSingleton<IOrganizationSettingsStore>(sp => sp.GetRequiredService<DynamoDbIdentityStore>());
+        services.AddSingleton<IOrganizationProfileStore>(sp => sp.GetRequiredService<DynamoDbIdentityStore>());
         services.AddSingleton<IPlatformStore, DynamoDbPlatformStore>();
         // Deleting an organisation: its items in the identity table.
         services.AddSingleton<IOrganizationIdentityDeletion, DynamoDbOrganizationIdentityDeletion>();
@@ -120,6 +121,7 @@ public static class DependencyInjection
         services.AddSingleton<IEmailSender, SesEmailSender>();
         services.AddScoped<SignupService>();
         services.AddScoped<OrganizationSettingsService>();
+        services.AddScoped<OrganizationProfileService>();
         services.AddScoped<PlatformService>();
 
         return services;

@@ -3,6 +3,7 @@ using Amazon.DynamoDBv2.Model;
 using InvoicePlatform.Application.Identity;
 using InvoicePlatform.Application.Organizations;
 using InvoicePlatform.Domain.Identity;
+using InvoicePlatform.Domain.Organizations;
 using Microsoft.Extensions.Options;
 
 namespace InvoicePlatform.Infrastructure.Identity;
@@ -25,6 +26,7 @@ namespace InvoicePlatform.Infrastructure.Identity;
 ///   SESSION#&lt;sha256(tok)&gt; / SESSION   expires by TTL; the token itself is never stored
 ///   ATTEMPT#&lt;key&gt;  / ATTEMPT          expires by TTL; key is an IP, account:&lt;email&gt; or signup-mail:&lt;email&gt;
 ///   ORG#&lt;org&gt;      / SETTINGS         the organisation's settings
+///   ORG#&lt;org&gt;      / COMPANY_PROFILE  the organisation's company profile
 ///
 /// The account is written twice on purpose: login looks up by email, and every
 /// authenticated request looks up by organization and id. Storing both avoids a
@@ -33,7 +35,7 @@ namespace InvoicePlatform.Infrastructure.Identity;
 internal sealed class DynamoDbIdentityStore(
     IAmazonDynamoDB dynamo,
     IOptions<IdentityOptions> options)
-    : IUserStore, ISessionStore, ILoginAttemptStore, IOrganizationSettingsStore
+    : IUserStore, ISessionStore, ILoginAttemptStore, IOrganizationSettingsStore, IOrganizationProfileStore
 {
     private const string Pk = "pk";
     private const string Sk = "sk";
@@ -307,6 +309,84 @@ internal sealed class DynamoDbIdentityStore(
                 },
             },
             cancellationToken);
+
+    // ── Company profile ──────────────────────────────────────────────────────
+
+    /// <summary>
+    /// Next to the settings, in the organisation's partition. Not "PROFILE":
+    /// that is the login item under USER#. Flat attributes; the PEPPOL block's
+    /// are prefixed, so a later format adds its own prefix. Explicit, for the
+    /// same reason as the settings' GetAsync.
+    /// </summary>
+    async Task<OrganizationProfile?> IOrganizationProfileStore.GetAsync(string organizationId, CancellationToken cancellationToken)
+    {
+        var item = await GetItemAsync($"ORG#{organizationId}", "COMPANY_PROFILE", cancellationToken).ConfigureAwait(false);
+        if (item is null)
+        {
+            return null;
+        }
+
+        return new OrganizationProfile
+        {
+            OrganizationId = organizationId,
+            General = new CompanyDetails
+            {
+                LegalName = OptionalString(item, "legalName"),
+                VatIdentifier = OptionalString(item, "vatIdentifier"),
+                LegalRegistrationId = OptionalString(item, "legalRegistrationId"),
+                LegalRegistrationScheme = OptionalString(item, "legalRegistrationScheme"),
+                StreetName = OptionalString(item, "streetName"),
+                AdditionalStreetName = OptionalString(item, "additionalStreetName"),
+                PostalZone = OptionalString(item, "postalZone"),
+                CityName = OptionalString(item, "cityName"),
+                ContactName = OptionalString(item, "contactName"),
+                ContactEmail = OptionalString(item, "contactEmail"),
+                ContactPhone = OptionalString(item, "contactPhone"),
+                PaymentMeansCode = OptionalString(item, "paymentMeansCode"),
+                Iban = OptionalString(item, "iban"),
+                Bic = OptionalString(item, "bic"),
+                AccountName = OptionalString(item, "accountName"),
+            },
+            Peppol = new PeppolDetails
+            {
+                EndpointId = OptionalString(item, "peppolEndpointId"),
+                EndpointScheme = OptionalString(item, "peppolEndpointScheme"),
+            },
+        };
+    }
+
+    public Task SaveAsync(OrganizationProfile profile, CancellationToken cancellationToken = default)
+    {
+        var general = profile.General;
+        return dynamo.PutItemAsync(
+            new PutItemRequest
+            {
+                TableName = _table,
+                Item = new Dictionary<string, AttributeValue>
+                {
+                    [Pk] = new($"ORG#{profile.OrganizationId}"),
+                    [Sk] = new("COMPANY_PROFILE"),
+                    ["legalName"] = NullableString(general.LegalName),
+                    ["vatIdentifier"] = NullableString(general.VatIdentifier),
+                    ["legalRegistrationId"] = NullableString(general.LegalRegistrationId),
+                    ["legalRegistrationScheme"] = NullableString(general.LegalRegistrationScheme),
+                    ["streetName"] = NullableString(general.StreetName),
+                    ["additionalStreetName"] = NullableString(general.AdditionalStreetName),
+                    ["postalZone"] = NullableString(general.PostalZone),
+                    ["cityName"] = NullableString(general.CityName),
+                    ["contactName"] = NullableString(general.ContactName),
+                    ["contactEmail"] = NullableString(general.ContactEmail),
+                    ["contactPhone"] = NullableString(general.ContactPhone),
+                    ["paymentMeansCode"] = NullableString(general.PaymentMeansCode),
+                    ["iban"] = NullableString(general.Iban),
+                    ["bic"] = NullableString(general.Bic),
+                    ["accountName"] = NullableString(general.AccountName),
+                    ["peppolEndpointId"] = NullableString(profile.Peppol.EndpointId),
+                    ["peppolEndpointScheme"] = NullableString(profile.Peppol.EndpointScheme),
+                },
+            },
+            cancellationToken);
+    }
 
     // ── Plumbing ─────────────────────────────────────────────────────────────
 

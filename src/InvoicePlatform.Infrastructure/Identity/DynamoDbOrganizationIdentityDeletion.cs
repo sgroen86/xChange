@@ -16,6 +16,7 @@ namespace InvoicePlatform.Infrastructure.Identity;
 ///   ORG#&lt;org&gt;          / INBOX                the inbox address     (DynamoDbInboxDirectory)
 ///   INBOX#&lt;localPart&gt;   / INBOX                and back
 ///   ORG#&lt;org&gt;          / SETTINGS             the organisation's settings
+///   ORG#&lt;org&gt;          / COMPANY_PROFILE      the company profile   (<see cref="DynamoDbIdentityStore"/>)
 ///   PLATFORM            / ORGANIZATION#&lt;org&gt;   the organisation      (<see cref="DynamoDbPlatformStore"/>)
 ///
 /// Items outside the organisation's partition are deleted only when they
@@ -81,8 +82,10 @@ internal sealed class DynamoDbOrganizationIdentityDeletion(
         return deleted + await DeleteAsync(Key($"ORG#{organizationId}", "INBOX"), cancellationToken).ConfigureAwait(false);
     }
 
-    public Task<int> DeleteSettingsAsync(string organizationId, CancellationToken cancellationToken = default)
-        => DeleteAsync(Key($"ORG#{organizationId}", "SETTINGS"), cancellationToken);
+    /// <summary>The settings and the company profile: both describe the organisation, both go with it.</summary>
+    public async Task<int> DeleteSettingsAsync(string organizationId, CancellationToken cancellationToken = default)
+        => await DeleteAsync(Key($"ORG#{organizationId}", "SETTINGS"), cancellationToken).ConfigureAwait(false)
+            + await DeleteAsync(Key($"ORG#{organizationId}", "COMPANY_PROFILE"), cancellationToken).ConfigureAwait(false);
 
     public Task<int> DeleteOrganizationRecordAsync(string organizationId, CancellationToken cancellationToken = default)
         => DeleteAsync(Key("PLATFORM", $"ORGANIZATION#{organizationId}"), cancellationToken);

@@ -37,6 +37,7 @@ public sealed class SignedInFactory : WebApplicationFactory<Program>
     public InMemoryInvoices Invoices { get; } = new();
 
     public InMemorySettings Settings { get; } = new();
+    public InMemoryProfiles Profiles { get; } = new();
 
     public InMemoryRelations Relations { get; } = new();
 
@@ -123,6 +124,7 @@ public sealed class SignedInFactory : WebApplicationFactory<Program>
             services.RemoveAll<ISessionStore>();
             services.RemoveAll<ILoginAttemptStore>();
             services.RemoveAll<IOrganizationSettingsStore>();
+            services.RemoveAll<IOrganizationProfileStore>();
             services.RemoveAll<IInvoiceRepository>();
             services.RemoveAll<IDocumentStore>();
             services.RemoveAll<IRelationRepository>();
@@ -151,6 +153,7 @@ public sealed class SignedInFactory : WebApplicationFactory<Program>
             services.AddSingleton<IMfaStore>(Mfa);
             services.AddSingleton<ISecretProtector>(new TestProtector());
             services.AddSingleton<IOrganizationSettingsStore>(Settings);
+            services.AddSingleton<IOrganizationProfileStore>(Profiles);
             services.AddSingleton<IInvoiceRepository>(Invoices);
             services.AddSingleton<IDocumentStore>(Invoices);
             services.AddSingleton<IRelationRepository>(Relations);
@@ -554,6 +557,37 @@ public sealed class InMemorySettings : IOrganizationSettingsStore
     }
 }
 
+public sealed class InMemoryProfiles : IOrganizationProfileStore
+{
+    private readonly Dictionary<string, OrganizationProfile> _profiles = [];
+
+    public Task<OrganizationProfile?> GetAsync(string organizationId, CancellationToken cancellationToken = default)
+    {
+        lock (_profiles)
+        {
+            return Task.FromResult(_profiles.GetValueOrDefault(organizationId));
+        }
+    }
+
+    public Task SaveAsync(OrganizationProfile profile, CancellationToken cancellationToken = default)
+    {
+        lock (_profiles)
+        {
+            _profiles[profile.OrganizationId] = profile;
+        }
+
+        return Task.CompletedTask;
+    }
+
+    public int RemoveOrganization(string organizationId)
+    {
+        lock (_profiles)
+        {
+            return _profiles.Remove(organizationId) ? 1 : 0;
+        }
+    }
+}
+
 public sealed class InMemoryRelations : IRelationRepository
 {
     private readonly Dictionary<(string Org, string Id), Relation> _relations = [];
@@ -927,7 +961,7 @@ internal sealed class InMemoryOrganizationDeletion(SignedInFactory factory) : IO
         => Task.FromResult(factory.Inboxes.RemoveOrganization(organizationId));
 
     public Task<int> DeleteSettingsAsync(string organizationId, CancellationToken cancellationToken = default)
-        => Task.FromResult(factory.Settings.RemoveOrganization(organizationId));
+        => Task.FromResult(factory.Settings.RemoveOrganization(organizationId) + factory.Profiles.RemoveOrganization(organizationId));
 
     public Task<int> DeleteOrganizationRecordAsync(string organizationId, CancellationToken cancellationToken = default)
         => Task.FromResult(factory.Platform.RemoveOrganization(organizationId));

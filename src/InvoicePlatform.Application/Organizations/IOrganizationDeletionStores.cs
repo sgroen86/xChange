@@ -30,7 +30,7 @@ public interface IOrganizationIdentityDeletion
     /// <summary>The organisation's inbox address, both ways (address to organisation and back), so no more mail is accepted for it.</summary>
     Task<int> DeleteInboxAsync(string organizationId, CancellationToken cancellationToken = default);
 
-    /// <summary>The organisation's settings (default ruleset, electronic address).</summary>
+    /// <summary>The organisation's settings and company profile.</summary>
     Task<int> DeleteSettingsAsync(string organizationId, CancellationToken cancellationToken = default);
 
     /// <summary>The organisation itself, as the platform lists it. Deleted last, so a deletion that failed halfway still shows it and can be repeated.</summary>
