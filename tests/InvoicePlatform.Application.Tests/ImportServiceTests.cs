@@ -81,6 +81,19 @@ public class ImportServiceTests
     }
 
     [Fact]
+    public async Task A_failed_reading_shows_its_reason_on_the_import_not_the_technical_text()
+    {
+        var record = await _service.SubmitAsync(OrgA, ImportSource.Upload, "f.pdf", Pdf, "u");
+        _interpreter.FailWith = InterpretationFailure.TimedOut;
+
+        await _service.ProcessAsync(OrgA, record.ImportId);
+        var failed = (await _service.GetAsync(OrgA, record.ImportId))!;
+
+        Assert.Equal(ImportStatus.Failed, failed.Status);
+        Assert.Equal("Het lezen duurde te lang. Probeer het opnieuw.", failed.Error);
+    }
+
+    [Fact]
     public async Task An_import_is_invisible_to_another_organisation()
     {
         var record = await _service.SubmitAsync(OrgA, ImportSource.Upload, "f.pdf", Pdf, "u");
@@ -140,12 +153,16 @@ public class ImportServiceTests
     {
         public bool Fail { get; set; }
 
+        public InterpretationFailure? FailWith { get; set; }
+
         public Task<InvoiceInterpretationResult> InterpretAsync(
             ReadOnlyMemory<byte> pdf, IReadOnlyList<ReadingHint>? hints = null, string? model = null, CancellationToken cancellationToken = default)
-            => Fail
-                ? throw new InvalidOperationException("The document is unreadable.")
-                : Task.FromResult(new InvoiceInterpretationResult(
-                    CompleteInvoice.Create("F-2026-001"), new ProviderExecution("test", "m", 0, TokenUsage.None)));
+            => FailWith is { } reason
+                ? throw new InterpretationFailedException("scripted", reason: reason)
+                : Fail
+                    ? throw new InvalidOperationException("The document is unreadable.")
+                    : Task.FromResult(new InvoiceInterpretationResult(
+                        CompleteInvoice.Create("F-2026-001"), new ProviderExecution("test", "m", 0, TokenUsage.None)));
     }
 
     private sealed class FakeImports : IImportRepository, IImportQueue

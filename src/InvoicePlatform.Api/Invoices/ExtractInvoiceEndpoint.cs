@@ -1,9 +1,9 @@
 using InvoicePlatform.Api.Identity;
+using InvoicePlatform.Application.Interpretation;
 using InvoicePlatform.Application.Invoices;
 using InvoicePlatform.Application.Usage;
 using InvoicePlatform.Contracts.Invoices;
 using InvoicePlatform.Domain.Validation;
-using InvoicePlatform.Infrastructure.Anthropic;
 
 namespace InvoicePlatform.Api.Invoices;
 
@@ -50,6 +50,7 @@ public static class ExtractInvoiceEndpoint
             .ProducesProblem(StatusCodes.Status401Unauthorized)
             .ProducesProblem(StatusCodes.Status413PayloadTooLarge)
             .ProducesProblem(StatusCodes.Status502BadGateway)
+            .ProducesProblem(StatusCodes.Status504GatewayTimeout)
             // Extraction spends money on every call, so it needs a login and is
             // closed to read-only accounts.
             .RequireAuthenticatedUser()
@@ -85,12 +86,14 @@ public static class ExtractInvoiceEndpoint
         {
             return Problem(StatusCodes.Status402PaymentRequired, InvoiceApiText.Current.OutOfCreditTitle, exception.Message);
         }
-        catch (InvoiceInterpretationException exception)
+        catch (InterpretationFailedException exception)
         {
-            logger.LogWarning(exception, "Invoice interpretation failed");
-            return Problem(StatusCodes.Status502BadGateway,
-                "Extraction failed",
-                exception.Message);
+            logger.LogWarning(exception, "Invoice interpretation failed: {Reason}", exception.Reason);
+            var text = InterpretationText.Current;
+            return Problem(
+                exception.Reason == InterpretationFailure.TimedOut ? StatusCodes.Status504GatewayTimeout : StatusCodes.Status502BadGateway,
+                text.Title,
+                text.Message(exception.Reason));
         }
         catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
         {

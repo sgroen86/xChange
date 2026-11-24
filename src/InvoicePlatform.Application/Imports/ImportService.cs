@@ -1,4 +1,5 @@
 using InvoicePlatform.Application.Identity;
+using InvoicePlatform.Application.Interpretation;
 using InvoicePlatform.Application.Invoices;
 using InvoicePlatform.Application.Usage;
 using InvoicePlatform.Domain.Imports;
@@ -136,6 +137,17 @@ public sealed class ImportService(
                 Draft = result.Draft,
                 Warnings = result.Warnings,
                 ProviderModel = $"{result.Execution.Provider}/{result.Execution.Model}",
+                UpdatedAt = clock.UtcNow,
+            };
+        }
+        catch (InterpretationFailedException exception)
+        {
+            // The reason, in words the reviewer can act on. The worker has no
+            // request language, so this is in the default one, like ImportText.
+            record = record with
+            {
+                Status = ImportStatus.Failed,
+                Error = InterpretationText.Current.Message(exception.Reason),
                 UpdatedAt = clock.UtcNow,
             };
         }
