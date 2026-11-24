@@ -41,6 +41,8 @@ export default function ProfileClient() {
   const p = t.profile;
   const user = useSyncExternalStore(subscribeToUser, getUserSnapshot, getServerUserSnapshot);
   const canEdit = user?.role === "Admin";
+  const [loadFailed, setLoadFailed] = useState(false);
+  const editable = canEdit && !loadFailed;
 
   const [profile, setProfile] = useState<OrganizationProfile | null>(null);
   const [general, setGeneral] = useState<GeneralForm | null>(null);
@@ -74,6 +76,7 @@ export default function ProfileClient() {
       })
       .catch((cause: unknown) => {
         if (cancelled) return;
+        setLoadFailed(true);
         show(FALLBACK_PROFILE);
         showToast(cause instanceof Error ? cause.message : text().common.loadFailed, "danger");
       });
@@ -112,7 +115,11 @@ export default function ProfileClient() {
     ((block === "general" ? general : peppol) as Record<string, string> | null)?.[key] ?? "";
 
   const errorOf = (id: string) =>
-    errors[id] ? <div className="form-help text-danger">{errors[id]}</div> : null;
+    errors[id] ? (
+      <div id={`${id}-error`} className="form-help text-danger">
+        {errors[id]}
+      </div>
+    ) : null;
 
   const input = (block: ProfileTab, key: string, label: string, options?: { type?: string; help?: string }) => {
     const id = `${block}.${key}`;
@@ -123,7 +130,9 @@ export default function ProfileClient() {
           id={id}
           type={options?.type ?? "text"}
           value={valueOf(block, key)}
-          readOnly={!canEdit}
+          readOnly={!editable}
+          aria-invalid={errors[id] ? true : undefined}
+          aria-describedby={errors[id] ? `${id}-error` : undefined}
           className={errors[id] ? "input--invalid" : undefined}
           onChange={(event) => setField(block, key, event.target.value)}
         />
@@ -141,7 +150,9 @@ export default function ProfileClient() {
         <select
           id={id}
           value={valueOf(block, key)}
-          disabled={!canEdit}
+          disabled={!editable}
+          aria-invalid={errors[id] ? true : undefined}
+          aria-describedby={errors[id] ? `${id}-error` : undefined}
           className={errors[id] ? "input--invalid" : undefined}
           onChange={(event) => setField(block, key, event.target.value)}
         >
@@ -273,12 +284,14 @@ export default function ProfileClient() {
             </div>
           )}
 
-          {canEdit ? (
+          {editable ? (
             <div className="form__actions">
               <button type="submit" className="btn btn--primary" disabled={saving || !isApiConfigured}>
                 <Icon name="save" /> {saving ? t.common.busy : t.common.save}
               </button>
             </div>
+          ) : loadFailed ? (
+            <p className="text-soft text-sm">{p.loadFailedReadOnly}</p>
           ) : (
             <p className="text-soft text-sm">{p.adminOnly}</p>
           )}

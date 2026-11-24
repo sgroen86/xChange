@@ -47,7 +47,7 @@ public static class ProfileEndpoints
         // and an anonymous caller must get 401, not body-validation feedback.
         var request = await RequestBody.ReadAsync<UpdateOrganizationProfileRequest>(context, cancellationToken)
             .ConfigureAwait(false);
-        if (request is null)
+        if (request is null || request.General is null || request.Peppol is null)
         {
             return RequestBody.Invalid();
         }
@@ -65,8 +65,8 @@ public static class ProfileEndpoints
 
     private static OrganizationProfile FromRequest(UpdateOrganizationProfileRequest request)
     {
-        var general = request.General ?? new CompanyDetailsDto();
-        var peppol = request.Peppol ?? new PeppolDetailsDto();
+        var general = request.General!;
+        var peppol = request.Peppol!;
         return new OrganizationProfile
         {
             // The service puts the caller's organisation here; never the request's.

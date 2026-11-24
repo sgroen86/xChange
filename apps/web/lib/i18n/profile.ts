@@ -7,8 +7,9 @@ const nl = {
   saved: "Bedrijfsprofiel opgeslagen.",
   saveFailed: "Opslaan mislukt.",
   adminOnly: "Alleen een beheerder kan dit wijzigen.",
+  loadFailedReadOnly: "Het profiel kon niet worden geladen. Herlaad de pagina om het te wijzigen.",
   howUsed:
-    "Naam, nummers, adres, PEPPOL-id en bankgegevens uit dit profiel gaan voor wat er in een PDF staat; u ziet een melding als ze verschillen. Contact en betaalwijze vullen alleen aan wat ontbreekt. Al geboekte facturen veranderen niet.",
+    "Naam, nummers, adres, PEPPOL-id en bankgegevens uit dit profiel gaan voor wat er in een PDF staat; u ziet een melding als ze verschillen. Contact en betaalwijze vullen alleen aan wat ontbreekt. Op al geboekte facturen overschrijft het profiel niets; het vult alleen lege velden aan.",
   tabs: { general: "Algemeen", peppol: "PEPPOL" },
   cards: { company: "Bedrijf", address: "Adres", contact: "Contact", payment: "Betaling", peppol: "PEPPOL" },
   fields: {
@@ -45,8 +46,9 @@ const en: typeof nl = {
   saved: "Company profile saved.",
   saveFailed: "Saving failed.",
   adminOnly: "Only an administrator can change this.",
+  loadFailedReadOnly: "The profile could not be loaded. Reload the page to change it.",
   howUsed:
-    "Name, numbers, address, PEPPOL ID and bank details from this profile take precedence over what a PDF says; you see a notice when they differ. Contact and payment means only fill in what is missing. Invoices already booked do not change.",
+    "Name, numbers, address, PEPPOL ID and bank details from this profile take precedence over what a PDF says; you see a notice when they differ. Contact and payment means only fill in what is missing. On invoices already booked the profile overwrites nothing; it only fills empty fields.",
   tabs: { general: "General", peppol: "PEPPOL" },
   cards: { company: "Company", address: "Address", contact: "Contact", payment: "Payment", peppol: "PEPPOL" },
   fields: {

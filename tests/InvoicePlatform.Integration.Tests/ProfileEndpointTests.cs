@@ -27,7 +27,7 @@ public class ProfileEndpointTests : IClassFixture<SignedInFactory>
     [InlineData("readonly-a")]
     public async Task Only_an_admin_may_change_the_profile(string token)
     {
-        var response = await _factory.As(token).PutAsJsonAsync(Route, new { general = new { legalName = "Alfa B.V." } });
+        var response = await _factory.As(token).PutAsJsonAsync(Route, new { general = new { legalName = "Alfa B.V." }, peppol = new { } });
 
         Assert.Equal(HttpStatusCode.Forbidden, response.StatusCode);
     }
@@ -54,10 +54,28 @@ public class ProfileEndpointTests : IClassFixture<SignedInFactory>
     [Fact]
     public async Task An_invalid_vat_number_is_refused_with_an_error_on_that_field()
     {
-        var response = await _factory.As("admin-a").PutAsJsonAsync(Route, new { general = new { vatIdentifier = "NL123" } });
+        var response = await _factory.As("admin-a").PutAsJsonAsync(Route, new { general = new { vatIdentifier = "NL123" }, peppol = new { } });
 
         Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
         var body = await response.Content.ReadFromJsonAsync<JsonElement>();
         Assert.True(body.GetProperty("errors").TryGetProperty("general.vatIdentifier", out _));
+    }
+
+    [Fact]
+    public async Task A_put_without_the_peppol_block_is_refused_and_keeps_the_old_peppol_id()
+    {
+        using var factory = new SignedInFactory();
+        await factory.Settings.SaveAsync(new InvoicePlatform.Application.Organizations.OrganizationSettings
+        {
+            OrganizationId = SignedInFactory.OrgA,
+            EndpointId = "12345678",
+            EndpointScheme = "0106",
+        });
+
+        var put = await factory.As("admin-a").PutAsJsonAsync(Route, new { general = new { legalName = "Alfa B.V." } });
+        Assert.Equal(HttpStatusCode.BadRequest, put.StatusCode);
+
+        var mine = await factory.As("admin-a").GetFromJsonAsync<JsonElement>(Route);
+        Assert.Equal("12345678", mine.GetProperty("peppol").GetProperty("endpointId").GetString());
     }
 }

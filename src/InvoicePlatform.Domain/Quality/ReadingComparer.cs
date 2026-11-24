@@ -179,7 +179,7 @@ public static class ReadingComparer
     /// <param name="filledBeforeReview">
     /// What the reviewer was shown, when <paramref name="read"/> is the model's own reading. A field
     /// the model left empty that xChange filled before review (from learned corrections, the
-    /// organisation's settings or its relations - an electronic address is rarely printed) is not
+    /// company profile or its relations - an electronic address is rarely printed) is not
     /// counted: it is neither the model's miss nor its credit.
     /// </param>
     /// <param name="setBeforeReview">
