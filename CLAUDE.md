@@ -19,6 +19,10 @@ Last updated 2026-10-23. Running in production on `app.xchangeinvoice.com`:
 - **Review and booking** — the app recalculates deterministically and lets the draft be corrected;
   an invoice can be saved as a concept, booked or deleted. Booking remembers the buyer as a relation
   (customer) and looks the buyer up on PEPPOL.
+- **Company profile** — an organisation's own seller details (General tab: name, VAT, KvK/KBO,
+  address, contact, payment; a tab per format, PEPPOL first). When a PDF is read, a saved profile's
+  fixed details win over what the model read, with a notice, and are neither learned as corrections
+  nor counted against the model; checking and exporting only fill empty fields.
 - **Export** — a booked invoice becomes a `ValidatedCanonicalInvoice` and is written as UBL for
   PEPPOL BIS Billing 3.0 (NL, BE, UK), NLCIUS / SI-UBL 2.0 or PINT-SG, in the format chosen per
   customer, and checked by the official validation artefacts (a Java/Saxon Lambda in `validator/`).
@@ -180,7 +184,8 @@ xchange-invoices   pk = ORG#<organizationId>   sk = INVOICE#…, IMPORT#…, REL
                                                     LEARNING, ALLOWANCE, USAGE#…, COST#…, QUALITY#…
                    pk = PLATFORM                    platform-wide sums for the Kosten page
                    pk = STRIPE#…                    Stripe customer -> organisation, processed events
-xchange-identity   users, sessions (hashed), login attempts, invitations, sign-ups, MFA, inbox addresses
+xchange-identity   users, sessions (hashed), login attempts, invitations, sign-ups, MFA, inbox addresses,
+                   per organisation SETTINGS and COMPANY_PROFILE
 ```
 
 so another organisation's invoice is unreachable rather than merely unauthorised. S3 keys are
