@@ -18,6 +18,9 @@ Nu kent Instellingen alleen het PEPPOL-id en het schema (`OrganizationSettings.E
 
 - **Het profiel hoort bij de organisatie, niet bij een gebruiker.** De organisatie is de verkoper.
   Iedere gebruiker van de organisatie ziet het profiel, alleen een beheerder wijzigt het.
+  Op dit moment heeft elke organisatie één gebruiker, en dat is de beheerder: bij aanmelden of
+  via de uitnodiging van de platformbeheerder ontstaan de organisatie en die eerste gebruiker
+  samen. Collega's toevoegen komt later. Het profiel en de rechten werken dan zonder aanpassing.
 - **Het profiel wint van de PDF** bij de vaste gegevens, met een melding (zie "Op ingelezen
   facturen").
 - **Een apart profielrecord** in plaats van de instellingen uit te breiden.
