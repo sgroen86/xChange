@@ -106,12 +106,15 @@ public class OrganizationProfileServiceTests
     [Fact]
     public async Task For_invoices_the_country_comes_with_a_saved_profile_only()
     {
-        Assert.Null((await _service.ForInvoicesAsync("org-a")).CountryCode);
+        var before = await _service.ForInvoicesAsync("org-a");
+        Assert.Null(before.CountryCode);
+        Assert.False(before.Saved);
 
         await _service.UpdateAsync("org-a", Profile());
 
         var seller = await _service.ForInvoicesAsync("org-a");
         Assert.Equal("NL", seller.CountryCode);
+        Assert.True(seller.Saved);
         Assert.Equal("Groen B.V.", seller.Profile.General.LegalName);
     }
 

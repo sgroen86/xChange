@@ -46,7 +46,7 @@ internal static class SellerFromProfile
         }
 
         if (peppol.EndpointId is { } endpoint
-            && filler.Fixed("seller.electronicAddress", original.ElectronicAddress, endpoint, Loose) == endpoint)
+            && filler.Fixed("seller.electronicAddress", original.ElectronicAddress, endpoint, Compact) == endpoint)
         {
             seller = seller with { ElectronicAddress = endpoint, ElectronicAddressScheme = peppol.EndpointScheme };
         }
@@ -55,7 +55,7 @@ internal static class SellerFromProfile
         {
             StreetName = filler.Fixed("seller.address.streetName", originalAddress.StreetName, profile.StreetName, Loose),
             AdditionalStreetName = filler.Fixed("seller.address.additionalStreetName", originalAddress.AdditionalStreetName, profile.AdditionalStreetName, Loose),
-            PostalZone = filler.Fixed("seller.address.postalZone", originalAddress.PostalZone, profile.PostalZone, Loose),
+            PostalZone = filler.Fixed("seller.address.postalZone", originalAddress.PostalZone, profile.PostalZone, Compact),
             CityName = filler.Fixed("seller.address.cityName", originalAddress.CityName, profile.CityName, Loose),
             CountryCode = filler.Fixed("seller.address.countryCode", originalAddress.CountryCode, source.CountryCode, Loose),
         };

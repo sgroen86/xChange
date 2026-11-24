@@ -7,7 +7,7 @@ internal interface IEnrichmentText
 {
     string SellerFilledFromProfile(string field);
 
-    string SellerReplacedFromProfile(string field, string documentValue);
+    string SellerReplacedFromProfile(string field, string readValue);
 
     /// <summary>A seller field's name by its path, for the two notices above.</summary>
     string SellerField(string path);
@@ -36,8 +36,8 @@ internal sealed class EnrichmentTextNl : IEnrichmentText
 {
     public string SellerFilledFromProfile(string field) => $"{field} van de verkoper ingevuld uit het bedrijfsprofiel.";
 
-    public string SellerReplacedFromProfile(string field, string documentValue)
-        => $"{field} van de verkoper komt uit het bedrijfsprofiel; de PDF toonde {documentValue}.";
+    public string SellerReplacedFromProfile(string field, string readValue)
+        => $"{field} van de verkoper komt uit het bedrijfsprofiel (gelezen: {readValue}).";
 
     public string SellerField(string path) => path switch
     {
@@ -83,8 +83,8 @@ internal sealed class EnrichmentTextEn : IEnrichmentText
 {
     public string SellerFilledFromProfile(string field) => $"The seller's {field} was filled in from the company profile.";
 
-    public string SellerReplacedFromProfile(string field, string documentValue)
-        => $"The seller's {field} comes from the company profile; the PDF showed {documentValue}.";
+    public string SellerReplacedFromProfile(string field, string readValue)
+        => $"The seller's {field} comes from the company profile (read: {readValue}).";
 
     public string SellerField(string path) => path switch
     {

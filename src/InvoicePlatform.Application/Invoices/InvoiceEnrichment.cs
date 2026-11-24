@@ -33,7 +33,7 @@ public sealed class InvoiceEnrichment(OrganizationProfileService profiles, Relat
         var notices = new List<ValidationWarning>();
 
         var seller = await profiles.ForInvoicesAsync(organizationId, cancellationToken).ConfigureAwait(false);
-        draft = SellerFromProfile.Apply(draft, seller, sellerFill, notices);
+        draft = SellerFromProfile.Apply(draft, seller, seller.Saved ? sellerFill : SellerFill.OnlyEmpty, notices);
 
         var relation = await relations.FindForAsync(organizationId, draft.Buyer, cancellationToken).ConfigureAwait(false);
         draft = FillBuyer(draft, relation, notices);
@@ -118,7 +118,10 @@ public sealed record EnrichmentResult(CanonicalInvoiceDraft Draft, IReadOnlyList
 /// <summary>How the company profile meets what a document says about the seller.</summary>
 public enum SellerFill
 {
-    /// <summary>Checking and exporting: the profile fills empty fields only, so a booked invoice stays as booked.</summary>
+    /// <summary>
+    /// Checking and exporting: the profile fills empty fields only, so a booked invoice stays as booked.
+    /// A value equal to the profile's after normalising takes the profile's spelling.
+    /// </summary>
     OnlyEmpty,
 
     /// <summary>Reading a new PDF: the profile's fixed details replace what the model read, with a warning.</summary>

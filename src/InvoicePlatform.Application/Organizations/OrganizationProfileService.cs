@@ -27,18 +27,19 @@ public sealed class OrganizationProfileService(
     /// <summary>
     /// What the seller on an invoice is filled from. The country only once the
     /// profile is saved: an organisation that never filled it in keeps today's
-    /// behaviour, where only the PEPPOL id is filled.
+    /// behaviour, where only empty fields are filled, and only the PEPPOL id is
+    /// available. <see cref="SellerProfile.Saved"/> tells the two apart.
     /// </summary>
     public async Task<SellerProfile> ForInvoicesAsync(string organizationId, CancellationToken cancellationToken = default)
     {
         var stored = await profiles.GetAsync(organizationId, cancellationToken).ConfigureAwait(false);
         if (stored is null)
         {
-            return new SellerProfile(await FromSettingsAsync(organizationId, cancellationToken).ConfigureAwait(false), CountryCode: null);
+            return new SellerProfile(await FromSettingsAsync(organizationId, cancellationToken).ConfigureAwait(false), CountryCode: null, Saved: false);
         }
 
         var organization = await platform.FindOrganizationAsync(organizationId, cancellationToken).ConfigureAwait(false);
-        return new SellerProfile(stored, organization?.CountryCode);
+        return new SellerProfile(stored, organization?.CountryCode, Saved: true);
     }
 
     /// <param name="update">What the screen sent. Its OrganizationId is ignored: the caller's is used.</param>
@@ -83,6 +84,6 @@ public sealed class OrganizationProfileService(
 }
 
 /// <param name="CountryCode">The organisation's country, or null while no profile is saved.</param>
-public sealed record SellerProfile(OrganizationProfile Profile, string? CountryCode);
+public sealed record SellerProfile(OrganizationProfile Profile, string? CountryCode, bool Saved);
 
 public sealed record ProfileUpdateResult(bool Succeeded, IReadOnlyList<ProfileFieldError> Errors, OrganizationProfile? Profile = null);

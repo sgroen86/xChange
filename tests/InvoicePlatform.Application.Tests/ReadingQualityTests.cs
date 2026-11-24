@@ -26,6 +26,7 @@ public class ReadingQualityTests
     private readonly FakeLearningStore _store = new();
     private readonly FakeInvoiceStore _invoices = new();
     private readonly FakeSettingsStore _settings = new();
+    private readonly FakeProfileStore _profiles = new();
     private readonly FakeQualityLedger _quality = new();
     private readonly TestClock _clock = new(DateTimeOffset.Parse("2026-10-19T09:00:00Z"));
     private readonly Interpreter _interpreter = new();
@@ -37,7 +38,7 @@ public class ReadingQualityTests
         var learning = new LearningService(_store, _clock);
         var relations = new RelationService(new FakeRelationStore(), _clock, new InvoiceRulesetRegistry());
         _extract = new ExtractInvoiceService(
-            _interpreter, new InvoiceEnrichment(TestProfiles.Over(_settings), relations), new InvoiceCalculationValidator(), new CanonicalInvoiceXmlSerializer(),
+            _interpreter, new InvoiceEnrichment(TestProfiles.Over(_settings, _profiles), relations), new InvoiceCalculationValidator(), new CanonicalInvoiceXmlSerializer(),
             learning, new FakePlatformStore(), new FakeUsageMeter(), new FakeUsageLedger(), _clock, NullLogger<ExtractInvoiceService>.Instance);
         _book = new BookInvoiceService(_invoices, _invoices, _clock, relations, learning,
             new ReadingQualityService(_quality, _clock, NullLogger<ReadingQualityService>.Instance));
@@ -57,6 +58,23 @@ public class ReadingQualityTests
 
     private Task<Domain.Invoices.StoredInvoice> BookAsync(string organizationId, string extractionId, string? invoiceId = null, bool reviewed = true)
         => _book.BookAsync(organizationId, "user-1", Booked(), new byte[] { 1 }, "a.pdf", "client-says-this", invoiceId, extractionId, reviewed);
+
+    [Fact]
+    public async Task Reading_a_pdf_the_saved_profile_replaces_the_seller_vat_and_warns()
+    {
+        await _profiles.SaveAsync(new OrganizationProfile
+        {
+            OrganizationId = OrgA,
+            General = new CompanyDetails { VatIdentifier = "NL123456789B01" },
+        });
+        _interpreter.Next = Booked() with { Seller = Booked().Seller! with { VatIdentifier = "NL999999999B01" } };
+
+        var result = await _extract.ExtractAsync(OrgA, new byte[] { 1 }, "user-1", UsageSources.Upload);
+
+        Assert.Equal("NL123456789B01", result.Draft.Seller!.VatIdentifier);
+        var warning = Assert.Single(result.Warnings, w => w.Code == "ENRICH-PROFILE" && w.Severity == ValidationSeverity.Warning);
+        Assert.Equal("seller.vatIdentifier", warning.Path);
+    }
 
     [Fact]
     public async Task A_reviewed_booking_is_measured_with_who_what_and_which_model()

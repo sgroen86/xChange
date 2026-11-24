@@ -8,6 +8,7 @@ using InvoicePlatform.Domain.EInvoicing;
 using InvoicePlatform.Domain.EInvoicing.Peppol;
 using InvoicePlatform.Domain.EInvoicing.Ubl;
 using InvoicePlatform.Domain.Invoices;
+using InvoicePlatform.Domain.Organizations;
 
 namespace InvoicePlatform.Application.Tests;
 
@@ -22,13 +23,14 @@ public class ExportInvoiceServiceTests
     private readonly FakePlatformStore _platform = new();
     private readonly FakeUsageMeter _usage = new();
     private readonly FakeRelationStore _relations = new();
+    private readonly FakeProfileStore _profiles = new();
     private readonly ExportInvoiceService _service;
 
     public ExportInvoiceServiceTests()
     {
         var registry = new InvoiceRulesetRegistry([new PeppolBisBilling30Ruleset(), new RenamedPeppol()]);
         var relations = new RelationService(_relations, new TestClock(DateTimeOffset.UnixEpoch), registry);
-        _service = new ExportInvoiceService(_invoices, _settings, registry, new InvoiceEnrichment(TestProfiles.Over(_settings), relations), new UblInvoiceWriter(), _official, _platform, _usage, _usage);
+        _service = new ExportInvoiceService(_invoices, _settings, registry, new InvoiceEnrichment(TestProfiles.Over(_settings, _profiles), relations), new UblInvoiceWriter(), _official, _platform, _usage, _usage);
     }
 
     private async Task<string> Book(CanonicalInvoiceDraft draft, string organizationId = OrgA)
@@ -100,6 +102,25 @@ public class ExportInvoiceServiceTests
         var id = await Book(CompleteInvoice.Create());
 
         Assert.Equal(ExportOutcomeKind.PlanRequired, (await _service.ExportAsync(OrgA, id, null)).Kind);
+    }
+
+    [Fact]
+    public async Task A_saved_profile_does_not_change_the_vat_number_of_a_booked_invoice()
+    {
+        await _profiles.SaveAsync(new OrganizationProfile
+        {
+            OrganizationId = OrgA,
+            General = new CompanyDetails { LegalName = "Groen B.V.", VatIdentifier = "NL123456789B01" },
+        });
+        var id = await Book(CompleteInvoice.Create());
+
+        var outcome = await _service.ExportAsync(OrgA, id, null);
+
+        // The outcome exposes the XML, so that is what is checked.
+        Assert.Equal(ExportOutcomeKind.Exported, outcome.Kind);
+        var xml = Encoding.UTF8.GetString(outcome.Content!);
+        Assert.Contains("NL857231409B01", xml, StringComparison.Ordinal);
+        Assert.DoesNotContain("NL123456789B01", xml, StringComparison.Ordinal);
     }
 
     [Fact]

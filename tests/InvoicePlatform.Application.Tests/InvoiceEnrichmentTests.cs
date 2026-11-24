@@ -168,4 +168,32 @@ public class InvoiceEnrichmentTests
         Assert.Null(result.Draft.Seller);
         Assert.Empty(result.Notices);
     }
+
+    [Fact]
+    public async Task Without_a_saved_profile_the_old_peppol_id_never_overwrites_the_document()
+    {
+        await Configure("12345678", "0106");
+
+        var result = await Read(new CanonicalInvoiceDraft
+        {
+            Seller = new CanonicalParty { ElectronicAddress = "NL857231409B01", ElectronicAddressScheme = "9944" },
+        });
+
+        Assert.Equal(("NL857231409B01", "9944"), (result.Draft.Seller!.ElectronicAddress, result.Draft.Seller.ElectronicAddressScheme));
+        Assert.DoesNotContain(result.Notices, n => n.Severity == ValidationSeverity.Warning);
+    }
+
+    [Fact]
+    public async Task A_postcode_with_or_without_a_space_is_the_same_value()
+    {
+        await Profile(new CompanyDetails { PostalZone = "1234AB" });
+
+        var result = await Read(new CanonicalInvoiceDraft
+        {
+            Seller = new CanonicalParty { Address = new CanonicalAddress { PostalZone = "1234 AB" } },
+        });
+
+        Assert.Equal("1234AB", result.Draft.Seller!.Address!.PostalZone);
+        Assert.DoesNotContain(result.Notices, n => n.Severity == ValidationSeverity.Warning);
+    }
 }
