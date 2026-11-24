@@ -56,7 +56,16 @@ public static class CorrectionMemory
         => RelationKeys.NormalizeVat(buyer?.VatIdentifier) ?? RelationKeys.NormalizeRegistration(buyer?.LegalRegistrationId);
 
     /// <summary>What the reviewer changed between the model's reading and the booked invoice.</summary>
-    public static IReadOnlyList<LearnedCorrection> Learn(CanonicalInvoiceDraft extracted, CanonicalInvoiceDraft booked, DateTimeOffset now)
+    /// <param name="supplied">
+    /// The reading and the booking as the organisation's own details (its company profile) make
+    /// them, when those have the last word on the seller. A seller or payment field that is the same
+    /// in both is what those details supplied, not what the reviewer corrected, and is not learned.
+    /// </param>
+    public static IReadOnlyList<LearnedCorrection> Learn(
+        CanonicalInvoiceDraft extracted,
+        CanonicalInvoiceDraft booked,
+        DateTimeOffset now,
+        (CanonicalInvoiceDraft Read, CanonicalInvoiceDraft Booked)? supplied = null)
     {
         ArgumentNullException.ThrowIfNull(extracted);
         ArgumentNullException.ThrowIfNull(booked);
@@ -67,7 +76,8 @@ public static class CorrectionMemory
         foreach (var (field, read, _) in OwnFields)
         {
             var to = Clean(read(booked));
-            if (to is not null && !Same(read(extracted), to))
+            var fromOwnDetails = supplied is { } own && Same(read(own.Read), read(own.Booked));
+            if (to is not null && !Same(read(extracted), to) && !fromOwnDetails)
             {
                 learned.Add(Correction(organization, field, Clean(read(extracted)), to, null, CorrectionUse.Apply, now));
             }

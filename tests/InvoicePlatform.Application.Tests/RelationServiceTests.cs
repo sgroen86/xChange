@@ -23,7 +23,7 @@ public class RelationServiceTests
     {
         _relations = new RelationService(_store, _clock, new InvoiceRulesetRegistry());
         var invoices = new FakeInvoiceStore();
-        _booking = new BookInvoiceService(invoices, invoices, _clock, _relations, new LearningService(new FakeLearningStore(), _clock), new ReadingQualityService(new FakeQualityLedger(), _clock, NullLogger<ReadingQualityService>.Instance));
+        _booking = new BookInvoiceService(invoices, invoices, _clock, _relations, TestProfiles.Over(), new LearningService(new FakeLearningStore(), _clock), new ReadingQualityService(new FakeQualityLedger(), _clock, NullLogger<ReadingQualityService>.Instance));
     }
 
     private static CanonicalParty VanDijk(string? endpoint = "87654321") => new()

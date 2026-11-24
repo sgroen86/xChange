@@ -1,5 +1,7 @@
 using InvoicePlatform.Application.Identity;
+using InvoicePlatform.Application.Invoices;
 using InvoicePlatform.Application.Learning;
+using InvoicePlatform.Application.Organizations;
 using InvoicePlatform.Domain.Canonical;
 using InvoicePlatform.Domain.Quality;
 using Microsoft.Extensions.Logging;
@@ -21,14 +23,20 @@ public sealed class ReadingQualityService(IQualityLedger ledger, IClock clock, I
     /// </summary>
     /// <param name="actor">The user who reviewed and booked the invoice.</param>
     /// <param name="booked">The draft as the reviewer left it (before the calculator).</param>
+    /// <param name="seller">
+    /// The organisation's company profile. Once saved, a seller detail it put
+    /// in place of what the model read is not counted for or against the model.
+    /// </param>
     public async Task MeasureAsync(
         string organizationId,
         string invoiceId,
         string actor,
         ExtractionSnapshot snapshot,
-        CanonicalInvoiceDraft booked)
+        CanonicalInvoiceDraft booked,
+        SellerProfile seller)
     {
         ArgumentNullException.ThrowIfNull(snapshot);
+        ArgumentNullException.ThrowIfNull(seller);
 
         try
         {
@@ -39,6 +47,11 @@ public sealed class ReadingQualityService(IQualityLedger ledger, IClock clock, I
             }
 
             var shown = snapshot.Shown ?? snapshot.Extracted;
+
+            // What the profile makes of the reading; counted out only where the reviewer was shown it.
+            var setByProfile = seller.Saved
+                ? SellerFromProfile.Apply(snapshot.Extracted, seller, SellerFill.ProfileWins, [])
+                : null;
 
             // Not cancelled with the request: the booking has happened.
             await ledger.RecordAsync(
@@ -51,7 +64,7 @@ public sealed class ReadingQualityService(IQualityLedger ledger, IClock clock, I
                     Model = model,
                     Actor = actor,
                     At = clock.UtcNow,
-                    Read = ReadingComparer.Compare(snapshot.Extracted, booked, filledBeforeReview: shown),
+                    Read = ReadingComparer.Compare(snapshot.Extracted, booked, filledBeforeReview: shown, setBeforeReview: setByProfile),
                     Shown = ReadingComparer.Compare(shown, booked),
                 },
                 CancellationToken.None).ConfigureAwait(false);

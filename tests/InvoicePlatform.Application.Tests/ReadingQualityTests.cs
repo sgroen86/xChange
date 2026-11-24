@@ -37,10 +37,11 @@ public class ReadingQualityTests
     {
         var learning = new LearningService(_store, _clock);
         var relations = new RelationService(new FakeRelationStore(), _clock, new InvoiceRulesetRegistry());
+        var profiles = TestProfiles.Over(_settings, _profiles);
         _extract = new ExtractInvoiceService(
-            _interpreter, new InvoiceEnrichment(TestProfiles.Over(_settings, _profiles), relations), new InvoiceCalculationValidator(), new CanonicalInvoiceXmlSerializer(),
+            _interpreter, new InvoiceEnrichment(profiles, relations), new InvoiceCalculationValidator(), new CanonicalInvoiceXmlSerializer(),
             learning, new FakePlatformStore(), new FakeUsageMeter(), new FakeUsageLedger(), _clock, NullLogger<ExtractInvoiceService>.Instance);
-        _book = new BookInvoiceService(_invoices, _invoices, _clock, relations, learning,
+        _book = new BookInvoiceService(_invoices, _invoices, _clock, relations, profiles, learning,
             new ReadingQualityService(_quality, _clock, NullLogger<ReadingQualityService>.Instance));
     }
 
@@ -124,6 +125,30 @@ public class ReadingQualityTests
         Assert.True(measured.Read.Perfect, string.Join(", ", measured.Read.NotCorrect.Select(f => f.Path)));
         Assert.DoesNotContain(measured.Read.Fields, f => f.Path == "seller.electronicAddress");
         Assert.Contains(measured.Shown.Fields, f => f is { Path: "seller.electronicAddress", Outcome: FieldOutcome.Correct });
+    }
+
+    [Fact]
+    public async Task A_seller_detail_the_saved_profile_replaced_is_not_held_against_the_model()
+    {
+        await _profiles.SaveAsync(new OrganizationProfile
+        {
+            OrganizationId = OrgA,
+            General = new CompanyDetails { VatIdentifier = "NL123456789B01", Iban = "NL91ABNA0417164300" },
+        });
+        _interpreter.Next = Misread() with { Seller = Booked().Seller! with { VatIdentifier = "NL999999999B01" } };
+        var extracted = await _extract.ExtractAsync(OrgA, new byte[] { 1 }, "user-1", UsageSources.Upload);
+
+        // The reviewer corrects what the model misread and keeps the profile's VAT number.
+        var booked = extracted.Draft with { InvoiceNumber = Booked().InvoiceNumber, BuyerReference = Booked().BuyerReference };
+        await _book.BookAsync(OrgA, "user-1", booked, new byte[] { 1 }, "a.pdf", "m", extractionId: extracted.InvoiceId, reviewed: true);
+
+        var measured = Assert.Single(_quality.All);
+        Assert.DoesNotContain(measured.Read.Fields, f => f.Path == "seller.vatIdentifier");
+        Assert.Equal(
+            [("invoiceNumber", FieldOutcome.Corrected), ("buyerReference", FieldOutcome.Missed)],
+            measured.Read.NotCorrect.Select(f => (f.Path, f.Outcome)));
+        Assert.Contains(measured.Read.Fields, f => f is { Path: "payment.iban", Outcome: FieldOutcome.Correct });
+        Assert.Contains(measured.Shown.Fields, f => f is { Path: "seller.vatIdentifier", Outcome: FieldOutcome.Correct });
     }
 
     [Fact]

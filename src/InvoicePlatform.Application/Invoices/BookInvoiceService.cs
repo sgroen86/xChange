@@ -1,5 +1,6 @@
 using InvoicePlatform.Application.Identity;
 using InvoicePlatform.Application.Learning;
+using InvoicePlatform.Application.Organizations;
 using InvoicePlatform.Application.Quality;
 using InvoicePlatform.Application.Relations;
 using InvoicePlatform.Domain.Calculation;
@@ -21,6 +22,7 @@ public sealed class BookInvoiceService(
     IDocumentStore documents,
     IClock clock,
     RelationService relations,
+    OrganizationProfileService profiles,
     LearningService learning,
     ReadingQualityService quality)
 {
@@ -65,13 +67,15 @@ public sealed class BookInvoiceService(
         // one: the calculator's figures are not corrections.
         if (!string.IsNullOrWhiteSpace(extractionId))
         {
-            var snapshot = await learning.LearnAsync(organizationId, extractionId, draft, cancellationToken).ConfigureAwait(false);
+            // What the company profile supplied is neither learned nor measured.
+            var seller = await profiles.ForInvoicesAsync(organizationId, cancellationToken).ConfigureAwait(false);
+            var snapshot = await learning.LearnAsync(organizationId, extractionId, draft, seller, cancellationToken).ConfigureAwait(false);
 
             // Measured from the same snapshot, at the same moment: learning
             // has just taken it, so only the first booking of an upload counts.
             if (snapshot is not null && reviewed)
             {
-                await quality.MeasureAsync(organizationId, stored.InvoiceId, userId, snapshot, draft).ConfigureAwait(false);
+                await quality.MeasureAsync(organizationId, stored.InvoiceId, userId, snapshot, draft, seller).ConfigureAwait(false);
             }
         }
 

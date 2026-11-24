@@ -223,6 +223,29 @@ public class ReadingComparerTests
     }
 
     [Fact]
+    public void A_value_xchange_replaced_before_review_is_not_counted()
+    {
+        var booked = Invoice();
+        var read = Invoice() with { Seller = Invoice().Seller! with { VatIdentifier = "NL000000000B00" } };
+
+        var result = ReadingComparer.Compare(read, booked, filledBeforeReview: booked, setBeforeReview: booked);
+
+        Assert.DoesNotContain(result.Fields, f => f.Path == "seller.vatIdentifier");
+        Assert.True(result.Perfect);
+    }
+
+    [Fact]
+    public void A_replacement_the_reviewer_was_not_shown_still_counts()
+    {
+        var booked = Invoice();
+        var read = Invoice() with { Seller = Invoice().Seller! with { VatIdentifier = "NL000000000B00" } };
+
+        var result = ReadingComparer.Compare(read, booked, filledBeforeReview: read, setBeforeReview: booked);
+
+        Assert.Equal(FieldOutcome.Corrected, Field(result, "seller.vatIdentifier").Outcome);
+    }
+
+    [Fact]
     public void Every_counted_field_is_in_the_documented_list()
     {
         var everything = Invoice() with

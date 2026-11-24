@@ -21,7 +21,7 @@ public class BookInvoiceServiceTests
     private readonly BookInvoiceService _service;
 
     public BookInvoiceServiceTests()
-        => _service = new BookInvoiceService(_store, _store, _clock, new RelationService(_relations, _clock, new InvoiceRulesetRegistry()), new LearningService(new FakeLearningStore(), _clock), new ReadingQualityService(new FakeQualityLedger(), _clock, NullLogger<ReadingQualityService>.Instance));
+        => _service = new BookInvoiceService(_store, _store, _clock, new RelationService(_relations, _clock, new InvoiceRulesetRegistry()), TestProfiles.Over(), new LearningService(new FakeLearningStore(), _clock), new ReadingQualityService(new FakeQualityLedger(), _clock, NullLogger<ReadingQualityService>.Instance));
 
     private static CanonicalInvoiceDraft ADraft(string number = "F-1") => new()
     {

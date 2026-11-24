@@ -41,6 +41,18 @@ public class CorrectionMemoryTests
     }
 
     [Fact]
+    public void An_own_detail_the_organisations_details_supplied_is_not_learned()
+    {
+        var supplied = (Read: Booked(), Booked: Booked());
+
+        var learned = CorrectionMemory.Learn(ReadByModel(), Booked(), Monday, supplied);
+
+        Assert.DoesNotContain(learned, c => c.Field == "seller.vatIdentifier");
+        Assert.Contains(learned, c => c.Field == "buyerReference");
+        Assert.Contains(learned, c => c.Field == "lines.tax");
+    }
+
+    [Fact]
     public void Nothing_is_learned_from_an_invoice_that_was_not_corrected()
         => Assert.Empty(CorrectionMemory.Learn(Booked(), Booked(), Monday));
 

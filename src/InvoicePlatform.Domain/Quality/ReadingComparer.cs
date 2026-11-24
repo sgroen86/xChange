@@ -182,10 +182,17 @@ public static class ReadingComparer
     /// organisation's settings or its relations - an electronic address is rarely printed) is not
     /// counted: it is neither the model's miss nor its credit.
     /// </param>
+    /// <param name="setBeforeReview">
+    /// <paramref name="read"/> as the organisation's own details make it where they have the last
+    /// word over the document (the company profile's seller details). A field where this differs from
+    /// <paramref name="read"/> and the reviewer was shown this value (<paramref name="filledBeforeReview"/>)
+    /// is not counted either: xChange replaced what the model read, so the booking says nothing about it.
+    /// </param>
     public static ReadingComparison Compare(
         CanonicalInvoiceDraft read,
         CanonicalInvoiceDraft booked,
-        CanonicalInvoiceDraft? filledBeforeReview = null)
+        CanonicalInvoiceDraft? filledBeforeReview = null,
+        CanonicalInvoiceDraft? setBeforeReview = null)
     {
         ArgumentNullException.ThrowIfNull(read);
         ArgumentNullException.ThrowIfNull(booked);
@@ -195,7 +202,7 @@ public static class ReadingComparer
 
         foreach (var field in HeaderFields)
         {
-            Add(fields, field.Name, field.Name, field, read, booked, filledBeforeReview);
+            Add(fields, field.Name, field.Name, field, read, booked, filledBeforeReview, setBeforeReview);
         }
 
         foreach (var (side, party) in new (string, Func<CanonicalInvoiceDraft, CanonicalParty?>)[] { ("seller", d => d.Seller), ("buyer", d => d.Buyer) })
@@ -203,23 +210,23 @@ public static class ReadingComparer
             foreach (var field in PartyFields)
             {
                 var name = $"{side}.{field.Name}";
-                Add(fields, name, name, field, party(read), party(booked), Maybe(filledBeforeReview, party));
+                Add(fields, name, name, field, party(read), party(booked), Maybe(filledBeforeReview, party), Maybe(setBeforeReview, party));
             }
         }
 
         foreach (var field in PaymentFields)
         {
             var name = $"payment.{field.Name}";
-            Add(fields, name, name, field, read.Payment, booked.Payment, filledBeforeReview?.Payment);
+            Add(fields, name, name, field, read.Payment, booked.Payment, filledBeforeReview?.Payment, setBeforeReview?.Payment);
         }
 
-        CompareLines(fields, read, booked, calculated, filledBeforeReview);
+        CompareLines(fields, read, booked, calculated, filledBeforeReview, setBeforeReview);
         CompareVat(fields, read, calculated);
 
         foreach (var field in TotalFields)
         {
             var name = $"totals.{field.Name}";
-            Add(fields, name, name, field, read.Totals, calculated.Totals, filledBeforeReview?.Totals);
+            Add(fields, name, name, field, read.Totals, calculated.Totals, filledBeforeReview?.Totals, setBeforeReview?.Totals);
         }
 
         return new ReadingComparison(fields);
@@ -230,7 +237,8 @@ public static class ReadingComparer
         CanonicalInvoiceDraft read,
         CanonicalInvoiceDraft booked,
         CanonicalInvoiceDraft calculated,
-        CanonicalInvoiceDraft? filled)
+        CanonicalInvoiceDraft? filled,
+        CanonicalInvoiceDraft? set)
     {
         var readCount = read.Lines.Count;
         var bookedCount = booked.Lines.Count;
@@ -252,7 +260,7 @@ public static class ReadingComparer
                 // The net is what the calculator makes of the line, as booking stores it.
                 var target = field.Name == "netAmount" ? calculated : booked;
                 Add(fields, $"lines[{i}].{field.Name}", $"lines[].{field.Name}", field,
-                    At(read.Lines, i), At(target.Lines, i), filled is null ? null : At(filled.Lines, i));
+                    At(read.Lines, i), At(target.Lines, i), filled is null ? null : At(filled.Lines, i), set is null ? null : At(set.Lines, i));
             }
         }
     }
@@ -271,7 +279,7 @@ public static class ReadingComparer
             foreach (var field in VatFields)
             {
                 Add(fields, $"vatBreakdown[{key}].{field.Name}", $"vatBreakdown[].{field.Name}", field,
-                    Bucket(read, category, rate), Bucket(calculated, category, rate), null);
+                    Bucket(read, category, rate), Bucket(calculated, category, rate), null, null);
             }
         }
     }
@@ -279,12 +287,12 @@ public static class ReadingComparer
     private static CanonicalVatBreakdownLine? Bucket(CanonicalInvoiceDraft draft, string category, decimal rate)
         => draft.VatBreakdown.FirstOrDefault(b => (b.VatCategoryCode ?? "").Trim() == category && (b.VatPercentage ?? 0m) == rate);
 
-    private static void Add<T>(List<FieldComparison> fields, string path, string name, Field<T> field, T? read, T? target, T? filled)
+    private static void Add<T>(List<FieldComparison> fields, string path, string name, Field<T> field, T? read, T? target, T? filled, T? set)
         where T : class
     {
         var outcome = field.Number is { } number
-            ? Outcome(Value(read, number), Value(target, number), Value(filled, number), (a, b) => a == b)
-            : Outcome(Normal(read, field), Normal(target, field), Normal(filled, field), (a, b) => string.Equals(a, b, StringComparison.Ordinal));
+            ? Outcome(Value(read, number), Value(target, number), Value(filled, number), Value(set, number), (a, b) => a == b)
+            : Outcome(Normal(read, field), Normal(target, field), Normal(filled, field), Normal(set, field), (a, b) => string.Equals(a, b, StringComparison.Ordinal));
 
         if (outcome is { } counted)
         {
@@ -292,9 +300,17 @@ public static class ReadingComparer
         }
     }
 
-    /// <returns>Null when the field is not counted: empty on both sides, or filled by xChange where the model left it empty.</returns>
-    private static FieldOutcome? Outcome<TValue>(TValue? read, TValue? target, TValue? filled, Func<TValue, TValue, bool> same)
+    /// <returns>
+    /// Null when the field is not counted: empty on both sides, filled by xChange where the model left
+    /// it empty, or replaced by xChange's own details before the reviewer saw it.
+    /// </returns>
+    private static FieldOutcome? Outcome<TValue>(TValue? read, TValue? target, TValue? filled, TValue? set, Func<TValue, TValue, bool> same)
     {
+        if (set is not null && filled is not null && same(set, filled) && (read is null || !same(read, set)))
+        {
+            return null;
+        }
+
         if (read is null)
         {
             return target is null || filled is not null ? null : FieldOutcome.Missed;

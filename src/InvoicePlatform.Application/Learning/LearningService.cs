@@ -1,4 +1,6 @@
 using InvoicePlatform.Application.Identity;
+using InvoicePlatform.Application.Invoices;
+using InvoicePlatform.Application.Organizations;
 using InvoicePlatform.Domain.Canonical;
 using InvoicePlatform.Domain.Learning;
 
@@ -59,6 +61,11 @@ public sealed class LearningService(ILearningStore store, IClock clock)
     /// new corrections are remembered, applied ones the reviewer undid are
     /// forgotten. Does nothing for an unknown or already used extraction.
     /// </summary>
+    /// <param name="seller">
+    /// The organisation's company profile. Once saved it has the last word on
+    /// the seller, so a seller or payment field booked as the profile has it is
+    /// not learned: the profile supplied it, the reviewer did not correct it.
+    /// </param>
     /// <returns>
     /// The snapshot that was taken, so booking can measure the reading
     /// against it; null when there was none.
@@ -67,8 +74,11 @@ public sealed class LearningService(ILearningStore store, IClock clock)
         string organizationId,
         string extractionId,
         CanonicalInvoiceDraft booked,
+        SellerProfile seller,
         CancellationToken cancellationToken = default)
     {
+        ArgumentNullException.ThrowIfNull(seller);
+
         var snapshot = await store.TakeExtractionAsync(organizationId, extractionId, cancellationToken).ConfigureAwait(false);
         if (snapshot is null)
         {
@@ -79,8 +89,16 @@ public sealed class LearningService(ILearningStore store, IClock clock)
         var applied = memory.Where(c => snapshot.AppliedCorrectionIds.Contains(c.Id));
         var undone = CorrectionMemory.Undone(applied, booked).ToHashSet(StringComparer.Ordinal);
 
+        // The reading as the profile makes it when a PDF is read, and the
+        // booking in the profile's spelling where it holds the same value after
+        // normalising - so a retyped VAT number is not a correction either.
+        (CanonicalInvoiceDraft, CanonicalInvoiceDraft)? supplied = seller.Saved
+            ? (SellerFromProfile.Apply(snapshot.Extracted, seller, SellerFill.ProfileWins, []),
+               SellerFromProfile.Apply(booked, seller, SellerFill.OnlyEmpty, []))
+            : null;
+
         var kept = memory.Where(c => !undone.Contains(c.Id)).ToList();
-        var updated = CorrectionMemory.Merge(kept, CorrectionMemory.Learn(snapshot.Extracted, booked, clock.UtcNow));
+        var updated = CorrectionMemory.Merge(kept, CorrectionMemory.Learn(snapshot.Extracted, booked, clock.UtcNow, supplied));
 
         await store.SaveCorrectionsAsync(organizationId, updated, cancellationToken).ConfigureAwait(false);
         return snapshot;
