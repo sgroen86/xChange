@@ -23,6 +23,18 @@ internal static partial class VatNumberShapes
         return findings.Violations;
     }
 
+    /// <summary>
+    /// True unless the number starts with NL, BE or GB and lacks that
+    /// country's shape. For the company profile, which has no invoice to check.
+    /// </summary>
+    internal static bool Fits(string vat) => vat[..Math.Min(2, vat.Length)] switch
+    {
+        "NL" => Dutch().IsMatch(vat),
+        "BE" => Belgian().IsMatch(vat) && Mod97(vat[2..]),
+        "GB" => British().IsMatch(vat),
+        _ => true,
+    };
+
     private static void Check(string? vat, string path, string businessTerm, PartyRole role, Findings findings, IPeppolRuleText text)
     {
         if (Findings.Missing(vat))
@@ -48,7 +60,7 @@ internal static partial class VatNumberShapes
     }
 
     /// <summary>The Belgian enterprise-number check, as PEPPOL-COMMON-R043 does it for 0208.</summary>
-    private static bool Mod97(string digits)
+    internal static bool Mod97(string digits)
         => 97 - (int.Parse(digits[..8], System.Globalization.CultureInfo.InvariantCulture) % 97)
             == int.Parse(digits[8..], System.Globalization.CultureInfo.InvariantCulture);
 
