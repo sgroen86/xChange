@@ -51,12 +51,6 @@ public sealed record OrganizationSettingsResponse
     [JsonPropertyName("effectiveDefaultRulesetId")]
     public string? EffectiveDefaultRulesetId { get; init; }
 
-    [JsonPropertyName("endpointId")]
-    public string? EndpointId { get; init; }
-
-    [JsonPropertyName("endpointScheme")]
-    public string? EndpointScheme { get; init; }
-
     /// <summary>Every ruleset the organisation can choose from, the system default first.</summary>
     [JsonPropertyName("rulesets")]
     public required IReadOnlyList<RulesetInfo> Rulesets { get; init; }
@@ -66,12 +60,6 @@ public sealed record UpdateOrganizationSettingsRequest
 {
     [JsonPropertyName("defaultRulesetId")]
     public string? DefaultRulesetId { get; init; }
-
-    [JsonPropertyName("endpointId")]
-    public string? EndpointId { get; init; }
-
-    [JsonPropertyName("endpointScheme")]
-    public string? EndpointScheme { get; init; }
 }
 
 public sealed record RuleViolationResponse

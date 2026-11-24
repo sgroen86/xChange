@@ -24,50 +24,47 @@ public class OrganizationSettingsServiceTests
     [Fact]
     public async Task An_update_round_trips_trimmed()
     {
-        var result = await _service.UpdateAsync("org-a", "peppol-bis-billing-3.0", " 12345678 ", "0106");
+        var result = await _service.UpdateAsync("org-a", " peppol-bis-billing-3.0 ");
 
         Assert.True(result.Succeeded);
-        var settings = await _service.GetAsync("org-a");
-        Assert.Equal(("peppol-bis-billing-3.0", "12345678", "0106"), (settings.DefaultRulesetId, settings.EndpointId, settings.EndpointScheme));
+        Assert.Equal("peppol-bis-billing-3.0", (await _service.GetAsync("org-a")).DefaultRulesetId);
     }
 
     [Fact]
     public async Task An_unknown_ruleset_is_refused()
     {
-        var result = await _service.UpdateAsync("org-a", "xrechnung-9", null, null);
+        var result = await _service.UpdateAsync("org-a", "xrechnung-9");
 
         Assert.False(result.Succeeded);
         Assert.Null(await _store.GetAsync("org-a"));
     }
 
-    [Theory]
-    [InlineData("12345678", null)]
-    [InlineData("12345678", "0217")]
-    public async Task An_endpoint_needs_a_valid_scheme(string endpoint, string? scheme)
+    [Fact]
+    public async Task An_empty_value_clears_the_default()
     {
-        var result = await _service.UpdateAsync("org-a", null, endpoint, scheme);
+        await _service.UpdateAsync("org-a", "peppol-bis-billing-3.0");
 
-        Assert.False(result.Succeeded);
+        await _service.UpdateAsync("org-a", "  ");
+
+        Assert.Null((await _service.GetAsync("org-a")).DefaultRulesetId);
     }
 
     [Fact]
-    public async Task Empty_values_clear_the_settings()
+    public async Task Saving_the_settings_keeps_a_peppol_id_that_has_not_moved_yet()
     {
-        await _service.UpdateAsync("org-a", "peppol-bis-billing-3.0", "12345678", "0106");
+        await _store.SaveAsync(new OrganizationSettings { OrganizationId = "org-a", EndpointId = "12345678", EndpointScheme = "0106" });
 
-        await _service.UpdateAsync("org-a", "", "  ", "0106");
+        await _service.UpdateAsync("org-a", "peppol-bis-billing-3.0");
 
         var settings = await _service.GetAsync("org-a");
-        Assert.Null(settings.DefaultRulesetId);
-        Assert.Null(settings.EndpointId);
-        Assert.Null(settings.EndpointScheme);
+        Assert.Equal(("12345678", "0106"), (settings.EndpointId, settings.EndpointScheme));
     }
 
     [Fact]
     public async Task One_organisation_never_sees_anothers_settings()
     {
-        await _service.UpdateAsync("org-a", null, "12345678", "0106");
+        await _service.UpdateAsync("org-a", "peppol-bis-billing-3.0");
 
-        Assert.Null((await _service.GetAsync("org-b")).EndpointId);
+        Assert.Null((await _service.GetAsync("org-b")).DefaultRulesetId);
     }
 }

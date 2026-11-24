@@ -7,6 +7,8 @@ internal interface IOrganizationApiText
 {
     string SettingsNotSaved { get; }
 
+    string ProfileNotSaved { get; }
+
     string NotSaved { get; }
 
     string SettingNotSaved { get; }
@@ -22,6 +24,8 @@ internal sealed class OrganizationApiTextNl : IOrganizationApiText
 {
     public string SettingsNotSaved => "Instellingen niet opgeslagen";
 
+    public string ProfileNotSaved => "Bedrijfsprofiel niet opgeslagen";
+
     public string NotSaved => "Niet opgeslagen";
 
     public string SettingNotSaved => "Instelling niet opgeslagen";
@@ -36,6 +40,8 @@ internal sealed class OrganizationApiTextNl : IOrganizationApiText
 internal sealed class OrganizationApiTextEn : IOrganizationApiText
 {
     public string SettingsNotSaved => "Settings not saved";
+
+    public string ProfileNotSaved => "Company profile not saved";
 
     public string NotSaved => "Not saved";
 

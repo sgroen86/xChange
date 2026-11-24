@@ -5,7 +5,7 @@ using InvoicePlatform.Contracts.Invoices;
 namespace InvoicePlatform.Api.Organizations;
 
 /// <summary>
-/// The signed-in user's organisation settings. There is no organisation id in
+/// The signed-in user's organisation settings: the default export format. There is no organisation id in
 /// the route: it comes from the session, so nobody can address another
 /// tenant's settings.
 /// </summary>
@@ -58,12 +58,8 @@ public static class OrganizationEndpoints
             return RequestBody.Invalid();
         }
 
-        var result = await service.UpdateAsync(
-            user.OrganizationId,
-            request.DefaultRulesetId,
-            request.EndpointId,
-            request.EndpointScheme,
-            cancellationToken).ConfigureAwait(false);
+        var result = await service.UpdateAsync(user.OrganizationId, request.DefaultRulesetId, cancellationToken)
+            .ConfigureAwait(false);
 
         var organization = await service.GetOrganizationAsync(user.OrganizationId, cancellationToken).ConfigureAwait(false);
         return result.Succeeded
@@ -79,8 +75,6 @@ public static class OrganizationEndpoints
     private static OrganizationSettingsResponse ToResponse(OrganizationSettings settings, OrganizationSettingsService service) => new()
     {
         DefaultRulesetId = settings.DefaultRulesetId,
-        EndpointId = settings.EndpointId,
-        EndpointScheme = settings.EndpointScheme,
         Rulesets = [.. service.Rulesets.Select(r => new RulesetInfo
         {
             Id = r.Id,

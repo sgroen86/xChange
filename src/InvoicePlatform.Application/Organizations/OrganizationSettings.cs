@@ -9,8 +9,10 @@ public sealed record OrganizationSettings
     public string? DefaultRulesetId { get; init; }
 
     /// <summary>
-    /// The organisation's own electronic address (BT-34, it is the seller) and
-    /// its EAS scheme. Filled into every invoice whose seller address is empty.
+    /// Where the organisation's PEPPOL id lived before the company profile.
+    /// Still read until the profile is first saved
+    /// (<see cref="OrganizationProfileService"/>), which clears it. Nothing
+    /// writes a new value here any more.
     /// </summary>
     public string? EndpointId { get; init; }
 

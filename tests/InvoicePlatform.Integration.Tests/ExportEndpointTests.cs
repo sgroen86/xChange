@@ -19,6 +19,8 @@ public class ExportEndpointTests : IClassFixture<SignedInFactory>
     [InlineData("POST", "/api/v1/rulesets/peppol-bis-billing-3.0/check")]
     [InlineData("GET", "/api/v1/organization/settings")]
     [InlineData("PUT", "/api/v1/organization/settings")]
+    [InlineData("GET", "/api/v1/organization/profile")]
+    [InlineData("PUT", "/api/v1/organization/profile")]
     public async Task Every_route_requires_a_login(string method, string path)
     {
         var client = _factory.CreateClient();

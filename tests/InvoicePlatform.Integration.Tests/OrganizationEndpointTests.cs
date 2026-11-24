@@ -48,7 +48,7 @@ public class OrganizationEndpointTests : IClassFixture<SignedInFactory>
     [InlineData("readonly-a")]
     public async Task Only_an_admin_may_change_settings(string token)
     {
-        var response = await _factory.As(token).PutAsJsonAsync("/api/v1/organization/settings", new { endpointId = "12345678", endpointScheme = "0106" });
+        var response = await _factory.As(token).PutAsJsonAsync("/api/v1/organization/settings", new { defaultRulesetId = "peppol-bis-billing-3.0" });
 
         Assert.Equal(HttpStatusCode.Forbidden, response.StatusCode);
     }
@@ -57,14 +57,15 @@ public class OrganizationEndpointTests : IClassFixture<SignedInFactory>
     public async Task An_admins_change_round_trips_and_stays_in_the_organisation()
     {
         var put = await _factory.As("admin-b").PutAsJsonAsync("/api/v1/organization/settings",
-            new { defaultRulesetId = "peppol-bis-billing-3.0", endpointId = "0123456749", endpointScheme = "0208" });
+            new { defaultRulesetId = "nlcius-si-ubl-2.0" });
         Assert.Equal(HttpStatusCode.OK, put.StatusCode);
 
         var mine = await _factory.As("admin-b").GetFromJsonAsync<JsonElement>("/api/v1/organization/settings");
-        Assert.Equal("0123456749", mine.GetProperty("endpointId").GetString());
+        Assert.Equal("nlcius-si-ubl-2.0", mine.GetProperty("defaultRulesetId").GetString());
+        Assert.False(mine.TryGetProperty("endpointId", out _));
 
         var theirs = await _factory.As("admin-a").GetFromJsonAsync<JsonElement>("/api/v1/organization/settings");
-        Assert.NotEqual("0123456749", theirs.GetProperty("endpointId").GetString());
+        Assert.NotEqual("nlcius-si-ubl-2.0", theirs.GetProperty("defaultRulesetId").GetString());
     }
 
     [Fact]

@@ -36,36 +36,22 @@ public sealed class OrganizationSettingsService(
     public async Task<SettingsUpdateResult> UpdateAsync(
         string organizationId,
         string? defaultRulesetId,
-        string? endpointId,
-        string? endpointScheme,
         CancellationToken cancellationToken = default)
     {
         var ruleset = Clean(defaultRulesetId);
-        var endpoint = Clean(endpointId);
-        var scheme = Clean(endpointScheme);
-
         if (ruleset is not null && rulesets.Find(ruleset) is null)
         {
             return SettingsUpdateResult.Fail(OrganizationText.Current.UnknownRuleset);
         }
 
-        if (endpoint is not null && scheme is null)
-        {
-            return SettingsUpdateResult.Fail(OrganizationText.Current.EndpointSchemeMissing);
-        }
-
-        if (scheme is not null && !CodeLists.IsElectronicAddressScheme(scheme))
-        {
-            return SettingsUpdateResult.Fail(OrganizationText.Current.EndpointSchemeInvalid(scheme));
-        }
-
+        var existing = await store.GetAsync(organizationId, cancellationToken).ConfigureAwait(false);
         var settings = new OrganizationSettings
         {
             OrganizationId = organizationId,
             DefaultRulesetId = ruleset,
-            EndpointId = endpoint,
-            // A scheme without an address means nothing.
-            EndpointScheme = endpoint is null ? null : scheme,
+            // A PEPPOL id that has not moved to the profile yet must survive.
+            EndpointId = existing?.EndpointId,
+            EndpointScheme = existing?.EndpointScheme,
         };
 
         await store.SaveAsync(settings, cancellationToken).ConfigureAwait(false);

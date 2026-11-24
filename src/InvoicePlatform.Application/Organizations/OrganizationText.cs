@@ -13,10 +13,6 @@ internal interface IOrganizationText
 
     string UnknownRuleset { get; }
 
-    string EndpointSchemeMissing { get; }
-
-    string EndpointSchemeInvalid(string scheme);
-
     string ConfirmNameMismatch { get; }
 
     string CannotDeleteOwnOrganization { get; }
@@ -35,10 +31,6 @@ internal sealed class OrganizationTextNl : IOrganizationText
     public string AccountWithEmailExists => "Er bestaat al een account met dit e-mailadres.";
 
     public string UnknownRuleset => "Onbekende regelset.";
-
-    public string EndpointSchemeMissing => "Kies het schema van het elektronisch adres.";
-
-    public string EndpointSchemeInvalid(string scheme) => $"'{scheme}' is geen geldig schema voor een elektronisch adres.";
 
     public string ConfirmNameMismatch => "Typ de naam van de organisatie precies zoals hij is, ter bevestiging.";
 
@@ -59,10 +51,6 @@ internal sealed class OrganizationTextEn : IOrganizationText
     public string AccountWithEmailExists => "An account with this email address already exists.";
 
     public string UnknownRuleset => "Unknown ruleset.";
-
-    public string EndpointSchemeMissing => "Choose the scheme of the electronic address.";
-
-    public string EndpointSchemeInvalid(string scheme) => $"'{scheme}' is not a valid electronic address scheme.";
 
     public string ConfirmNameMismatch => "Type the organisation's name exactly as it is, to confirm.";
 
