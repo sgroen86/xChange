@@ -154,3 +154,27 @@ internal sealed class FakeOfficialValidator : IOfficialValidator
         return Task.FromResult(Verdict);
     }
 }
+
+internal sealed class FakeProfileStore : IOrganizationProfileStore
+{
+    private readonly Dictionary<string, OrganizationProfile> _profiles = [];
+
+    public Task<OrganizationProfile?> GetAsync(string organizationId, CancellationToken cancellationToken = default)
+        => Task.FromResult(_profiles.GetValueOrDefault(organizationId));
+
+    public Task SaveAsync(OrganizationProfile profile, CancellationToken cancellationToken = default)
+    {
+        _profiles[profile.OrganizationId] = profile;
+        return Task.CompletedTask;
+    }
+}
+
+internal static class TestProfiles
+{
+    /// <summary>A profile service over fakes; pass the stores a test fills itself.</summary>
+    public static OrganizationProfileService Over(
+        FakeSettingsStore? settings = null,
+        FakeProfileStore? profiles = null,
+        FakePlatformStore? platform = null)
+        => new(profiles ?? new FakeProfileStore(), settings ?? new FakeSettingsStore(), platform ?? new FakePlatformStore());
+}
