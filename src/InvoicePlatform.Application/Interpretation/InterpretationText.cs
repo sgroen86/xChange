@@ -19,6 +19,7 @@ internal sealed class InterpretationTextNl : IInterpretationText
         InterpretationFailure.TooLarge => "De factuur is te groot om in één keer te lezen. Splits de PDF in kleinere delen.",
         InterpretationFailure.TimedOut => "Het lezen duurde te lang. Probeer het opnieuw.",
         InterpretationFailure.Declined => "Het model wilde dit document niet verwerken.",
+        InterpretationFailure.Rejected => "Dit document kon niet worden gelezen, bijvoorbeeld omdat het beveiligd of beschadigd is of te veel pagina's heeft. Controleer de PDF.",
         InterpretationFailure.ProviderUnavailable => "De leesdienst is nu niet bereikbaar. Probeer het later opnieuw.",
         _ => "Het model gaf geen bruikbaar antwoord. Probeer het opnieuw.",
     };
@@ -33,6 +34,7 @@ internal sealed class InterpretationTextEn : IInterpretationText
         InterpretationFailure.TooLarge => "The invoice is too large to read in one go. Split the PDF into smaller parts.",
         InterpretationFailure.TimedOut => "Reading took too long. Please try again.",
         InterpretationFailure.Declined => "The model declined to process this document.",
+        InterpretationFailure.Rejected => "This document could not be read, for example because it is protected, damaged or has too many pages. Check the PDF.",
         InterpretationFailure.ProviderUnavailable => "The reading service cannot be reached right now. Please try again later.",
         _ => "The model gave no usable answer. Please try again.",
     };

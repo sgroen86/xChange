@@ -21,6 +21,7 @@ public class ExtractFailureEndpointTests : IClassFixture<SignedInFactory>
     [InlineData(InterpretationFailure.TimedOut, HttpStatusCode.GatewayTimeout, "en", "Reading took too long")]
     [InlineData(InterpretationFailure.TooLarge, HttpStatusCode.BadGateway, "nl", "De factuur is te groot")]
     [InlineData(InterpretationFailure.ProviderUnavailable, HttpStatusCode.BadGateway, "en", "The reading service cannot be reached")]
+    [InlineData(InterpretationFailure.Rejected, HttpStatusCode.BadGateway, "nl", "Dit document kon niet worden gelezen")]
     public async Task A_failed_reading_says_why(InterpretationFailure reason, HttpStatusCode status, string language, string message)
     {
         using var factory = _factory.WithWebHostBuilder(builder => builder.ConfigureTestServices(services =>

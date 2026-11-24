@@ -18,6 +18,9 @@ public enum InterpretationFailure
     /// <summary>The model declined to process the document.</summary>
     Declined,
 
+    /// <summary>The provider refused the request itself: the document cannot be read as sent (protected, damaged, too many pages).</summary>
+    Rejected,
+
     /// <summary>The provider could not be reached, kept failing, or rejected the key.</summary>
     ProviderUnavailable,
 }

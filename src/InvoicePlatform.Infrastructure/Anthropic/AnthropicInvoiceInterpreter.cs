@@ -103,10 +103,14 @@ public sealed class AnthropicInvoiceInterpreter : IInvoiceInterpreter
 
     private const string HeaderTask =
         "Extract the invoice data from the attached document into the required schema, except the "
-        + "invoice lines: those are read separately." + Reminder;
+        + "invoice lines: those are read separately. Put in allowancesAndCharges only discounts and "
+        + "charges that apply to the invoice as a whole, not to a single line." + Reminder;
 
     private const string LinesTask =
-        "Extract only the invoice lines from the attached document into the required schema." + Reminder;
+        "Extract only the invoice lines from the attached document into the required schema. A "
+        + "discount or charge that applies to the invoice as a whole is not a line: leave it out, it "
+        + "is read separately. A discount or charge on one line belongs in that line's "
+        + "allowancesAndCharges." + Reminder;
 
     private enum Part
     {
@@ -281,40 +285,70 @@ public sealed class AnthropicInvoiceInterpreter : IInvoiceInterpreter
         {
             return Fail(exception);
         }
-        catch (Exception exception) when (exception is AnthropicApiException or AnthropicIOException or HttpRequestException)
+        catch (Exception exception) when (exception is AnthropicBadRequestException or AnthropicUnprocessableEntityException)
+        {
+            // A permanent refusal (protected or damaged PDF, too many pages, prompt too long):
+            // trying again later does not help.
+            return Fail(new InvoiceInterpretationException(
+                "Anthropic refused the request.", InterpretationFailure.Rejected, null, exception));
+        }
+        catch (Exception exception) when (exception is AnthropicException or HttpRequestException)
         {
             return Fail(new InvoiceInterpretationException(
                 "Anthropic could not be reached or kept failing.", InterpretationFailure.ProviderUnavailable, null, exception));
         }
+        catch (OperationCanceledException exception)
+        {
+            // Not the caller, not the other call, not our own limit: a timeout below us (the HTTP client's).
+            return Fail(new InvoiceInterpretationException(
+                "The request to Anthropic timed out.", InterpretationFailure.TimedOut, null, exception));
+        }
+        catch (Exception exception)
+        {
+            // Anything else (Secrets Manager failing to hand out the key, say) still stops the
+            // other call and reaches the user as a reason, never as a bare 500.
+            return Fail(new InvoiceInterpretationException(
+                "Reading with Anthropic failed unexpectedly.", InterpretationFailure.ProviderUnavailable, null, exception));
+        }
 
         // From here on the call is paid for: a failure carries what it cost.
-        var usage = UsageOf(response);
-        _logger.LogInformation(
-            "Read the {Part} with {Model}: {PartInputTokens} input tokens, {PartOutputTokens} output tokens",
-            part, model, usage.InputTokens, usage.OutputTokens);
-
-        if (response.StopReason == "refusal")
+        TokenUsage? usage = null;
+        try
         {
-            return Fail(new InvoiceInterpretationException(
-                "The model declined to process this document.", InterpretationFailure.Declined), usage);
-        }
+            usage = UsageOf(response);
+            _logger.LogInformation(
+                "Read the {Part} with {Model}: {PartInputTokens} input tokens, {PartOutputTokens} output tokens",
+                part, model, usage.InputTokens, usage.OutputTokens);
 
-        if (response.StopReason == "max_tokens")
+            if (response.StopReason == "refusal")
+            {
+                return Fail(new InvoiceInterpretationException(
+                    "The model declined to process this document.", InterpretationFailure.Declined), usage);
+            }
+
+            if (response.StopReason == "max_tokens")
+            {
+                return Fail(new InvoiceInterpretationException(
+                    $"The answer for the {part} was cut off at the token limit.", InterpretationFailure.TooLarge), usage);
+            }
+
+            var json = string.Concat(
+                response.Content.Select(block => block.Value).OfType<TextBlock>().Select(block => block.Text));
+
+            if (string.IsNullOrWhiteSpace(json))
+            {
+                return Fail(new InvoiceInterpretationException(
+                    "The model returned no content for this document.", InterpretationFailure.Unreadable), usage);
+            }
+
+            return new PartOutcome(json, usage, null);
+        }
+        catch (Exception exception)
         {
+            // The SDK reads the answer lazily: a malformed one throws here (AnthropicInvalidDataException).
             return Fail(new InvoiceInterpretationException(
-                $"The answer for the {part} was cut off at the token limit.", InterpretationFailure.TooLarge), usage);
+                "Anthropic's answer could not be read.", InterpretationFailure.Unreadable, null, exception), usage);
         }
-
-        var json = string.Concat(
-            response.Content.Select(block => block.Value).OfType<TextBlock>().Select(block => block.Text));
-
-        if (string.IsNullOrWhiteSpace(json))
-        {
-            return Fail(new InvoiceInterpretationException(
-                "The model returned no content for this document.", InterpretationFailure.Unreadable), usage);
-        }
-
-        return new PartOutcome(json, usage, null);
     }
 
     private MessageCreateParams Request(Part part, DocumentBlockParam document, IReadOnlyList<ReadingHint> hints, string model) => new()

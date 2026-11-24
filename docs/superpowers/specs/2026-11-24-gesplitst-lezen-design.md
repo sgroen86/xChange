@@ -176,7 +176,8 @@ De kop en de regels worden samen één `ExtractedInvoiceJson`, met `Lines` uit d
 | `TimedOut` | de eigen time-out van 180 seconden verloopt, terwijl de gebruiker niet zelf afbrak | Het lezen duurde te lang. Probeer het opnieuw. |
 | `Declined` | `stop_reason: refusal` | Het model wilde dit document niet verwerken. |
 | `Unreadable` | leeg antwoord, of JSON die niet bij het schema past | Het model gaf geen bruikbaar antwoord. Probeer het opnieuw. |
-| `ProviderUnavailable` | de sleutel geweigerd (ook na opnieuw lezen), of een API- of verbindingsfout na de herhaalpogingen van de SDK | De leesdienst is nu niet bereikbaar. Probeer het later opnieuw. |
+| `Rejected` | Anthropic weigert het verzoek zelf (400/422): beveiligde of beschadigde PDF, te veel pagina's | Dit document kon niet worden gelezen, bijvoorbeeld omdat het beveiligd of beschadigd is of te veel pagina's heeft. Controleer de PDF. |
+| `ProviderUnavailable` | de sleutel geweigerd (401, ook na opnieuw lezen), 403/404/429/5xx of een netwerkfout na de herhaalpogingen van de SDK, en andere SDK-fouten | De leesdienst is nu niet bereikbaar. Probeer het later opnieuw. |
 
 - **De interpreter zet alles om.** Hij vertaalt de SDK-fouten, de eigen time-out en de
   stopredenen naar `InvoiceInterpretationException` met een oorzaak. Er komt geen SDK-fout meer
@@ -265,6 +266,7 @@ Alle tests draaien zonder netwerk, met een nep-`HttpMessageHandler` zoals in
     - onleesbare JSON → `Unreadable`;
     - de eigen time-out → `TimedOut`;
     - een 500 van de API → `ProviderUnavailable`;
+    - een 400 of 422 van de API → `Rejected`;
   - als één helft mislukt, mislukt het geheel, met de kosten van de aanroepen die antwoord gaven;
   - een afbreking door de gebruiker blijft een `OperationCanceledException`;
   - de schemabewaking: geen schema met meer velden dan het huidige.

@@ -128,6 +128,96 @@ public class AnthropicInvoiceInterpreterTests
         Assert.Equal(InterpretationFailure.ProviderUnavailable, error.Reason);
     }
 
+    [Theory]
+    [InlineData(HttpStatusCode.BadRequest)]
+    [InlineData(HttpStatusCode.UnprocessableEntity)]
+    public async Task A_request_anthropic_refuses_is_rejected_not_unavailable(HttpStatusCode status)
+    {
+        var anthropic = new ScriptedAnthropic
+        {
+            Header = _ => Task.FromResult(ScriptedAnthropic.Error(status, "invalid_request_error")),
+            Lines = ScriptedAnthropic.Hang,
+        };
+
+        var error = await Assert.ThrowsAsync<InvoiceInterpretationException>(() => Interpreter(anthropic).InterpretAsync(Pdf));
+
+        Assert.Equal(InterpretationFailure.Rejected, error.Reason);
+        Assert.NotNull(error.InnerException);
+    }
+
+    [Fact]
+    public async Task A_key_that_cannot_be_fetched_is_unavailable_and_stops_both_calls()
+    {
+        var anthropic = new ScriptedAnthropic { Header = ScriptedAnthropic.Hang, Lines = ScriptedAnthropic.Hang };
+        var watch = System.Diagnostics.Stopwatch.StartNew();
+
+        var error = await Assert.ThrowsAsync<InvoiceInterpretationException>(
+            () => Interpreter(anthropic, keys: new BrokenKey()).InterpretAsync(Pdf));
+
+        Assert.Equal(InterpretationFailure.ProviderUnavailable, error.Reason);
+        Assert.IsType<InvalidOperationException>(error.InnerException);
+        Assert.True(watch.Elapsed < TimeSpan.FromSeconds(10), $"took {watch.Elapsed}");
+    }
+
+    [Fact]
+    public async Task An_answer_the_sdk_cannot_read_is_unreadable_and_stops_the_other_call()
+    {
+        const string withoutUsage = """
+            {"id":"msg_1","type":"message","role":"assistant","model":"claude-test",
+             "content":[{"type":"text","text":"{}"}],"stop_reason":"end_turn","stop_sequence":null}
+            """;
+        var anthropic = new ScriptedAnthropic
+        {
+            Header = _ => Task.FromResult(new HttpResponseMessage(HttpStatusCode.OK)
+            {
+                Content = new StringContent(withoutUsage, System.Text.Encoding.UTF8, "application/json"),
+            }),
+            Lines = ScriptedAnthropic.Hang,
+        };
+        var watch = System.Diagnostics.Stopwatch.StartNew();
+
+        var error = await Assert.ThrowsAsync<InvoiceInterpretationException>(() => Interpreter(anthropic).InterpretAsync(Pdf));
+
+        Assert.Equal(InterpretationFailure.Unreadable, error.Reason);
+        Assert.True(watch.Elapsed < TimeSpan.FromSeconds(10), $"took {watch.Elapsed}");
+    }
+
+    [Fact]
+    public async Task Each_call_is_told_where_a_discount_on_the_whole_invoice_belongs()
+    {
+        var anthropic = new ScriptedAnthropic();
+
+        await Interpreter(anthropic).InterpretAsync(Pdf);
+
+        Assert.Contains("Put in allowancesAndCharges only discounts and charges that apply to the invoice as a whole",
+            UserTexts(anthropic.HeaderBody), StringComparison.Ordinal);
+        Assert.Contains("A discount or charge that applies to the invoice as a whole is not a line",
+            UserTexts(anthropic.LinesBody), StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task Evidence_about_lines_comes_from_the_lines_call_only()
+    {
+        var anthropic = new ScriptedAnthropic
+        {
+            Header = _ => Task.FromResult(ScriptedAnthropic.Reply("""
+                {"evidence":[{"field":"invoiceNumber","confidence":"0.9","pageNumber":"1","sourceText":"F-1"},
+                             {"field":"lines[0].netAmount","confidence":"0.5","pageNumber":"1","sourceText":"from the header"}]}
+                """)),
+            Lines = _ => Task.FromResult(ScriptedAnthropic.Reply("""
+                {"lines":[{"description":"Schroeven","netAmount":"37.50"}],
+                 "evidence":[{"field":"lines[0].netAmount","confidence":"0.8","pageNumber":"1","sourceText":"from the lines"},
+                             {"field":"invoiceNumber","confidence":"0.5","pageNumber":"1","sourceText":"from the lines"}]}
+                """)),
+        };
+
+        var result = await Interpreter(anthropic).InterpretAsync(Pdf);
+
+        Assert.Equal(
+            [("invoiceNumber", "F-1"), ("lines[0].netAmount", "from the lines")],
+            result.Draft.Evidence.Select(e => (e.Field, e.SourceText)));
+    }
+
     [Fact]
     public async Task When_one_half_fails_the_other_is_stopped_and_the_whole_fails_with_what_was_paid()
     {
@@ -165,9 +255,10 @@ public class AnthropicInvoiceInterpreterTests
             () => Interpreter(anthropic).InterpretAsync(Pdf, cancellationToken: caller.Token));
     }
 
-    private static AnthropicInvoiceInterpreter Interpreter(ScriptedAnthropic anthropic, int timeoutSeconds = 30)
+    private static AnthropicInvoiceInterpreter Interpreter(
+        ScriptedAnthropic anthropic, int timeoutSeconds = 30, IAnthropicApiKeyProvider? keys = null)
         => new(
-            new FixedKey(),
+            keys ?? new FixedKey(),
             Options.Create(new AnthropicOptions { Model = "claude-test", TimeoutSeconds = timeoutSeconds }),
             NullLogger<AnthropicInvoiceInterpreter>.Instance,
             new HttpClient(anthropic));
@@ -185,6 +276,24 @@ public class AnthropicInvoiceInterpreterTests
         => string.Join("\n", JsonDocument.Parse(body).RootElement.GetProperty("messages")[0].GetProperty("content").EnumerateArray()
             .Where(b => b.GetProperty("type").GetString() == "text")
             .Select(b => b.GetProperty("text").GetString()));
+
+    /// <summary>
+    /// Secrets Manager fails for the first call that asks; the second call then
+    /// gets a key and would hang, unless the first one's failure stops it.
+    /// </summary>
+    private sealed class BrokenKey : IAnthropicApiKeyProvider
+    {
+        private int _asked;
+
+        public Task<string> GetApiKeyAsync(CancellationToken cancellationToken = default)
+            => Interlocked.Increment(ref _asked) == 1
+                ? Task.FromException<string>(new InvalidOperationException("Secrets Manager is down"))
+                : Task.FromResult("sk-ant-test");
+
+        public void Invalidate()
+        {
+        }
+    }
 
     private sealed class FixedKey : IAnthropicApiKeyProvider
     {

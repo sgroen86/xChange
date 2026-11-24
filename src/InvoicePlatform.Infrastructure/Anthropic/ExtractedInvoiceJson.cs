@@ -55,12 +55,24 @@ internal sealed record ExtractedInvoiceJson
         Evidence = Evidence?.Select(e => e.ToDomain()).ToList() ?? [],
     };
 
-    /// <summary>The header answer with the lines answer merged in: lines from there, evidence from both.</summary>
+    /// <summary>
+    /// The header answer with the lines answer merged in: lines from there, and
+    /// evidence from both, each for its own part. Evidence the header call gave
+    /// about lines, or the lines call about the header, is dropped: the other
+    /// call read those values, and its evidence is the one that belongs to them.
+    /// </summary>
     public ExtractedInvoiceJson WithLines(ExtractedLinesJson lines) => this with
     {
         Lines = lines.Lines,
-        Evidence = [.. Evidence ?? [], .. lines.Evidence ?? []],
+        Evidence =
+        [
+            .. (Evidence ?? []).Where(e => !IsAboutLines(e)),
+            .. (lines.Evidence ?? []).Where(IsAboutLines),
+        ],
     };
+
+    private static bool IsAboutLines(EvidenceJson evidence)
+        => evidence.Field?.StartsWith("lines", StringComparison.Ordinal) == true;
 
     /// <summary>Parses a decimal string exactly. Anything unparseable becomes null, never zero.</summary>
     internal static decimal? ParseDecimal(string? value)
