@@ -3,63 +3,125 @@ using System.Text.Json;
 namespace InvoicePlatform.Infrastructure.Anthropic;
 
 /// <summary>
-/// The JSON Schema the model's output is constrained to.
+/// The JSON Schemas the model's output is constrained to: one for the header,
+/// one for the lines. <see cref="AnthropicInvoiceInterpreter"/> sends both
+/// with the same PDF at the same time and merges the answers.
 ///
-/// The field set is capped by a hard API limit, not by preference: the request
-/// is rejected with "The compiled grammar is too large" above roughly seventy
-/// declared properties. Everything the brief named is kept - tax identifiers,
-/// electronic addresses, purchase order and buyer references, payment means,
-/// IBAN and reference, lines, allowances and charges, the VAT breakdown, all
-/// totals, and per-field evidence. What was dropped was never asked for:
-/// contact name/email/phone, a second tax registration id, item name and seller
-/// item id, base quantity, payment means text, BIC and account name, and two
-/// address lines. They remain in the domain model and simply stay null; add one
-/// back only by removing another.
+/// Why two: the API rejects a schema whose compiled grammar is too large ("The
+/// compiled grammar is too large"). The single schema before the split had 82
+/// fields counting every $ref written out, was accepted, and left no room:
+/// contact details, the extra address line, BIC, account name, article code
+/// and base quantity had to stay out. Split, the header has 74 fields and the
+/// lines 25 (InvoiceExtractionSchemaTests guards both against growing past 82),
+/// and each answer is shorter, which keeps a large invoice within the token
+/// and time limits.
 ///
-/// Three deliberate choices:
+/// Only fields the review screen shows are asked for: a value read by the model
+/// must be one a reviewer can see and correct before it reaches an e-invoice.
+/// The item name (BT-153) is not asked for: UblInvoiceWriter writes it from the
+/// line description, a settled decision. The domain keeps the fields this
+/// schema does not ask for (country subdivision, a second tax registration,
+/// payment means text, item name); they simply stay null.
+///
+/// Three deliberate choices, unchanged from the single schema:
 ///
 /// 1. Every property is listed in "required", so the model emits each field
 ///    explicitly rather than silently omitting what it could not find.
 ///
-/// 2. "Not present in the document" is the empty string, not null. The obvious
-///    encoding would be nullable types, but the API caps a schema at 16
-///    union-typed parameters and this schema has around fifty fields:
-///    "Schemas contains too many parameters with union types ... This causes
-///    exponential compilation cost." Plain strings carry the same meaning here
-///    because the mapper already treats empty and whitespace as absent, so a
-///    blank still becomes null in the domain rather than an empty value.
+/// 2. "Not present in the document" is the empty string, not null. The API
+///    caps a schema at 16 union-typed parameters, and these schemas have far
+///    more optional values than that. The mapper treats empty and whitespace
+///    as absent, so a blank still becomes null in the domain.
 ///
-/// 3. Monetary and quantity values are strings, not JSON numbers. A JSON number
-///    would invite a float representation, and 1234.10 must not become
-///    1234.0999999. They are parsed into <see cref="decimal"/> on arrival
-///    (CLAUDE.md, hard rule 3).
+/// 3. Monetary and quantity values are strings, not JSON numbers, so 1234.10
+///    never becomes 1234.0999999; they are parsed into decimal on arrival
+///    (CLAUDE.md, hard rule 3). They carry no regex "pattern": that blows up
+///    the grammar and would contradict the empty-string convention. ParseDecimal
+///    is the real guard.
 ///
-///    They carry no regex "pattern", for two reasons. Constraining ~25 amount
-///    fields by regex compiles into a grammar the API rejects outright - "The
-///    compiled grammar is too large" - and the pattern also contradicted the
-///    empty-string convention above, since it matched no empty value. The
-///    format is described in words instead, and ParseDecimal is the real
-///    guard: it returns null for anything unparseable rather than trusting the
-///    model to have obeyed.
+/// Changing a schema invalidates the prompt cache, so the two calls cannot share
+/// a cached PDF; each pays for it in full.
 /// </summary>
 internal static class InvoiceExtractionSchema
 {
-    public static IReadOnlyDictionary<string, JsonElement> Build()
+    public static IReadOnlyDictionary<string, JsonElement> Header() => Parse(HeaderJson);
+
+    public static IReadOnlyDictionary<string, JsonElement> Lines() => Parse(LinesJson);
+
+    private static IReadOnlyDictionary<string, JsonElement> Parse(string json)
     {
-        using var document = JsonDocument.Parse(SchemaJson);
+        using var document = JsonDocument.Parse(json);
         return document.RootElement
             .EnumerateObject()
             .ToDictionary(property => property.Name, property => property.Value.Clone());
     }
 
-    private const string SchemaJson = """
+    private const string Evidence = """
+        {
+          "type": "array",
+          "description": "Provenance for the fields you filled in. Omit entries for fields you left empty.",
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["field", "confidence", "pageNumber", "sourceText"],
+            "properties": {
+              "field": {
+                "type": "string",
+                "description": "Dotted path of the field, e.g. totals.payableAmount or lines[0].netAmount."
+              },
+              "confidence": {
+                "$ref": "#/$defs/decimalString",
+                "description": "Your confidence from 0 to 1, as a decimal string."
+              },
+              "pageNumber": { "type": "string" },
+              "sourceText": {
+                "type": "string",
+                "description": "The verbatim text this value was read from."
+              }
+            }
+          }
+        }
+        """;
+
+    private const string DecimalString = """
+        {
+          "type": "string",
+          "description": "A decimal as a string, e.g. 1234.50, using . as the decimal separator and no thousands separators or currency symbols. Never a JSON number. Empty string if the value is not in the document."
+        }
+        """;
+
+    private const string Adjustments = """
+        {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["isCharge", "amount", "baseAmount", "percentage", "reasonCode", "reason", "vatCategoryCode", "vatPercentage"],
+            "properties": {
+              "isCharge": {
+                "type": "boolean",
+                "description": "true for a charge that increases the total, false for an allowance or discount."
+              },
+              "amount": { "$ref": "#/$defs/decimalString" },
+              "baseAmount": { "$ref": "#/$defs/decimalString" },
+              "percentage": { "$ref": "#/$defs/decimalString" },
+              "reasonCode": { "type": "string" },
+              "reason": { "type": "string" },
+              "vatCategoryCode": { "type": "string" },
+              "vatPercentage": { "$ref": "#/$defs/decimalString" }
+            }
+          }
+        }
+        """;
+
+    private const string HeaderJson = $$"""
     {
       "type": "object",
       "additionalProperties": false,
       "required": [
         "typeCode", "invoiceNumber", "issueDate", "dueDate", "currencyCode", "note",
         "seller", "buyer", "purchaseOrderReference", "buyerReference", "payment",
-        "lines", "allowancesAndCharges", "vatBreakdown", "totals", "evidence"
+        "allowancesAndCharges", "vatBreakdown", "totals", "evidence"
       ],
       "properties": {
         "typeCode": {
@@ -87,45 +149,22 @@ internal static class InvoiceExtractionSchema
         "payment": {
           "type": "object",
           "additionalProperties": false,
-          "required": ["paymentMeansCode", "iban", "paymentReference"],
+          "required": ["paymentMeansCode", "iban", "bic", "accountName", "paymentReference"],
           "properties": {
             "paymentMeansCode": {
               "type": "string",
               "description": "UNTDID 4461 code, e.g. 30 for credit transfer."
             },
             "iban": { "type": "string" },
+            "bic": {
+              "type": "string",
+              "description": "BIC / SWIFT code of the payee's bank, as printed."
+            },
+            "accountName": {
+              "type": "string",
+              "description": "Name of the payee's account holder, as printed."
+            },
             "paymentReference": { "type": "string" }
-          }
-        },
-        "lines": {
-          "type": "array",
-          "items": {
-            "type": "object",
-            "additionalProperties": false,
-            "required": [
-              "lineId", "description", "quantity", "unitCode", "unitPrice",
-              "netAmount", "vatCategoryCode", "vatPercentage", "allowancesAndCharges"
-            ],
-            "properties": {
-              "lineId": { "type": "string" },
-              "description": { "type": "string" },
-              "quantity": { "$ref": "#/$defs/decimalString" },
-              "unitCode": {
-                "type": "string",
-                "description": "UN/ECE Rec 20 code, e.g. C62 for each, HUR for hour."
-              },
-              "unitPrice": { "$ref": "#/$defs/decimalString" },
-              "netAmount": {
-                "$ref": "#/$defs/decimalString",
-                "description": "Line net amount excluding VAT, exactly as printed."
-              },
-              "vatCategoryCode": {
-                "type": "string",
-                "description": "UNTDID 5305 code: S standard, Z zero rated, E exempt, AE reverse charge, G export, K intra-community, O out of scope."
-              },
-              "vatPercentage": { "$ref": "#/$defs/decimalString" },
-              "allowancesAndCharges": { "$ref": "#/$defs/adjustments" }
-            }
           }
         },
         "allowancesAndCharges": { "$ref": "#/$defs/adjustments" },
@@ -179,42 +218,17 @@ internal static class InvoiceExtractionSchema
             }
           }
         },
-        "evidence": {
-          "type": "array",
-          "description": "Provenance for the fields you filled in. Omit entries for fields you set to null.",
-          "items": {
-            "type": "object",
-            "additionalProperties": false,
-            "required": ["field", "confidence", "pageNumber", "sourceText"],
-            "properties": {
-              "field": {
-                "type": "string",
-                "description": "Dotted path of the field, e.g. totals.payableAmount or lines[0].netAmount."
-              },
-              "confidence": {
-                "$ref": "#/$defs/decimalString",
-                "description": "Your confidence from 0 to 1, as a decimal string."
-              },
-              "pageNumber": { "type": "string" },
-              "sourceText": {
-                "type": "string",
-                "description": "The verbatim text this value was read from."
-              }
-            }
-          }
-        }
+        "evidence": {{Evidence}}
       },
       "$defs": {
-        "decimalString": {
-          "type": "string",
-          "description": "A decimal as a string, e.g. 1234.50, using . as the decimal separator and no thousands separators or currency symbols. Never a JSON number. Empty string if the value is not in the document."
-        },
+        "decimalString": {{DecimalString}},
         "party": {
           "type": "object",
           "additionalProperties": false,
           "required": [
             "name", "legalRegistrationId", "vatIdentifier",
-            "electronicAddress", "electronicAddressScheme", "address"
+            "electronicAddress", "electronicAddressScheme",
+            "contactName", "contactEmail", "contactPhone", "address"
           ],
           "properties": {
             "name": { "type": "string" },
@@ -234,12 +248,28 @@ internal static class InvoiceExtractionSchema
               "type": "string",
               "description": "Scheme of the electronic address, e.g. 0106 or EM."
             },
+            "contactName": {
+              "type": "string",
+              "description": "Name of the contact person or department, as printed."
+            },
+            "contactEmail": {
+              "type": "string",
+              "description": "Email address of the contact, as printed."
+            },
+            "contactPhone": {
+              "type": "string",
+              "description": "Telephone number of the contact, as printed."
+            },
             "address": {
               "type": "object",
               "additionalProperties": false,
-              "required": ["streetName", "postalZone", "cityName", "countryCode"],
+              "required": ["streetName", "additionalStreetName", "postalZone", "cityName", "countryCode"],
               "properties": {
                 "streetName": { "type": "string" },
+                "additionalStreetName": {
+                  "type": "string",
+                  "description": "A second address line, e.g. a building, unit or PO box, as printed."
+                },
                 "postalZone": { "type": "string" },
                 "cityName": { "type": "string" },
                 "countryCode": {
@@ -250,27 +280,61 @@ internal static class InvoiceExtractionSchema
             }
           }
         },
-        "adjustments": {
+        "adjustments": {{Adjustments}}
+      }
+    }
+    """;
+
+    private const string LinesJson = $$"""
+    {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["lines", "evidence"],
+      "properties": {
+        "lines": {
           "type": "array",
           "items": {
             "type": "object",
             "additionalProperties": false,
-            "required": ["isCharge", "amount", "baseAmount", "percentage", "reasonCode", "reason", "vatCategoryCode", "vatPercentage"],
+            "required": [
+              "lineId", "description", "sellerItemIdentifier", "quantity", "unitCode", "unitPrice",
+              "baseQuantity", "netAmount", "vatCategoryCode", "vatPercentage", "allowancesAndCharges"
+            ],
             "properties": {
-              "isCharge": {
-                "type": "boolean",
-                "description": "true for a charge that increases the total, false for an allowance or discount."
+              "lineId": { "type": "string" },
+              "description": { "type": "string" },
+              "sellerItemIdentifier": {
+                "type": "string",
+                "description": "The seller's article or item code for this line, as printed."
               },
-              "amount": { "$ref": "#/$defs/decimalString" },
-              "baseAmount": { "$ref": "#/$defs/decimalString" },
-              "percentage": { "$ref": "#/$defs/decimalString" },
-              "reasonCode": { "type": "string" },
-              "reason": { "type": "string" },
-              "vatCategoryCode": { "type": "string" },
-              "vatPercentage": { "$ref": "#/$defs/decimalString" }
+              "quantity": { "$ref": "#/$defs/decimalString" },
+              "unitCode": {
+                "type": "string",
+                "description": "UN/ECE Rec 20 code, e.g. C62 for each, HUR for hour."
+              },
+              "unitPrice": { "$ref": "#/$defs/decimalString" },
+              "baseQuantity": {
+                "$ref": "#/$defs/decimalString",
+                "description": "The quantity the unit price refers to when the price is per more than one unit, e.g. 100 for a price per 100 pieces. Empty string when the price is per single unit."
+              },
+              "netAmount": {
+                "$ref": "#/$defs/decimalString",
+                "description": "Line net amount excluding VAT, exactly as printed."
+              },
+              "vatCategoryCode": {
+                "type": "string",
+                "description": "UNTDID 5305 code: S standard, Z zero rated, E exempt, AE reverse charge, G export, K intra-community, O out of scope."
+              },
+              "vatPercentage": { "$ref": "#/$defs/decimalString" },
+              "allowancesAndCharges": { "$ref": "#/$defs/adjustments" }
             }
           }
-        }
+        },
+        "evidence": {{Evidence}}
+      },
+      "$defs": {
+        "decimalString": {{DecimalString}},
+        "adjustments": {{Adjustments}}
       }
     }
     """;

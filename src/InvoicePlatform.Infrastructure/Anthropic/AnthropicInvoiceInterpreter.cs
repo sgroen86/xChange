@@ -240,7 +240,7 @@ public sealed class AnthropicInvoiceInterpreter : IInvoiceInterpreter
             {
                 Format = new JsonOutputFormat
                 {
-                    Schema = new Dictionary<string, JsonElement>(InvoiceExtractionSchema.Build()),
+                    Schema = new Dictionary<string, JsonElement>(InvoiceExtractionSchema.Header()),
                 },
             },
             Messages =

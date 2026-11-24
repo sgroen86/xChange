@@ -55,6 +55,13 @@ internal sealed record ExtractedInvoiceJson
         Evidence = Evidence?.Select(e => e.ToDomain()).ToList() ?? [],
     };
 
+    /// <summary>The header answer with the lines answer merged in: lines from there, evidence from both.</summary>
+    public ExtractedInvoiceJson WithLines(ExtractedLinesJson lines) => this with
+    {
+        Lines = lines.Lines,
+        Evidence = [.. Evidence ?? [], .. lines.Evidence ?? []],
+    };
+
     /// <summary>Parses a decimal string exactly. Anything unparseable becomes null, never zero.</summary>
     internal static decimal? ParseDecimal(string? value)
     {
@@ -75,6 +82,13 @@ internal sealed record ExtractedInvoiceJson
     /// <summary>Empty and whitespace-only strings mean "absent", not "present but blank".</summary>
     internal static string? Clean(string? value)
         => string.IsNullOrWhiteSpace(value) ? null : value.Trim();
+}
+
+/// <summary>The answer of the lines call: the shape of <see cref="InvoiceExtractionSchema.Lines"/>.</summary>
+internal sealed record ExtractedLinesJson
+{
+    [JsonPropertyName("lines")] public List<LineJson>? Lines { get; init; }
+    [JsonPropertyName("evidence")] public List<EvidenceJson>? Evidence { get; init; }
 }
 
 internal sealed record PartyJson
