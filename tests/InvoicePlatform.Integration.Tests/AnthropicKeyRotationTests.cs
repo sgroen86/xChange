@@ -44,6 +44,7 @@ public class AnthropicKeyRotationTests
 
         Assert.Contains("API key", error.Message, StringComparison.Ordinal);
         Assert.Contains("xchange/anthropic-api-key", error.Message, StringComparison.Ordinal);
+        Assert.Equal(InterpretationFailure.ProviderUnavailable, error.Reason);
     }
 
     [Fact]

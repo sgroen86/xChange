@@ -12,7 +12,7 @@ using System.Globalization;
 using System.Text;
 using InvoicePlatform.Domain.Canonical;
 using InvoicePlatform.Infrastructure.Anthropic;
-using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Logging.Abstractions;
 using Microsoft.Extensions.Options;
 
 // Dollars per million tokens (input, output), from public price lists on
@@ -63,9 +63,15 @@ if (pdfs.Count == 0)
     ("Buyer VAT", d => d.Buyer?.VatIdentifier),
     ("Buyer registration", d => d.Buyer?.LegalRegistrationId),
     ("IBAN", d => d.Payment?.Iban),
+    ("BIC", d => d.Payment?.Bic),
+    ("Account name", d => d.Payment?.AccountName),
+    ("Buyer contact", d => string.Join(" / ", new[] { d.Buyer?.ContactName, d.Buyer?.ContactEmail, d.Buyer?.ContactPhone }.Where(v => v is not null))),
+    ("Buyer address line 2", d => d.Buyer?.Address?.AdditionalStreetName),
     ("Lines", d => d.Lines.Count.ToString(CultureInfo.InvariantCulture)),
     ("Line amounts", d => string.Join(" ", d.Lines.Select(l => $"{l.Quantity}x{l.UnitPrice}"))),
     ("VAT per line", d => string.Join(" ", d.Lines.Select(l => $"{l.VatCategoryCode}{l.VatPercentage}"))),
+    ("Article codes", d => string.Join(" ", d.Lines.Select(l => l.SellerItemIdentifier ?? "-"))),
+    ("Base quantities", d => string.Join(" ", d.Lines.Select(l => l.BaseQuantity?.ToString(CultureInfo.InvariantCulture) ?? "-"))),
     ("Total excl.", d => d.Totals?.TaxExclusiveAmount?.ToString(CultureInfo.InvariantCulture)),
     ("VAT", d => d.Totals?.TaxAmount?.ToString(CultureInfo.InvariantCulture)),
     ("Payable", d => d.Totals?.PayableAmount?.ToString(CultureInfo.InvariantCulture)),
@@ -78,7 +84,7 @@ report.AppendLine($"{pdfs.Count} PDF(s); reference model: {models[0]}. A field m
 report.AppendLine();
 
 var totals = models.ToDictionary(m => m, _ => (Cost: 0m, Seconds: 0.0, Differences: 0, Failures: 0));
-var logger = new UsageLogger();
+var logger = NullLogger<AnthropicInvoiceInterpreter>.Instance;
 
 foreach (var path in pdfs)
 {
@@ -102,7 +108,7 @@ foreach (var path in pdfs)
             var result = await interpreter.InterpretAsync(pdf, null, model);
             watch.Stop();
             results[model] = result.Draft;
-            var (input, output) = logger.Last;
+            var (input, output) = (result.Execution.Usage.InputTokens, result.Execution.Usage.OutputTokens);
             var price = prices.GetValueOrDefault(model);
             var cost = (input * price.Input + output * price.Output) / 1_000_000m;
             var t = totals[model];
@@ -175,25 +181,5 @@ sealed class EnvironmentKey : IAnthropicApiKeyProvider
 
     public void Invalidate()
     {
-    }
-}
-
-/// <summary>Picks the token counts out of the interpreter's usage log line.</summary>
-sealed class UsageLogger : ILogger<AnthropicInvoiceInterpreter>
-{
-    public (long Input, long Output) Last { get; private set; }
-
-    public IDisposable? BeginScope<TState>(TState state) where TState : notnull => null;
-
-    public bool IsEnabled(LogLevel logLevel) => true;
-
-    public void Log<TState>(LogLevel logLevel, EventId eventId, TState state, Exception? exception, Func<TState, Exception?, string> formatter)
-    {
-        if (state is IReadOnlyList<KeyValuePair<string, object?>> values
-            && values.FirstOrDefault(v => v.Key == "InputTokens").Value is { } input
-            && values.FirstOrDefault(v => v.Key == "OutputTokens").Value is { } output)
-        {
-            Last = (Convert.ToInt64(input, CultureInfo.InvariantCulture), Convert.ToInt64(output, CultureInfo.InvariantCulture));
-        }
     }
 }

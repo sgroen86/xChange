@@ -1,6 +1,5 @@
 using System.Net;
 using System.Net.Http.Json;
-using System.Text;
 using System.Text.Json;
 using InvoicePlatform.Domain.Learning;
 using InvoicePlatform.Infrastructure.Anthropic;
@@ -59,7 +58,7 @@ public class LearningEndpointTests : IClassFixture<SignedInFactory>
     [Fact]
     public async Task Hints_reach_the_model_as_a_separate_data_block()
     {
-        var anthropic = new CapturingAnthropic();
+        var anthropic = new ScriptedAnthropic();
         var interpreter = new AnthropicInvoiceInterpreter(
             new FixedKey(),
             Options.Create(new AnthropicOptions { Model = "claude-test" }),
@@ -68,7 +67,7 @@ public class LearningEndpointTests : IClassFixture<SignedInFactory>
 
         await interpreter.InterpretAsync("%PDF-1.4"u8.ToArray(), [new ReadingHint("buyerReference", null, "PO-4502", null)]);
 
-        var body = JsonDocument.Parse(anthropic.Body!).RootElement;
+        var body = JsonDocument.Parse(anthropic.HeaderBody).RootElement;
         var texts = body.GetProperty("messages")[0].GetProperty("content").EnumerateArray()
             .Where(b => b.GetProperty("type").GetString() == "text")
             .Select(b => b.GetProperty("text").GetString()!)
@@ -83,26 +82,6 @@ public class LearningEndpointTests : IClassFixture<SignedInFactory>
 
         public void Invalidate()
         {
-        }
-    }
-
-    private sealed class CapturingAnthropic : HttpMessageHandler
-    {
-        public string? Body { get; private set; }
-
-        protected override async Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken cancellationToken)
-        {
-            Body = await request.Content!.ReadAsStringAsync(cancellationToken);
-            const string extracted = """{\"invoiceNumber\":\"F-1\"}""";
-            return new HttpResponseMessage(HttpStatusCode.OK)
-            {
-                Content = new StringContent($$$"""
-                    {"id":"msg_1","type":"message","role":"assistant","model":"claude-test",
-                     "content":[{"type":"text","text":"{{{extracted}}}"}],
-                     "stop_reason":"end_turn","stop_sequence":null,
-                     "usage":{"input_tokens":1,"output_tokens":1}}
-                    """, Encoding.UTF8, "application/json"),
-            };
         }
     }
 }
