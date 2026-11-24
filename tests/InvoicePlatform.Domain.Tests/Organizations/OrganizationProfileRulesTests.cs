@@ -37,7 +37,9 @@ public class OrganizationProfileRulesTests
         Assert.Equal("NL91ABNA0417164300", profile.General.Iban);
         Assert.Equal("ABNANL2A", profile.General.Bic);
         Assert.Null(profile.General.StreetName);
+        Assert.Equal("0106", profile.General.LegalRegistrationScheme);
         Assert.Equal("12345678", profile.Peppol.EndpointId);
+        Assert.Equal("0106", profile.Peppol.EndpointScheme);
     }
 
     [Fact]
@@ -68,6 +70,7 @@ public class OrganizationProfileRulesTests
     [InlineData("0123456748", "0208", "general.legalRegistrationId")]
     [InlineData("12345678", null, "general.legalRegistrationScheme")]
     [InlineData("12345678", "12", "general.legalRegistrationScheme")]
+    [InlineData("abc", "0106", "general.legalRegistrationId")]
     public void The_registration_number_fits_its_scheme(string id, string? scheme, string? error)
     {
         var errors = Errors(With(new CompanyDetails { LegalRegistrationId = id, LegalRegistrationScheme = scheme }));

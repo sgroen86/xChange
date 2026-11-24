@@ -24,7 +24,7 @@ public static class OrganizationProfileRules
         var registration = Clean(general.LegalRegistrationId);
         if (scheme is "0106" or "0208")
         {
-            registration = RelationKeys.NormalizeRegistration(registration);
+            registration = RelationKeys.NormalizeRegistration(registration) ?? registration;
         }
 
         var endpoint = Clean(profile.Peppol.EndpointId);
@@ -74,7 +74,7 @@ public static class OrganizationProfileRules
             }
             else if (!VatNumberShapes.Fits(vat))
             {
-                errors.Add(new("general.vatIdentifier", text.VatShape(vat)));
+                errors.Add(new("general.vatIdentifier", text.VatShape(vat, vat[..Math.Min(2, vat.Length)])));
             }
         }
 
@@ -85,10 +85,10 @@ public static class OrganizationProfileRules
                 case null:
                     errors.Add(new("general.legalRegistrationScheme", text.RegistrationSchemeMissing));
                     break;
-                case "0106" when registration.Length != 8:
+                case "0106" when registration.Length != 8 || !registration.All(char.IsAsciiDigit):
                     errors.Add(new("general.legalRegistrationId", text.KvkShape));
                     break;
-                case "0208" when registration.Length != 10 || !VatNumberShapes.Mod97(registration):
+                case "0208" when registration.Length != 10 || !registration.All(char.IsAsciiDigit) || !VatNumberShapes.Mod97(registration):
                     errors.Add(new("general.legalRegistrationId", text.KboShape));
                     break;
                 case { } scheme when !CodeLists.IsRegistrationScheme(scheme):

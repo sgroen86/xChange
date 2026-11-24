@@ -7,7 +7,7 @@ internal interface IProfileRuleText
 {
     string VatPrefix(string country);
 
-    string VatShape(string vat);
+    string VatShape(string vat, string country);
 
     string RegistrationSchemeMissing { get; }
 
@@ -30,7 +30,7 @@ internal sealed class ProfileRuleTextNl : IProfileRuleText
 {
     public string VatPrefix(string country) => $"Een btw-nummer uit {country} begint met {country}.";
 
-    public string VatShape(string vat) => $"'{vat}' heeft niet de vorm van een btw-nummer uit dit land.";
+    public string VatShape(string vat, string country) => $"'{vat}' heeft niet de vorm van een btw-nummer uit {country}.";
 
     public string RegistrationSchemeMissing => "Kies het schema van het inschrijvingsnummer (KvK of KBO).";
 
@@ -53,7 +53,7 @@ internal sealed class ProfileRuleTextEn : IProfileRuleText
 {
     public string VatPrefix(string country) => $"A VAT number from {country} starts with {country}.";
 
-    public string VatShape(string vat) => $"'{vat}' does not have the shape of a VAT number from this country.";
+    public string VatShape(string vat, string country) => $"'{vat}' does not have the shape of a VAT number from {country}.";
 
     public string RegistrationSchemeMissing => "Choose the scheme of the registration number (KvK or KBO).";
 
