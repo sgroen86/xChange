@@ -37,14 +37,23 @@ public sealed record TokenUsage(long InputTokens, long OutputTokens, long CacheW
 /// Interpreting a document failed. When the provider did answer - and so was
 /// paid - but the answer could not be used, <see cref="Execution"/> says what
 /// that answer cost; otherwise it is null and nothing is known to be spent.
+/// <see cref="Reason"/> says why, for the message the user sees; the exception's
+/// own message is English and meant for the log.
 /// </summary>
 public class InterpretationFailedException : Exception
 {
-    public InterpretationFailedException(string message, ProviderExecution? execution = null, Exception? innerException = null)
+    public InterpretationFailedException(
+        string message,
+        ProviderExecution? execution = null,
+        Exception? innerException = null,
+        InterpretationFailure reason = InterpretationFailure.Unreadable)
         : base(message, innerException)
     {
         Execution = execution;
+        Reason = reason;
     }
 
     public ProviderExecution? Execution { get; }
+
+    public InterpretationFailure Reason { get; }
 }
