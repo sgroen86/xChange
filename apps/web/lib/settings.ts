@@ -30,8 +30,6 @@ export interface OrganizationSettings {
   defaultRulesetId: string | null;
   /** What the export menu opens on: the organisation's choice, else its country's default. */
   effectiveDefaultRulesetId?: string | null;
-  endpointId: string | null;
-  endpointScheme: string | null;
   /** Every ruleset that can be chosen, the system default first. */
   rulesets: RulesetInfo[];
 }
@@ -39,8 +37,6 @@ export interface OrganizationSettings {
 /** Without an API there is one ruleset to show, and nothing to load. */
 export const FALLBACK_SETTINGS: OrganizationSettings = {
   defaultRulesetId: null,
-  endpointId: null,
-  endpointScheme: null,
   rulesets: [
     {
       id: "peppol-bis-billing-3.0",
@@ -86,11 +82,7 @@ export function getSettings(): Promise<OrganizationSettings> {
   return call("GET");
 }
 
-export function updateSettings(update: {
-  defaultRulesetId: string | null;
-  endpointId: string | null;
-  endpointScheme: string | null;
-}): Promise<OrganizationSettings> {
+export function updateSettings(update: { defaultRulesetId: string | null }): Promise<OrganizationSettings> {
   return call("PUT", update);
 }
 

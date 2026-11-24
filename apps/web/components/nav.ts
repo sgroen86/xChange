@@ -54,6 +54,7 @@ export const navStructure: NavEntry[] = [
 
   { section: "admin" },
   { id: "gebruikers", label: "users", icon: "users", hidden: true },
+  { id: "profile", label: "profile", icon: "user", href: "/profile" },
   { id: "instellingen", label: "settings", icon: "settings", href: "/settings" },
   { id: "platform", label: "platform", icon: "users", href: "/platform", requiresPlatformAdmin: true },
   { id: "costs", label: "costs", icon: "barChart", href: "/platform/costs", requiresPlatformAdmin: true },

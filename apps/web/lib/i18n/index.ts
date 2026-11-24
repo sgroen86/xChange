@@ -20,13 +20,14 @@ import {
   type Lang,
 } from "./language.ts";
 import { platform } from "./platform.ts";
+import { profile } from "./profile.ts";
 import { relations } from "./relations.ts";
 import { review } from "./review.ts";
 import { settings } from "./settings.ts";
 import { shell } from "./shell.ts";
 import { upload } from "./upload.ts";
 
-const areas = { common, shell, auth, mfa, review, upload, imports, invoices, relations, settings, platform, costs };
+const areas = { common, shell, auth, mfa, review, upload, imports, invoices, relations, settings, profile, platform, costs };
 
 type Areas = typeof areas;
 export type Dictionary = { [Area in keyof Areas]: Areas[Area]["nl"] };

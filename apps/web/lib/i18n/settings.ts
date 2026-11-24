@@ -15,9 +15,8 @@ const nl = {
   systemDefault: "Systeemstandaard",
   rulesetOption: (name: string, release: string) => `${name} (regels ${release})`,
   formatHelp: "Het formaatmenu op een factuur opent hierop. Per download kunt u een ander kiezen.",
-  endpointId: "Eigen elektronisch adres (PEPPOL-id)",
-  endpointScheme: "Schema",
-  endpointHelp: "Wordt ingevuld als elektronisch adres van de verkoper op elke factuur waar dat nog ontbreekt.",
+  peppolMoved: "Uw PEPPOL-id en andere bedrijfsgegevens staan onder",
+  peppolMovedLink: "Bedrijfsprofiel",
   adminOnly: "Alleen een beheerder kan dit wijzigen.",
 
   inbox: {
@@ -140,9 +139,8 @@ const en: typeof nl = {
   systemDefault: "System default",
   rulesetOption: (name: string, release: string) => `${name} (rules ${release})`,
   formatHelp: "The format menu on an invoice opens on this. You can pick another one per download.",
-  endpointId: "Your own electronic address (PEPPOL ID)",
-  endpointScheme: "Scheme",
-  endpointHelp: "Filled in as the seller's electronic address on every invoice that does not have one yet.",
+  peppolMoved: "Your PEPPOL ID and other company details are under",
+  peppolMovedLink: "Company profile",
   adminOnly: "Only an administrator can change this.",
 
   inbox: {

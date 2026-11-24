@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { useEffect, useState, useSyncExternalStore } from "react";
 
 import { Icon } from "../../components/Icon";
@@ -8,16 +9,15 @@ import { isApiConfigured } from "../../lib/api";
 import { getServerUserSnapshot, getUserSnapshot, listCountries, subscribeToUser, type CountryOption } from "../../lib/auth";
 import { text, useText } from "../../lib/i18n";
 import { FALLBACK_SETTINGS, getSettings, updateSettings, type OrganizationSettings } from "../../lib/settings";
-import { endpointSchemes } from "../invoices/[invoiceId]/review/fields";
 import { BillingCard } from "./BillingCard";
 import { InboxAddress } from "./InboxAddress";
 import { LearnedCorrections } from "./LearnedCorrections";
 import { TwoStepCard } from "./TwoStepCard";
 
 /**
- * The organisation's settings: the format the export menu opens on, and the
- * organisation's own PEPPOL id, which fills the seller's electronic address
- * on every invoice. Only an admin may change them; the API enforces that too.
+ * The organisation's settings: the format the export menu opens on. Its own
+ * details as the seller, the PEPPOL id included, are on the company profile.
+ * Only an admin may change them; the API enforces that too.
  */
 export default function SettingsClient() {
   const showToast = useToast();
@@ -27,8 +27,6 @@ export default function SettingsClient() {
 
   const [settings, setSettings] = useState<OrganizationSettings | null>(null);
   const [defaultRulesetId, setDefaultRulesetId] = useState("");
-  const [endpointId, setEndpointId] = useState("");
-  const [endpointScheme, setEndpointScheme] = useState("");
   const [saving, setSaving] = useState(false);
   const [countries, setCountries] = useState<CountryOption[]>([]);
 
@@ -52,8 +50,6 @@ export default function SettingsClient() {
         if (cancelled) return;
         setSettings(loaded);
         setDefaultRulesetId(loaded.defaultRulesetId ?? "");
-        setEndpointId(loaded.endpointId ?? "");
-        setEndpointScheme(loaded.endpointScheme ?? "");
       })
       .catch((cause: unknown) => {
         if (cancelled) return;
@@ -71,11 +67,7 @@ export default function SettingsClient() {
 
     setSaving(true);
     try {
-      const saved = await updateSettings({
-        defaultRulesetId: defaultRulesetId || null,
-        endpointId: endpointId || null,
-        endpointScheme: endpointScheme || null,
-      });
+      const saved = await updateSettings({ defaultRulesetId: defaultRulesetId || null });
       setSettings(saved);
       showToast(t.settings.saved, "success");
     } catch (cause) {
@@ -145,35 +137,9 @@ export default function SettingsClient() {
               <div className="form-help">{t.settings.formatHelp}</div>
             </div>
 
-            <div className="form__row">
-              <div className="form__group">
-                <label htmlFor="endpointId">{t.settings.endpointId}</label>
-                <input
-                  id="endpointId"
-                  type="text"
-                  value={endpointId}
-                  readOnly={!canEdit}
-                  onChange={(event) => setEndpointId(event.target.value)}
-                />
-              </div>
-              <div className="form__group">
-                <label htmlFor="endpointScheme">{t.settings.endpointScheme}</label>
-                <select
-                  id="endpointScheme"
-                  value={endpointScheme}
-                  disabled={!canEdit}
-                  onChange={(event) => setEndpointScheme(event.target.value)}
-                >
-                  <option value="">—</option>
-                  {endpointSchemes(t).map((scheme) => (
-                    <option key={scheme.value} value={scheme.value}>
-                      {scheme.label}
-                    </option>
-                  ))}
-                </select>
-              </div>
-            </div>
-            <div className="form-help">{t.settings.endpointHelp}</div>
+            <p className="form-help">
+              {t.settings.peppolMoved} <Link href="/profile/">{t.settings.peppolMovedLink}</Link>
+            </p>
 
             {canEdit ? (
               <div className="form__actions">

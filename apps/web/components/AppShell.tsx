@@ -33,6 +33,7 @@ function currentInvoiceId(pathname: string): string | null {
 function activeNavId(pathname: string): PageKey {
   if (/\/invoices\/[^/]+\/review/.test(pathname)) return "review";
   if (pathname.includes("/invoices")) return "invoices";
+  if (pathname.includes("/profile")) return "profile";
   if (pathname.includes("/settings")) return "instellingen";
   if (pathname.includes("/relations")) return "relations";
   if (pathname.includes("/platform/costs")) return "costs";
